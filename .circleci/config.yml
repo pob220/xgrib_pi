@@ -79,7 +79,6 @@ commands:
             command: mkdir -p /tmp/empty_checkout
         - checkout:
             path: /tmp/empty_checkout
-        - checkout:
             clone:
               ssh: false
     deploy-code:
