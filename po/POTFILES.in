@@ -25,6 +25,7 @@ src/pi_ocpndc.cpp
 src/pi_shaders.cpp
 libs/manual/src/manual.cpp
 libs/manual/src/manual_dlg.cpp
+src/pi_TexFont.cpp
 src/grib_pi.h
 src/GribOverlayFactory.h
 src/GribUIDialogBase.h
@@ -50,3 +51,4 @@ src/pi_ocpndc.h
 src/pi_shaders.h
 libs/manual/include/manual.h
 libs/manual/include/manual_dlg.h
+src/pi_TexFont.h
