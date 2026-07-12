@@ -61,14 +61,14 @@ endif (COMMAND cmake_policy)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
 
 # define plugin name, owner and versions
-set(VERBOSE_NAME "EnvironmentalGRIB")
-set(COMMON_NAME "EnvironmentalGRIB")
-set(TITLE_NAME "environmental_grib")
+set(VERBOSE_NAME "xGRIB")
+set(COMMON_NAME "xGRIB")
+set(TITLE_NAME "xgrib")
 set(PACKAGE_CONTACT "Paul")
-set(PACKAGE "environmental_grib_pi")
-set(SHORT_DESCRIPTION "Generate combined weather, wave, and current GRIB files.")
+set(PACKAGE "xgrib_pi")
+set(SHORT_DESCRIPTION "Display, download, and generate environmental GRIB files.")
 set(LONG_DESCRIPTION
-    "Downloads and converts environmental model data using an isolated native helper, producing validated GRIB files for OpenCPN."
+    "A catalogue-installable GRIB viewer with integrated generation of combined weather, wave, and current GRIB files using an isolated native helper."
 )
 
 set(VERSION_MAJOR "0")
@@ -76,10 +76,10 @@ set(VERSION_MINOR "1")
 set(VERSION_PATCH "0")
 set(VERSION_TWEAK "0")
 set(VERSION_DATE "12/07/2026") # DD/MM/YYYY format
-set(OCPN_MIN_VERSION "ov58")
+set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
-set(OCPN_API_VERSION_MINOR "18")
+set(OCPN_API_VERSION_MINOR "21")
 
 set(WX_VER "32")
 set(WX_VER_PATCH "8")
@@ -100,14 +100,14 @@ set(ALPHA "alpha") # Standard Repos
 # Set if  Cloudsmith Base Repository name does not match your Git Repository
 # name. set(CLOUDSMITH_BASE_REPOSITORY "${GIT_REPOSITORY_NAME}")
 # set(CLOUDSMITH_BASE_REPOSITORY "opencpn-plugins")  #Ricks's customization
-set(CLOUDSMITH_BASE_REPOSITORY "environmental-grib")
+set(CLOUDSMITH_BASE_REPOSITORY "xgrib")
 
 # Set the following to use OpenCPN cloudsmith repositories instead of own
 # repositories
 set(CLOUDSMITH_USER "opencpn")
 # set(CLOUDSMITH_USER "jon-gough")
 
-set(XML_INFO_URL "https://github.com/pob220/environmental_grib_pi")
+set(XML_INFO_URL "https://github.com/pob220/xgrib_pi")
 set(XML_SUMMARY ${SHORT_DESCRIPTION})
 set(XML_DESCRIPTION ${LONG_DESCRIPTION})
 
@@ -127,7 +127,7 @@ set(USE_LOCAL_GLU FALSE)
 # Prefer libGL.so to libOpenGL.so, see CMP0072
 set(OpenGL_GL_PREFERENCE "LEGACY") # not operational
 
-option(USE_GL "Enable OpenGL support" OFF)
+option(USE_GL "Enable OpenGL support" ON)
 message(STATUS "${CMLOC}USE_GL: ${USE_GL}")
 
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "")
@@ -178,11 +178,71 @@ add_definitions(-DUSE_S57)
 
 # ---- Section Below - Add your project SET(SRCS and SET(HDRS  etc..
 
-set(SRCS src/environmental_grib_pi.cpp src/EnvironmentalGribDialog.cpp
-         src/GeneratorJobJson.cpp)
+set(SRCS
+    src/grib_pi.cpp
+    src/GribOverlayFactory.cpp
+    src/GribUIDialogBase.cpp
+    src/GrabberWin.cpp
+    src/GribUIDialog.cpp
+    src/EnvironmentalGribDialog.cpp
+    src/XgribPaths.cpp
+    src/XgribPluginPolicy.cpp
+    src/CursorData.cpp
+    src/GribSettingsDialog.cpp
+    src/GribRequestDialog.cpp
+    src/XyGribPanel.cpp
+    src/XyGribModelDef.cpp
+    src/icons.cpp
+    src/email.cpp
+    src/GribTable.cpp
+    src/CustomGrid.cpp
+    src/GribReader.cpp
+    src/GribRecord.cpp
+    src/GribV1Record.cpp
+    src/GribV2Record.cpp
+    src/zuFile.cpp
+    src/IsoLine.cpp
+    src/pi_ocpndc.cpp
+    src/pi_shaders.cpp
+    libs/manual/src/manual.cpp
+    libs/manual/src/manual_dlg.cpp)
 
-set(HDRS include/environmental_grib_pi.h include/EnvironmentalGribDialog.h
-         include/GeneratorJobJson.h)
+set(HDRS
+    src/grib_pi.h
+    src/GribOverlayFactory.h
+    src/GribUIDialogBase.h
+    src/GrabberWin.h
+    src/GribUIDialog.h
+    src/EnvironmentalGribDialog.h
+    src/XgribPaths.h
+    src/XgribPluginPolicy.h
+    src/CursorData.h
+    src/GribSettingsDialog.h
+    src/GribRequestDialog.h
+    src/XyGribPanel.h
+    src/XyGribModelDef.h
+    src/GribTable.h
+    src/CustomGrid.h
+    src/GribReader.h
+    src/GribRecord.h
+    src/GribRecordSet.h
+    src/GribV1Record.h
+    src/GribV2Record.h
+    src/IsoLine.h
+    src/pi_ocpndc.h
+    src/pi_shaders.h
+    libs/manual/include/manual.h
+    libs/manual/include/manual_dlg.h)
+
+if(USE_GL)
+  list(APPEND SRCS src/pi_TexFont.cpp)
+  list(APPEND HDRS src/pi_TexFont.h)
+endif()
+
+if(WIN32)
+  list(APPEND SRCS src/smapi.cpp)
+  list(APPEND HDRS src/smapi.h)
+endif()
 
 add_definitions(-DPLUGIN_USE_SVG)
 
@@ -236,6 +296,8 @@ set(SRC ${SRCS} ${HDRS})
 
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/include)
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/ocpninclude)
+include_directories(BEFORE ${PROJECT_SOURCE_DIR}/src)
+include_directories(BEFORE ${PROJECT_SOURCE_DIR}/libs/manual/include)
 # Change target_sources to match your project needs.
 # ==============================================================
 
@@ -247,6 +309,9 @@ target_sources(${PACKAGE_NAME} PUBLIC ${SRC})
 include(CTest)
 add_subdirectory(generator EXCLUDE_FROM_ALL)
 add_dependencies(${PACKAGE_NAME} environmental-grib)
+if(BUILD_TESTING AND TARGET environmental_grib_tests)
+  add_dependencies(${PACKAGE_NAME} environmental_grib_tests)
+endif()
 
 if(UNIX AND NOT APPLE)
   set_target_properties(environmental-grib PROPERTIES
@@ -309,15 +374,43 @@ if (NOT OCPN_FLATPAK_CONFIG)
   add_subdirectory(opencpn-libs/wxJSON)
   target_link_libraries(${PACKAGE_NAME} ocpn::wxjson)
 
+  find_package(Jasper REQUIRED)
+  find_package(BZip2 REQUIRED)
+  find_package(ZLIB REQUIRED)
+  target_link_libraries(${PACKAGE_NAME} Jasper::Jasper BZip2::BZip2
+                        ZLIB::ZLIB)
+
   if(BUILD_TESTING)
-    add_executable(environmental_grib_job_json_tests
-      test/GeneratorJobJson_tests.cpp src/GeneratorJobJson.cpp)
-    target_include_directories(environmental_grib_job_json_tests PRIVATE
-      ${PROJECT_SOURCE_DIR}/include)
-    target_link_libraries(environmental_grib_job_json_tests PRIVATE
-      ocpn::wxjson ${wxWidgets_LIBRARIES})
-    add_test(NAME environmental_grib_job_json_tests
-             COMMAND environmental_grib_job_json_tests)
+    add_executable(xgrib_plugin_policy_tests
+      test/XgribPluginPolicyTests.cpp src/XgribPluginPolicy.cpp)
+    target_include_directories(xgrib_plugin_policy_tests PRIVATE
+      ${PROJECT_SOURCE_DIR}/src)
+    target_link_libraries(xgrib_plugin_policy_tests PRIVATE
+      ${wxWidgets_LIBRARIES})
+    add_test(NAME xgrib_plugin_policy_tests COMMAND xgrib_plugin_policy_tests)
+
+    add_executable(xgrib_reader_integration_tests
+      test/XgribReaderIntegrationTests.cpp
+      src/GribReader.cpp src/GribRecord.cpp src/GribV1Record.cpp
+      src/GribV2Record.cpp src/zuFile.cpp)
+    target_include_directories(xgrib_reader_integration_tests PRIVATE
+      ${PROJECT_SOURCE_DIR}/src)
+    target_link_libraries(xgrib_reader_integration_tests PRIVATE
+      Jasper::Jasper BZip2::BZip2 ZLIB::ZLIB ${wxWidgets_LIBRARIES})
+
+    set(XGRIB_TEST_GRIB "${CMAKE_CURRENT_BINARY_DIR}/xgrib-test-current.grb")
+    add_test(NAME xgrib_generate_reader_fixture
+      COMMAND $<TARGET_FILE:environmental-grib> generate
+        --bbox -6.3 53.0 -5.9 53.4
+        --start 2026-07-12T00:00:00Z --hours 6 --step-hours 3
+        --grid-spacing-deg 0.1 --source synthetic
+        --output ${XGRIB_TEST_GRIB} --overwrite)
+    set_tests_properties(xgrib_generate_reader_fixture PROPERTIES
+      FIXTURES_SETUP xgrib_reader_fixture)
+    add_test(NAME xgrib_reader_integration_tests
+      COMMAND xgrib_reader_integration_tests ${XGRIB_TEST_GRIB})
+    set_tests_properties(xgrib_reader_integration_tests PROPERTIES
+      FIXTURES_REQUIRED xgrib_reader_fixture)
   endif()
 
 endif (NOT OCPN_FLATPAK_CONFIG)

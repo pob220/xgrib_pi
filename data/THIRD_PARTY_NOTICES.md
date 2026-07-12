@@ -1,6 +1,6 @@
 # Third-party components
 
-EnvironmentalGRIB catalogue packages contain a native helper and may bundle
+xGRIB catalogue packages contain a native helper and may bundle
 the following runtime components. They remain under their own licenses:
 
 - ecCodes (Apache-2.0)

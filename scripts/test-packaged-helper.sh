@@ -2,7 +2,7 @@
 set -eu
 
 stage=${1:?usage: test-packaged-helper.sh STAGING_PREFIX}
-plugin_root="$stage/share/opencpn/plugins/environmental_grib_pi"
+plugin_root="$stage/share/opencpn/plugins/xgrib_pi"
 helper="$plugin_root/bin/environmental-grib"
 
 test -x "$helper"
@@ -12,7 +12,7 @@ test -f "$plugin_root/runtime/share/eccodes/definitions/grib1/boot.def"
 test -f "$plugin_root/runtime/share/eccodes/samples/regular_ll_sfc_grib1.tmpl"
 test -f "$plugin_root/runtime/share/proj/proj.db"
 
-tmp=${TMPDIR:-/tmp}/environmental-grib-package-test-$$
+tmp=${TMPDIR:-/tmp}/xgrib-package-test-$$
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 mkdir -p "$tmp"
 
@@ -45,4 +45,4 @@ jq -e '.status == "complete" and .schemaVersion == 1' \
 grep -q '"event":"started"' "$tmp/progress.jsonl"
 grep -q '"event":"complete"' "$tmp/progress.jsonl"
 
-printf '%s\n' "Packaged Environmental GRIB helper test passed"
+printf '%s\n' "Packaged xGRIB helper test passed"

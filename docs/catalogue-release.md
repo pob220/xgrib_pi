@@ -3,7 +3,8 @@
 ## Prerequisites
 
 - CMake 3.20 or newer and a C++20 compiler for the helper.
-- OpenCPN Frontend2 build prerequisites and wxWidgets 3.2.
+- OpenCPN Frontend2 build prerequisites, wxWidgets 3.2, Jasper, bzip2 and
+  zlib for the viewer.
 - Development packages for ecCodes, NetCDF, libcurl, jsoncpp, Qhull,
   bzip2, Blosc, libzip, and PROJ.
 - All git submodules initialized at recorded commits.
@@ -14,13 +15,19 @@
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j"$(nproc)"
 ctest --test-dir build --output-on-failure
-cmake --install build --prefix /tmp/environmental-grib-stage
-scripts/test-packaged-helper.sh /tmp/environmental-grib-stage
+cmake --install build --prefix /tmp/xgrib-stage
+scripts/test-packaged-helper.sh /tmp/xgrib-stage
 ```
 
 Run `git diff --check` and verify the generated archive contains the plugin
 library, launcher, native helper, runtime libraries, ecCodes definitions and
 samples, PROJ data, toolbar assets, and metadata.
+
+For a bounded GUI lifecycle/parser smoke test in an isolated OpenCPN profile,
+set `XGRIB_TEST_OPEN_FILE=/path/to/test.grb` for one launch. xGRIB opens the
+normal control bar and the supplied file through its production viewer path.
+Set `XGRIB_TEST_OPEN_GENERATOR=1` to open the integrated generator dialog as
+well. These variables are developer test hooks and are ignored when unset.
 
 ## Catalogue package
 
@@ -37,11 +44,13 @@ Before publishing:
 3. Run generator unit and differential parity tests.
 4. Run packaged-helper tests from a clean staging directory.
 5. Install through an isolated stock OpenCPN profile.
-6. Generate a synthetic GRIB, inspect it, and open it in stock `grib_pi`.
+6. With bundled GRIB disabled, generate a synthetic GRIB and open it directly
+   in xGRIB.
 7. Test one public no-credential provider with a bounded request.
 8. Verify cancellation, malformed jobs, missing credentials, unavailable
    provider data, and an unwritable output path all fail cleanly.
-9. Record third-party notices and source offers for bundled libraries.
+9. Verify xGRIB refuses activation while bundled GRIB is enabled.
+10. Record third-party notices and source offers for bundled libraries.
 
 The release CI image must copy its package copyright/license records for all
 libraries selected by `GET_RUNTIME_DEPENDENCIES` into the package's

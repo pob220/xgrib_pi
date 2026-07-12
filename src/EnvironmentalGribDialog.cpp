@@ -1,6 +1,6 @@
 #include "EnvironmentalGribDialog.h"
 
-#include "GeneratorJobJson.h"
+#include "XgribPaths.h"
 
 #include <wx/config.h>
 #include <wx/datetime.h>
@@ -15,9 +15,9 @@
 #include <wx/utils.h>
 #include <wx/file.h>
 
-#include <wx/jsonreader.h>
-#include <wx/jsonval.h>
-#include <wx/jsonwriter.h>
+#include "jsonval.h"
+#include "jsonreader.h"
+#include "jsonwriter.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -218,10 +218,10 @@ void RedactQueryParameter(wxString* text, const wxString& name) {
 }  // namespace
 
 EnvironmentalGribDialog::EnvironmentalGribDialog(
-    wxWindow* parent, const wxString& plugin_data_dir)
+    wxWindow* parent, GribReadyCallback onGribReady)
     : wxDialog(parent, wxID_ANY, "Environmental GRIB Generator", wxDefaultPosition,
                wxSize(880, 760), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
-      m_pluginDataDir(plugin_data_dir) {
+      m_onGribReady(std::move(onGribReady)) {
   auto* top = new wxBoxSizer(wxVERTICAL);
   m_scrolled = new wxScrolledWindow(
       this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
@@ -290,6 +290,7 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(
                                "Copernicus NWS forecast/model currents",
                                "Copernicus Global forecast/model currents",
                                "NOAA RTOFS Global ocean currents",
+                               "NOAA OFS / S-111 coastal currents (experimental)",
                                "Auto forecast/model current provider"};
   m_currentSource = new wxChoice(scrolled, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                  WXSIZEOF(currentSources), currentSources);
@@ -440,6 +441,8 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(
   Bind(wxEVT_END_PROCESS, &EnvironmentalGribDialog::OnProcessTerminated, this);
 
   AppendLog("Generated environmental GRIBs are model data for planning and experimentation, not official navigation products.");
+  wxLogMessage("xGRIB environmental generator executable: %s",
+               m_generatorPath->GetValue());
   LoadSettings();
   RefreshOutputFilenameDefault();
   UpdateProviderUi();
@@ -447,16 +450,24 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(
 }
 
 EnvironmentalGribDialog::~EnvironmentalGribDialog() {
+  PrepareForParentShutdown();
+}
+
+void EnvironmentalGribDialog::PrepareForParentShutdown() {
   m_processTimer.Stop();
-  if (m_processRunning && m_processPid != 0) {
+  if (m_processRunning && m_processPid != 0 && ChildProcessStillExists()) {
     wxKillError error = wxKILL_OK;
     wxKill(m_processPid, wxSIGTERM, &error, wxKILL_CHILDREN);
+    wxLogMessage("xGRIB: stopped environmental generator pid=%ld during shutdown "
+                 "(wxKillError=%d)",
+                 m_processPid, static_cast<int>(error));
   }
   if (m_process) {
     m_process->Detach();
-    delete m_process;
     m_process = nullptr;
   }
+  m_processRunning = false;
+  m_processPid = 0;
 }
 
 void EnvironmentalGribDialog::SetCurrentViewPort(const PlugIn_ViewPort& vp) {
@@ -1158,38 +1169,11 @@ void EnvironmentalGribDialog::StartCommand(const wxString& command, const wxStri
   process->Redirect();
 
   wxExecuteEnv env;
-  wxFileName helper(m_generatorPath->GetValue());
-  wxFileName runtimeRoot(helper.GetPath(), "");
-  runtimeRoot.RemoveLastDir();
-  wxFileName privateLib(runtimeRoot.GetPath(), "");
-  privateLib.AppendDir("runtime");
-  privateLib.AppendDir("lib");
-  if (privateLib.DirExists()) {
-    wxString libraryPath = privateLib.GetPath();
-    const wxString inherited = wxGetenv("LD_LIBRARY_PATH");
-    if (!inherited.empty()) libraryPath += ":" + inherited;
-    env.env["LD_LIBRARY_PATH"] = libraryPath;
-  }
-  wxFileName definitions(runtimeRoot.GetPath(), "");
-  definitions.AppendDir("share");
-  definitions.AppendDir("eccodes");
-  definitions.AppendDir("definitions");
-  if (definitions.DirExists())
-    env.env["ECCODES_DEFINITION_PATH"] = definitions.GetPath();
-  wxFileName samples(runtimeRoot.GetPath(), "");
-  samples.AppendDir("share");
-  samples.AppendDir("eccodes");
-  samples.AppendDir("samples");
-  if (samples.DirExists()) env.env["ECCODES_SAMPLES_PATH"] = samples.GetPath();
-  wxFileName projData(runtimeRoot.GetPath(), "");
-  projData.AppendDir("share");
-  projData.AppendDir("proj");
-  if (projData.DirExists()) env.env["PROJ_DATA"] = projData.GetPath();
   if (!password.empty()) {
     env.env["ENVIRONMENTAL_GRIB_COPERNICUS_PASSWORD"] = password;
   }
 
-  long pid = wxExecute(command, wxEXEC_ASYNC | wxEXEC_NODISABLE, process, &env);
+  long pid = wxExecute(command, wxEXEC_ASYNC | wxEXEC_NODISABLE, process, password.empty() ? nullptr : &env);
   if (pid == 0) {
     AppendLog("Process failed to launch");
     delete process;
@@ -1265,9 +1249,9 @@ void EnvironmentalGribDialog::FinishCommand(long exit_code, bool launched) {
                        "\nOutput: " + OutputPath();
     if (m_openAfter->GetValue()) {
       TryOpenGeneratedGrib();
-      message += "\n\nA request was sent to the GRIB plugin to open this file. If it does not appear, open this GRIB in the GRIB plugin.";
+      message += "\n\nThe generated file was opened in xGRIB.";
     } else {
-      message += "\n\nOpen this GRIB in the GRIB plugin. It is already a merged environmental GRIB when both weather and currents were selected.";
+      message += "\n\nUse Open GRIB in xGRIB to display this file. It is already a merged environmental GRIB when both weather and currents were selected.";
     }
     AppendLog(message);
     wxMessageBox(message, "Environmental GRIB generated", wxOK | wxICON_INFORMATION, this);
@@ -1312,12 +1296,20 @@ void EnvironmentalGribDialog::SetBusy(bool busy) {
 void EnvironmentalGribDialog::TryOpenGeneratedGrib() {
   wxString path = OutputPath();
   if (!wxFileName::FileExists(path)) {
-    AppendLog("Generated GRIB does not exist; not sending GRIB open request.");
+    AppendLog("Generated GRIB does not exist; it cannot be opened.");
     return;
   }
-  wxString body = "{\"grib_file\":\"" + JsonEscape(path) + "\"}";
+  if (m_onGribReady) {
+    m_onGribReady(path);
+    AppendLog("Opened generated GRIB in xGRIB: " + path);
+    return;
+  }
+
+  // Retain the standard GRIB message as a compatibility fallback for builds
+  // embedding this dialog outside xGRIB.
+  const wxString body = "{\"grib_file\":\"" + JsonEscape(path) + "\"}";
   SendPluginMessage("GRIB_APPLY_JSON_CONFIG", body);
-  AppendLog("Sent GRIB plugin open request for: " + path);
+  AppendLog("Requested GRIB open through plugin messaging: " + path);
 }
 
 bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
@@ -1370,7 +1362,9 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
   if (m_mode->GetSelection() == 2) currentSource = "netcdf";
   if (m_mode->GetSelection() == 3) currentSource = "synthetic";
 
-  wxJSONValue root = CreateGeneratorJobEnvelope();
+  wxJSONValue root;
+  root["schemaVersion"] = 1;
+  root["operation"] = "generateEnvironment";
   wxJSONValue& request = root["request"];
   request["bbox"]["west"] = west;
   request["bbox"]["south"] = south;
@@ -1379,6 +1373,7 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
   request["start"] = m_startUtc->GetValue();
   request["hours"] = m_durationHours->GetValue();
   request["stepHours"] = m_stepHours->GetValue();
+  request["cycle"] = "auto";
   request["weatherProvider"] = weatherProvider;
   request["weatherPreset"] = weatherPreset;
   request["weatherGridSpacingDeg"] = 0.025;
@@ -1386,10 +1381,10 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
   request["includeWaves"] =
       m_includeWaves->GetValue() && weatherProvider != "none" &&
       weatherProvider != "existing-file";
-  request["waveProvider"] = wxString(
+  request["waveProvider"] =
       m_waveProvider->GetStringSelection().Contains("Copernicus")
           ? "copernicus_global_waves"
-          : "gfs_wave");
+          : "gfs_wave";
   request["waveStepHours"] = 3;
   request["currentSource"] = currentSource;
   request["currentFile"] = m_existingCurrentFile->GetPath();
@@ -1410,6 +1405,9 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
     request["downloadDirectory"] = downloadDir.GetPath();
     request["copernicusUsername"] = m_username->GetValue();
   }
+  root["credentials"]["copernicusPasswordEnvironment"] =
+      "ENVIRONMENTAL_GRIB_COPERNICUS_PASSWORD";
+
   wxJSONWriter writer;
   wxString text;
   writer.Write(root, text);
@@ -1597,7 +1595,7 @@ void EnvironmentalGribDialog::LoadSettings() {
   wxConfigBase* config = wxConfigBase::Get(false);
   if (!config) return;
   wxString oldPath = config->GetPath();
-  config->SetPath("/PlugIns/GRIB/EnvironmentalGenerator");
+  config->SetPath("/PlugIns/xGRIB/EnvironmentalGenerator");
   long mode = config->ReadLong("generation_mode", m_mode->GetSelection());
   if (mode >= 0 && mode < static_cast<long>(m_mode->GetCount())) {
     m_mode->SetSelection(static_cast<int>(mode));
@@ -1630,7 +1628,7 @@ void EnvironmentalGribDialog::SaveSettings() {
   wxConfigBase* config = wxConfigBase::Get(false);
   if (!config) return;
   wxString oldPath = config->GetPath();
-  config->SetPath("/PlugIns/GRIB/EnvironmentalGenerator");
+  config->SetPath("/PlugIns/xGRIB/EnvironmentalGenerator");
   config->Write("generation_mode", static_cast<long>(m_mode->GetSelection()));
   config->Write("tpxo_model_directory", m_tpxoModelDir->GetPath());
   config->Write("tpxo_model_name", m_tpxoModelName->GetValue());
@@ -1660,17 +1658,8 @@ wxString EnvironmentalGribDialog::FindDefaultGenerator() const {
   wxFileName sibling(executable.GetPath(), "environmental-grib");
   if (IsExecutableFile(sibling.GetFullPath())) return sibling.GetFullPath();
 
-  if (!m_pluginDataDir.empty()) {
-    wxFileName pluginHelper(m_pluginDataDir, "");
-    pluginHelper.AppendDir("bin");
-    pluginHelper.SetFullName("environmental-grib");
-    if (IsExecutableFile(pluginHelper.GetFullPath()))
-      return pluginHelper.GetFullPath();
-  }
-
-  wxFileName packaged(wxStandardPaths::Get().GetDataDir(), "");
-  packaged.AppendDir("plugins");
-  packaged.AppendDir("environmental_grib_pi");
+  wxFileName packaged(GetXgribDataDirectory(), "");
+  packaged.RemoveLastDir();
   packaged.AppendDir("bin");
   packaged.SetFullName("environmental-grib");
   if (IsExecutableFile(packaged.GetFullPath())) return packaged.GetFullPath();
