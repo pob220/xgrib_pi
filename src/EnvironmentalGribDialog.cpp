@@ -86,6 +86,21 @@ wxString DefaultTpxoCacheFile() {
   return path.GetFullPath();
 }
 
+wxString ResolveTpxoAtlasDirectory(const wxString& selected) {
+  const auto isAtlas = [](const wxString& directory) {
+    wxFileName grid(directory, "grid_tpxo10atlas_v2.nc");
+    wxDir model(directory);
+    wxString constituent;
+    return grid.FileExists() && model.IsOpened() &&
+           model.GetFirst(&constituent, "u_*_tpxo10_atlas_30_v2.nc",
+                          wxDIR_FILES);
+  };
+  if (isAtlas(selected)) return selected;
+  wxFileName nested(selected, "");
+  nested.AppendDir("TPXO10_atlas_v2");
+  return isAtlas(nested.GetPath()) ? nested.GetPath() : wxString{};
+}
+
 wxString JsonEscape(const wxString& value) {
   wxString escaped;
   for (wxUniChar ch : value) {
@@ -208,10 +223,13 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(
                wxSize(880, 760), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
       m_pluginDataDir(plugin_data_dir) {
   auto* top = new wxBoxSizer(wxVERTICAL);
-  auto* scrolled = new wxScrolledWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                                       wxVSCROLL | wxTAB_TRAVERSAL);
-  scrolled->SetScrollRate(8, 8);
-  scrolled->SetMinSize(wxSize(760, 330));
+  m_scrolled = new wxScrolledWindow(
+      this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+      wxVSCROLL | wxALWAYS_SHOW_SB | wxTAB_TRAVERSAL);
+  m_scrolled->SetScrollRate(0, 12);
+  m_scrolled->ShowScrollbars(wxSHOW_SB_NEVER, wxSHOW_SB_ALWAYS);
+  m_scrolled->SetMinSize(wxSize(760, 330));
+  auto* scrolled = m_scrolled;
   auto* form = new wxBoxSizer(wxVERTICAL);
   auto* grid = new wxFlexGridSizer(2, 8, 8);
   grid->AddGrowableCol(1, 1);
@@ -374,6 +392,7 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(
   form->Add(m_rememberUsername, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
   form->Add(m_openAfter, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
   scrolled->SetSizer(form);
+  scrolled->SetVirtualSize(form->GetMinSize());
   top->Add(scrolled, 1, wxEXPAND);
 
   m_log = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 220),
@@ -454,22 +473,16 @@ void EnvironmentalGribDialog::OnCheckDependencies(wxCommandEvent&) {
 void EnvironmentalGribDialog::OnCheckTpxoModel(wxCommandEvent&) {
   AppendLog("Checking TPXO model...");
   AppendLog("Source: TPXO10 astronomical tide model");
-  wxFileName atlas(m_tpxoModelDir->GetPath(), "");
-  atlas.AppendDir("TPXO10_atlas_v2");
-  wxFileName grid(atlas.GetPath(), "grid_tpxo10atlas_v2.nc");
-  wxDir directory(atlas.GetPath());
-  wxString constituent;
-  const bool hasConstituent =
-      directory.IsOpened() &&
-      directory.GetFirst(&constituent, "u_*_tpxo10_atlas_30_v2.nc",
-                         wxDIR_FILES);
-  if (grid.FileExists() && hasConstituent) {
-    AppendLog("TPXO10 model is available: " + atlas.GetPath());
+  const wxString atlas = ResolveTpxoAtlasDirectory(m_tpxoModelDir->GetPath());
+  if (!atlas.empty()) {
+    AppendLog("TPXO10 model is available: " + atlas);
     wxMessageBox("The TPXO10 model grid and constituent files are available.",
                  "TPXO model available", wxOK | wxICON_INFORMATION, this);
   } else {
     const wxString message =
-        "TPXO10 model files were not found below " + atlas.GetPath();
+        "TPXO10 model files were not found. Select either the model parent "
+        "directory or the TPXO10_atlas_v2 directory: " +
+        m_tpxoModelDir->GetPath();
     AppendLog(message);
     wxMessageBox(message, "TPXO model unavailable", wxOK | wxICON_WARNING,
                  this);
@@ -526,8 +539,10 @@ void EnvironmentalGribDialog::OnGenerate(wxCommandEvent&) {
       cachePath = DefaultTpxoCacheFile();
       m_tpxoCacheFile->SetPath(cachePath);
     }
-    if (m_tpxoModelDir->GetPath().empty() || m_tpxoModelName->GetValue().empty()) {
-      wxString message = "Select a TPXO model directory and model name before TPXO cache generation.";
+    if (ResolveTpxoAtlasDirectory(m_tpxoModelDir->GetPath()).empty()) {
+      wxString message =
+          "Select a valid TPXO model parent or TPXO10_atlas_v2 directory "
+          "before TPXO cache generation.";
       AppendLog(message);
       wxMessageBox(message, "Missing TPXO model", wxOK | wxICON_WARNING, this);
       return;
@@ -544,8 +559,10 @@ void EnvironmentalGribDialog::OnGenerate(wxCommandEvent&) {
     }
   }
   if (m_generateCurrents->GetValue() && currentSource.Contains("TPXO direct") &&
-      (m_tpxoModelDir->GetPath().empty() || m_tpxoModelName->GetValue().empty())) {
-    wxString message = "Select a TPXO model directory and model name before direct TPXO generation.";
+      ResolveTpxoAtlasDirectory(m_tpxoModelDir->GetPath()).empty()) {
+    wxString message =
+        "Select a valid TPXO model parent or TPXO10_atlas_v2 directory "
+        "before direct TPXO generation.";
     AppendLog(message);
     wxMessageBox(message, "Missing TPXO model", wxOK | wxICON_WARNING, this);
     return;
@@ -915,9 +932,9 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
   } else {
     m_providerNote->SetLabel("");
   }
-  if (auto* scrolled = dynamic_cast<wxScrolledWindow*>(m_generatorPath->GetParent())) {
-    scrolled->FitInside();
-  }
+  m_scrolled->Layout();
+  m_scrolled->FitInside();
+  m_scrolled->SetVirtualSize(m_scrolled->GetSizer()->GetMinSize());
   Layout();
 }
 

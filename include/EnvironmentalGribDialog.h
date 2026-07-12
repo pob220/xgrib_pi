@@ -4,6 +4,7 @@
 
 #include <wx/filepicker.h>
 #include <wx/process.h>
+#include <wx/scrolwin.h>
 #include <wx/spinctrl.h>
 #include <wx/timer.h>
 #include <wx/wx.h>
@@ -62,6 +63,7 @@ private:
   wxString Redact(const wxString& text) const;
 
   wxTextCtrl* m_generatorPath;
+  wxScrolledWindow* m_scrolled;
   wxTextCtrl* m_west;
   wxTextCtrl* m_south;
   wxTextCtrl* m_east;
