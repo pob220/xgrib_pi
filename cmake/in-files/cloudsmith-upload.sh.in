@@ -109,7 +109,13 @@ tag=$(git tag --contains HEAD)
 
 ls -la
 pwd
-xml=$(ls $BUILD_DIR/*.xml)
+rm -f "$BUILD_DIR/metadata.xml"
+xml=$(find "$BUILD_DIR" -maxdepth 1 -type f -name '*.xml' \
+    ! -name metadata.xml -print -quit)
+if [ -z "$xml" ]; then
+    echo "No package metadata XML found in $BUILD_DIR" >&2
+    exit 1
+fi
 cat $xml
 tarball=$(ls $BUILD_DIR/*.tar.gz)
 tarball_basename=${tarball##*/}
@@ -123,11 +129,8 @@ else
     tarball_name=@PACKAGE_NAME@-@PACKAGE_VERSION@-${PKG_TARGET}-@COMPOUND_ARCH_DASH@@PKG_TARGET_WX_VER@@PKG_BUILD_GTK@-${PKG_TARGET_VERSION}-tarball
 fi
 
-if [ "$(ls $BUILD_DIR/*.${PKG_EXT})" ]; then
-    pkg=$(ls $BUILD_DIR/*.${PKG_EXT})
-else
-    pkg=""
-fi
+pkg=$(find "$BUILD_DIR" -maxdepth 1 -type f -name "*.${PKG_EXT}" \
+    -print -quit)
 
 echo $BUILD_BRANCH
 echo $BUILD_TAG
@@ -171,7 +174,7 @@ fi
 echo $VERSION
 echo $REPO
 
-if [ "$APPVEYOR" ] || [ $LOCAL_BUILD=true ]; then
+if [ -n "$APPVEYOR" ] || [ "$LOCAL_BUILD" = true ]; then
     echo 'substituting xml file variables for windows build'
     while read line; do
         line=${line//--pkg_repo--/$REPO}
@@ -195,7 +198,12 @@ gunzip -f $tarball
 cd "$BUILD_DIR"
 rm -f metadata.xml
 tarball_tar=$(ls *.tar)
-xml_here=$(ls *.xml)
+xml_here=$(find . -maxdepth 1 -type f -name '*.xml' \
+    ! -name metadata.xml -print -quit)
+if [ -z "$xml_here" ]; then
+    echo "No package metadata XML found in $BUILD_DIR" >&2
+    exit 1
+fi
 cp -f $xml_here metadata.xml
 if [ "$TRAVIS" ] || [ "$CIRCLECI" ] || [ ! -z ${LOCAL_DEPLOY+x} ]; then
     mkdir build_tar
