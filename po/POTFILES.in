@@ -1,4 +1,6 @@
 src/environmental_grib_pi.cpp
 src/EnvironmentalGribDialog.cpp
+src/GeneratorJobJson.cpp
 include/environmental_grib_pi.h
 include/EnvironmentalGribDialog.h
+include/GeneratorJobJson.h
