@@ -22,16 +22,16 @@ creating duplicate overlays or ambiguous `GRIB_*` plugin messages.
 - Weather: NOAA GFS and HRRR, Met Office UKV, DWD ICON-EU, ECMWF IFS/AIFS
   Open Data, or an existing GRIB.
 - Waves: NOAA GFS Wave and Copernicus Marine Global Waves.
-- Currents: Offline Tidal from a separately supplied xGRIB `.xtd` package,
+- Currents: Offline current from a separately supplied xGRIB `.xtd` package,
   TPXO10 local model/cache, Marine.ie Irish Sea, NOAA RTOFS, Copernicus
   NWS/Global, an existing GRIB, NetCDF, or synthetic test data.
 
 Some sources require provider credentials or separately licensed local model
 data. These are not bundled with xGRIB.
 
-### Offline Tidal
+### Offline current (.xtd)
 
-**Offline Tidal** evaluates global astronomical tidal-current harmonics from
+**Offline current** evaluates global astronomical tidal-current harmonics from
 a separately supplied `xgrib-global-tides.xtd` package. Select the package in
 the generator's current-source controls; xGRIB authenticates it and shows
 its model, coverage, resolution, constituent count, and build identity before
@@ -45,7 +45,7 @@ It does not contain or predict ocean circulation, Gulf Stream or gyre flow,
 storm surge, wind-driven residuals, river flow, or other non-tidal currents.
 Use a forecast/model provider when those effects are required.
 
-Offline Tidal does not require internet access or TPXO NetCDF files at runtime.
+Offline current does not require internet access or TPXO NetCDF files at runtime.
 It is separate from the direct TPXO and prepared TPXO-cache options, which use
 model data supplied locally by the user. The global XTD package is deliberately
 not embedded in the plugin archive because of its size and update lifecycle.
@@ -54,6 +54,26 @@ source model's registration, copyright, and redistribution terms. The reader
 and package format do not themselves grant permission to redistribute model
 data.
 See [the XTD v1 reader format](docs/xtd-format-v1.md).
+
+An XTD v2 package can additionally contain long-term mean and predictable
+seasonal circulation. When such a package is selected, choose explicitly
+between **Astronomical tide only** and **Tide + expected seasonal
+circulation**. The latter is historical climatology, not an ocean-current
+forecast. Existing XTD v1 settings remain tide-only and no mode falls back
+silently. See [the XTD v2 container format](docs/xtd-format-v2.md).
+
+For diagnostics and independent validation, the bundled native helper can
+sample a package without generating a GRIB:
+
+```sh
+environmental-grib sample-xtd currents.xtd \
+  --latitude 53.75 --longitude -5.2 \
+  --time 2026-07-13T12:00:00Z --mode tide-expected-seasonal
+```
+
+The reported direction is the oceanographic direction **towards** which the
+current flows. Regional sampling reads only the necessary tide/residual tiles;
+uncertainty tiles are not loaded for ordinary prediction.
 
 ## Build
 

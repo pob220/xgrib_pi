@@ -96,6 +96,8 @@ private:
   wxFilePickerCtrl* m_offlineTidalFile;
   wxStaticText* m_offlineTidalStatusLabel;
   wxTextCtrl* m_offlineTidalStatus;
+  wxStaticText* m_offlineCurrentModeLabel;
+  wxChoice* m_offlineCurrentMode;
   wxChoice* m_mode;
   wxChoice* m_presetChoice;
   wxChoice* m_provider;
@@ -147,4 +149,5 @@ private:
   bool m_outputFileUserCustomized{false};
   bool m_updatingOutputFilename{false};
   bool m_offlineTidalPackageValid{false};
+  bool m_offlineClimatologyAvailable{false};
 };
