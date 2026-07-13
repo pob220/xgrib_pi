@@ -1487,7 +1487,13 @@ void EnvironmentalGribDialog::StartCommand(const wxString& command, const wxStri
   m_processRunning = true;
   m_processPid = pid;
   AppendLog(wxString::Format("Process launched, pid=%ld", pid));
-  m_processTimer.Start(100);
+  if (!m_processTimer.Start(100)) {
+    AppendLog("Failed to start the process-output monitor; terminating the helper to avoid an output-pipe deadlock.");
+    wxKillError error = wxKILL_OK;
+    wxKill(pid, wxSIGTERM, &error, wxKILL_CHILDREN);
+    AppendLog(wxString::Format("Helper termination requested (wxKillError=%d).",
+                               static_cast<int>(error)));
+  }
 }
 
 void EnvironmentalGribDialog::FinishCommand(long exit_code, bool launched) {

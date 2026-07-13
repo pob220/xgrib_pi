@@ -402,6 +402,11 @@ if (NOT OCPN_FLATPAK_CONFIG)
       ${wxWidgets_LIBRARIES})
     add_test(NAME xgrib_plugin_policy_tests COMMAND xgrib_plugin_policy_tests)
 
+    add_test(NAME xgrib_environmental_process_output_contract
+      COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/src/EnvironmentalGribDialog.cpp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/EnvironmentalGribDialogContract.cmake)
+
     add_executable(xgrib_reader_integration_tests
       test/XgribReaderIntegrationTests.cpp
       src/GribVectorPolicy.cpp
