@@ -315,6 +315,7 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(
     wxWindow* parent, GribReadyCallback onGribReady)
     : wxDialog(parent, wxID_ANY, "Environmental GRIB Generator", wxDefaultPosition,
                wxSize(880, 760), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+      m_processTimer(this),
       m_onGribReady(std::move(onGribReady)) {
   auto* top = new wxBoxSizer(wxVERTICAL);
   m_scrolled = new wxScrolledWindow(
