@@ -5,6 +5,7 @@
 #include <wx/string.h>
 
 #include "GribReader.h"
+#include "GribVectorPolicy.h"
 #include "GribV2Record.h"
 
 namespace {
@@ -44,16 +45,32 @@ int main(int argc, char** argv) {
 
   int uRecords = 0;
   int vRecords = 0;
+  GribRecord* firstU = nullptr;
+  GribRecord* firstV = nullptr;
   for (const auto& [key, records] : *reader.getGribMap()) {
     (void)key;
     if (!records) continue;
     for (const GribRecord* record : *records) {
-      if (record->getDataType() == GRB_UOGRD) ++uRecords;
-      if (record->getDataType() == GRB_VOGRD) ++vRecords;
+      if (record->getDataType() == GRB_UOGRD) {
+        ++uRecords;
+        if (!firstU) firstU = const_cast<GribRecord*>(record);
+      }
+      if (record->getDataType() == GRB_VOGRD) {
+        ++vRecords;
+        if (!firstV) firstV = const_cast<GribRecord*>(record);
+      }
     }
   }
   Expect(uRecords == 3, "expected three U-current records");
   Expect(vRecords == 3, "expected three V-current records");
+  Expect(xgrib::IsRenderableCurrentRecordPair(firstU, firstV),
+         "native generator fixture currents should be renderable");
+  const double original = firstU->getValue(0, 0);
+  firstU->setValue(0, 0, 12.001);
+  firstV->setValue(0, 0, 0.0);
+  Expect(!xgrib::IsRenderableCurrentRecordPair(firstU, firstV),
+         "one implausible vector must reject the complete current record pair");
+  firstU->setValue(0, 0, original);
 
   std::cout << "xGRIB reader accepted native generator output\n";
   return 0;

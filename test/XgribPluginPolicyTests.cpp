@@ -1,9 +1,11 @@
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 
 #include <wx/fileconf.h>
 
 #include "XgribPluginPolicy.h"
+#include "GribVectorPolicy.h"
 
 namespace {
 
@@ -48,6 +50,16 @@ int main() {
 
   Expect(!IsBundledGribPluginEnabled(nullptr),
          "missing OpenCPN config must fail open without a false conflict");
+
+  Expect(xgrib::IsRenderableDirectionVector(12.0, 180.0, false),
+         "a genuine 12 m/s current must remain renderable");
+  Expect(!xgrib::IsRenderableDirectionVector(12.001, 180.0, false),
+         "an implausible current must be rejected before arrow scaling");
+  Expect(!xgrib::IsRenderableDirectionVector(
+             std::numeric_limits<double>::infinity(), 180.0, false),
+         "an infinite current must not reach the renderer");
+  Expect(xgrib::IsRenderableDirectionVector(8.0, 180.0, true),
+         "the current guard must not reject finite wave heights");
   std::cout << "xGRIB plugin policy tests passed\n";
   return 0;
 }

@@ -1,5 +1,6 @@
 src/grib_pi.cpp
 src/GribOverlayFactory.cpp
+src/GribVectorPolicy.cpp
 src/GribUIDialogBase.cpp
 src/GrabberWin.cpp
 src/GribUIDialog.cpp
@@ -29,6 +30,7 @@ libs/manual/src/manual_dlg.cpp
 src/pi_TexFont.cpp
 src/grib_pi.h
 src/GribOverlayFactory.h
+src/GribVectorPolicy.h
 src/GribUIDialogBase.h
 src/GrabberWin.h
 src/GribUIDialog.h

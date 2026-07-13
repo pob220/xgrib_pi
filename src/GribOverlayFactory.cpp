@@ -43,6 +43,7 @@
 
 #include "GribUIDialog.h"
 #include "GribOverlayFactory.h"
+#include "GribVectorPolicy.h"
 
 extern int m_Altitude;
 extern bool g_bpause;
@@ -1654,6 +1655,9 @@ void GRIBOverlayFactory::RenderGribDirectionArrows(int settings,
           scale = wxMax(1.0, sh);  // Size depends on magnitude.
         }
 
+        // Keep malformed GRIB vectors from generating unbounded geometry.
+        if (!xgrib::IsRenderableDirectionVector(sh, dir, polar))
+          continue;
         dir = (dir - 90) * M_PI / 180.;
 
         // draw arrows
@@ -1734,6 +1738,9 @@ void GRIBOverlayFactory::RenderGribDirectionArrows(int settings,
               scale = wxMax(1.0, sh);  // Size depends on magnitude.
             }
 
+            // Keep malformed GRIB vectors from generating unbounded geometry.
+            if (!xgrib::IsRenderableDirectionVector(sh, dir, polar))
+              continue;
             dir = (dir - 90) * M_PI / 180.;
 
             // draw arrows

@@ -181,6 +181,7 @@ add_definitions(-DUSE_S57)
 set(SRCS
     src/grib_pi.cpp
     src/GribOverlayFactory.cpp
+    src/GribVectorPolicy.cpp
     src/GribUIDialogBase.cpp
     src/GrabberWin.cpp
     src/GribUIDialog.cpp
@@ -211,6 +212,7 @@ set(SRCS
 set(HDRS
     src/grib_pi.h
     src/GribOverlayFactory.h
+    src/GribVectorPolicy.h
     src/GribUIDialogBase.h
     src/GrabberWin.h
     src/GribUIDialog.h
@@ -402,6 +404,7 @@ if (NOT OCPN_FLATPAK_CONFIG)
 
     add_executable(xgrib_reader_integration_tests
       test/XgribReaderIntegrationTests.cpp
+      src/GribVectorPolicy.cpp
       src/GribReader.cpp src/GribRecord.cpp src/GribV1Record.cpp
       src/GribV2Record.cpp src/zuFile.cpp)
     target_include_directories(xgrib_reader_integration_tests PRIVATE

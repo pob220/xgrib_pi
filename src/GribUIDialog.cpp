@@ -46,6 +46,7 @@
 #include "email.h"
 #include "folder.xpm"
 #include "GribUIDialog.h"
+#include "GribVectorPolicy.h"
 #include "EnvironmentalGribDialog.h"
 #include <wx/arrimpl.cpp>
 
@@ -2530,6 +2531,51 @@ GRIBFile::GRIBFile(const wxArrayString &file_names, bool CumRec, bool WaveRec,
         }
       }
     }
+  }
+
+  unsigned int rejectedCurrentSets = 0;
+  int firstRejectedUType = -1;
+  int firstRejectedVType = -1;
+  time_t firstRejectedTime = 0;
+  for (unsigned int j = 0; j < m_GribRecordSetArray.GetCount(); ++j) {
+    GribRecordSet& set = m_GribRecordSetArray.Item(j);
+    GribRecord* u = set.m_GribRecordPtrArray[Idx_SEACURRENT_VX];
+    GribRecord* v = set.m_GribRecordPtrArray[Idx_SEACURRENT_VY];
+    if (!u && !v) continue;
+    if (xgrib::IsRenderableCurrentRecordPair(u, v)) continue;
+
+    if (rejectedCurrentSets == 0) {
+      firstRejectedUType = u ? u->getDataType() : -1;
+      firstRejectedVType = v ? v->getDataType() : -1;
+      firstRejectedTime = set.m_Reference_Time;
+    }
+
+    set.m_GribRecordPtrArray[Idx_SEACURRENT_VX] = nullptr;
+    set.m_GribRecordPtrArray[Idx_SEACURRENT_VY] = nullptr;
+    ++rejectedCurrentSets;
+  }
+
+  if (rejectedCurrentSets > 0) {
+    bool hasUsableCurrent = false;
+    for (unsigned int j = 0; j < m_GribRecordSetArray.GetCount(); ++j) {
+      const GribRecordSet& set = m_GribRecordSetArray.Item(j);
+      if (set.m_GribRecordPtrArray[Idx_SEACURRENT_VX] &&
+          set.m_GribRecordPtrArray[Idx_SEACURRENT_VY]) {
+        hasUsableCurrent = true;
+        break;
+      }
+    }
+    if (!hasUsableCurrent) {
+      m_GribIdxArray.Remove(Idx_SEACURRENT_VX);
+      m_GribIdxArray.Remove(Idx_SEACURRENT_VY);
+    }
+    wxLogWarning(
+        "xGRIB rejected %u malformed current record set(s): current speed "
+        "exceeded %.1f m/s or contained invalid paired data "
+        "(first types=%d/%d valid_time=%lld)",
+        rejectedCurrentSets,
+        xgrib::kMaxRenderableCurrentMetresPerSecond, firstRejectedUType,
+        firstRejectedVType, static_cast<long long>(firstRejectedTime));
   }
 
   if (isOK)
