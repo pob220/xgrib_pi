@@ -22,18 +22,45 @@ creating duplicate overlays or ambiguous `GRIB_*` plugin messages.
 - Weather: NOAA GFS and HRRR, Met Office UKV, DWD ICON-EU, ECMWF IFS/AIFS
   Open Data, or an existing GRIB.
 - Waves: NOAA GFS Wave and Copernicus Marine Global Waves.
-- Currents: TPXO10 local model/cache, Marine.ie Irish Sea, NOAA RTOFS,
-  Copernicus NWS/Global, an existing GRIB, NetCDF, or synthetic test data.
+- Currents: Offline Tidal from a separately supplied xGRIB `.xtd` package,
+  TPXO10 local model/cache, Marine.ie Irish Sea, NOAA RTOFS, Copernicus
+  NWS/Global, an existing GRIB, NetCDF, or synthetic test data.
 
 Some sources require provider credentials or separately licensed local model
 data. These are not bundled with xGRIB.
+
+### Offline Tidal
+
+**Offline Tidal** evaluates global astronomical tidal-current harmonics from
+a separately supplied `xgrib-global-tides.xtd` package. Select the package in
+the generator's current-source controls; xGRIB authenticates it and shows
+its model, coverage, resolution, constituent count, and build identity before
+generation is enabled. The selected path is retained in the plugin settings.
+
+XTD v1 is a runtime-optimized representation derived from the full-resolution
+TPXO10 Atlas v2 current solution. It is intended to reproduce that model's
+eastward and northward astronomical tidal currents, including its standard
+astronomical and nodal corrections and optional minor-constituent inference.
+It does not contain or predict ocean circulation, Gulf Stream or gyre flow,
+storm surge, wind-driven residuals, river flow, or other non-tidal currents.
+Use a forecast/model provider when those effects are required.
+
+Offline Tidal does not require internet access or TPXO NetCDF files at runtime.
+It is separate from the direct TPXO and prepared TPXO-cache options, which use
+model data supplied locally by the user. The global XTD package is deliberately
+not embedded in the plugin archive because of its size and update lifecycle.
+Distribution of a package derived from TPXO requires compliance with the
+source model's registration, copyright, and redistribution terms. The reader
+and package format do not themselves grant permission to redistribute model
+data.
+See [the XTD v1 reader format](docs/xtd-format-v1.md).
 
 ## Build
 
 The xGRIB viewer requires the normal OpenCPN plugin toolchain plus development
 packages for wxWidgets, Jasper, bzip2 and zlib. Building the bundled native
 generator also requires ecCodes, NetCDF, libcurl, jsoncpp, Qhull, Blosc,
-libzip and PROJ.
+libzip, PROJ, libsodium and Zstandard.
 
 ```sh
 git clone --recurse-submodules https://github.com/pob220/xgrib_pi.git

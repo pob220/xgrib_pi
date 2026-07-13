@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cmath>
+#include <initializer_list>
 #include <vector>
 
 #ifdef __UNIX__
@@ -216,6 +217,98 @@ void RedactQueryParameter(wxString* text, const wxString& name) {
   }
 }
 
+wxString JoinLines(const wxArrayString& lines) {
+  wxString result;
+  for (const auto& line : lines) {
+    if (!result.empty()) result += "\n";
+    result += line;
+  }
+  return result;
+}
+
+wxString ConciseText(wxString text) {
+  text.Replace("\r", " ");
+  text.Replace("\n", " ");
+  text.Replace("\t", " ");
+  text.Trim(true).Trim(false);
+  while (text.Replace("  ", " ") != 0) {
+  }
+  if (text.Lower().StartsWith("error:")) {
+    text = text.Mid(6);
+    text.Trim(false);
+  }
+  constexpr size_t kMaximumStatusLength = 360;
+  if (text.Length() > kMaximumStatusLength) {
+    text = text.Left(kMaximumStatusLength - 3) + "...";
+  }
+  return text;
+}
+
+wxString FirstJsonText(const wxJSONValue& object,
+                       std::initializer_list<const char*> keys) {
+  if (!object.IsObject()) return {};
+  for (const char* key : keys) {
+    if (!object.HasMember(key)) continue;
+    const wxJSONValue value = object.ItemAt(key);
+    if (value.IsString() || value.IsInt() || value.IsUInt() ||
+        value.IsLong() || value.IsULong() || value.IsDouble()) {
+      const wxString text = value.AsString();
+      if (!text.empty()) return text;
+    }
+  }
+  return {};
+}
+
+bool JsonBoundingBox(const wxJSONValue& root, double* west, double* south,
+                     double* east, double* north) {
+  if (!root.IsObject()) return false;
+  for (const char* key : {"coverage", "bbox"}) {
+    if (!root.HasMember(key)) continue;
+    const wxJSONValue coverage = root.ItemAt(key);
+    if (coverage.IsObject() && coverage.HasMember("west") &&
+        coverage.HasMember("south") && coverage.HasMember("east") &&
+        coverage.HasMember("north")) {
+      return coverage.ItemAt("west").AsString().ToDouble(west) &&
+             coverage.ItemAt("south").AsString().ToDouble(south) &&
+             coverage.ItemAt("east").AsString().ToDouble(east) &&
+             coverage.ItemAt("north").AsString().ToDouble(north);
+    }
+    if (coverage.IsArray() && coverage.Size() == 4) {
+      return coverage.ItemAt(0).AsString().ToDouble(west) &&
+             coverage.ItemAt(1).AsString().ToDouble(south) &&
+             coverage.ItemAt(2).AsString().ToDouble(east) &&
+             coverage.ItemAt(3).AsString().ToDouble(north);
+    }
+  }
+  return false;
+}
+
+wxString OfflineTidalFailureStatus(const wxString& detail) {
+  const wxString lower = detail.Lower();
+  if (lower.Contains("unsupported version") ||
+      lower.Contains("unsupported header") || lower.Contains("format_version")) {
+    return _("Unsupported XTD version");
+  }
+  if (lower.Contains("authenticat") || lower.Contains("integrity") ||
+      lower.Contains("public-region") || lower.Contains("mac")) {
+    return _("Authentication/integrity failure");
+  }
+  if (lower.Contains("index")) return _("Invalid tile index");
+  if (lower.Contains("outside") && lower.Contains("coverage")) {
+    return _("Requested area outside coverage");
+  }
+  if (lower.Contains("metadata") || lower.Contains("constituent") ||
+      lower.Contains("velocity_units") || lower.Contains("corrections") ||
+      lower.Contains("model data")) {
+    return _("Unsupported model data");
+  }
+  if (lower.Contains("header") || lower.Contains("magic") ||
+      lower.Contains("endian") || lower.Contains("invalid xtd package")) {
+    return _("Corrupt header");
+  }
+  return _("Inspection failed");
+}
+
 }  // namespace
 
 EnvironmentalGribDialog::EnvironmentalGribDialog(
@@ -292,11 +385,20 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(
                                "Copernicus Global forecast/model currents",
                                "NOAA RTOFS Global ocean currents",
                                "NOAA OFS / S-111 coastal currents (experimental)",
-                               "Auto forecast/model current provider"};
+                               "Auto forecast/model current provider",
+                               _("Offline Tidal")};
   m_currentSource = new wxChoice(scrolled, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                  WXSIZEOF(currentSources), currentSources);
   m_currentSource->SetSelection(2);
   m_existingCurrentFile = new wxFilePickerCtrl(scrolled, wxID_ANY, "", "Select current GRIB", "*.grb;*.grb2");
+  m_offlineTidalFile = new wxFilePickerCtrl(
+      scrolled, wxID_ANY, "", _("Select Offline Tidal package"),
+      _("xGRIB tidal data (*.xtd)|*.xtd|All files (*.*)|*.*"),
+      wxDefaultPosition, wxDefaultSize, wxFLP_OPEN | wxFLP_FILE_MUST_EXIST);
+  m_offlineTidalStatus = new wxTextCtrl(
+      scrolled, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 118),
+      wxTE_MULTILINE | wxTE_READONLY);
+  m_offlineTidalStatus->SetMinSize(wxSize(-1, 100));
 
   wxString modes[] = {"Forecast/model current GRIB",
                       "Tidal stream prediction from local TPXO model",
@@ -364,6 +466,8 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(
   grid->Add(m_generateCurrents, 0);
   addRow("Current source", m_currentSource);
   m_existingCurrentFileLabel = addRow("Existing current GRIB", m_existingCurrentFile);
+  m_offlineTidalFileLabel = addRow(_("Offline Tidal package"), m_offlineTidalFile);
+  m_offlineTidalStatusLabel = addRow(_("Offline Tidal status"), m_offlineTidalStatus);
   m_usernameLabel = addRow("Copernicus username", m_username);
   m_passwordLabel = addRow("Copernicus password", m_password);
   addRow("Provider note", m_providerNote);
@@ -425,6 +529,8 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(
   m_prepareTpxoCacheButton->Bind(wxEVT_BUTTON, &EnvironmentalGribDialog::OnPrepareTpxoCache, this);
   outputBrowse->Bind(wxEVT_BUTTON, &EnvironmentalGribDialog::OnBrowseOutput, this);
   m_outputFile->Bind(wxEVT_TEXT, &EnvironmentalGribDialog::OnOutputFilenameChanged, this);
+  m_offlineTidalFile->Bind(wxEVT_FILEPICKER_CHANGED,
+                           &EnvironmentalGribDialog::OnOfflineTidalFileChanged, this);
   m_presetChoice->Bind(wxEVT_CHOICE, &EnvironmentalGribDialog::OnPresetChanged, this);
   m_provider->Bind(wxEVT_CHOICE, &EnvironmentalGribDialog::OnProviderChanged, this);
   m_mode->Bind(wxEVT_CHOICE, &EnvironmentalGribDialog::OnModeChanged, this);
@@ -445,6 +551,7 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(
   wxLogMessage("xGRIB environmental generator executable: %s",
                m_generatorPath->GetValue());
   LoadSettings();
+  ValidateOfflineTidalPackage();
   RefreshOutputFilenameDefault();
   UpdateProviderUi();
   SetBusy(false);
@@ -544,6 +651,16 @@ void EnvironmentalGribDialog::OnGenerate(wxCommandEvent&) {
     AppendLog(message);
     wxMessageBox(message, "Missing current GRIB", wxOK | wxICON_WARNING, this);
     return;
+  }
+  if (m_generateCurrents->GetValue() && IsOfflineTidalSelected()) {
+    ValidateOfflineTidalPackage();
+    if (!m_offlineTidalPackageValid) {
+      const wxString message = m_offlineTidalStatus->GetValue();
+      AppendLog(_("Offline Tidal package is unavailable: ") + message);
+      wxMessageBox(message, _("Offline Tidal package unavailable"),
+                   wxOK | wxICON_WARNING, this);
+      return;
+    }
   }
   if (m_generateCurrents->GetValue() && currentSource.Contains("TPXO cache")) {
     wxString cachePath = m_tpxoCacheFile->GetPath();
@@ -678,11 +795,21 @@ void EnvironmentalGribDialog::OnOutputFilenameChanged(wxCommandEvent&) {
   m_outputFileUserCustomized = true;
 }
 
-void EnvironmentalGribDialog::OnPresetChanged(wxCommandEvent& event) {
-  ApplyPreset(event.GetSelection());
+void EnvironmentalGribDialog::OnOfflineTidalFileChanged(wxFileDirPickerEvent&) {
+  ValidateOfflineTidalPackage();
+  SaveSettings();
 }
 
-void EnvironmentalGribDialog::OnProviderChanged(wxCommandEvent&) {
+void EnvironmentalGribDialog::OnPresetChanged(wxCommandEvent& event) {
+  ApplyPreset(event.GetSelection());
+  if (IsOfflineTidalSelected()) ValidateOfflineTidalPackage();
+}
+
+void EnvironmentalGribDialog::OnProviderChanged(wxCommandEvent& event) {
+  if (event.GetEventObject() == m_currentSource) {
+    if (IsOfflineTidalSelected()) ValidateOfflineTidalPackage();
+    SaveSettings();
+  }
   RefreshOutputFilenameDefault();
   UpdateProviderUi();
 }
@@ -781,6 +908,171 @@ bool EnvironmentalGribDialog::NeedsCopernicusCredentials() const {
   return currentSource.Contains("Copernicus") || currentSource.Contains("Auto");
 }
 
+bool EnvironmentalGribDialog::IsOfflineTidalSelected() const {
+  return m_currentSource &&
+         m_currentSource->GetStringSelection() == _("Offline Tidal");
+}
+
+bool EnvironmentalGribDialog::ValidateOfflineTidalPackage() {
+  m_offlineTidalPackageValid = false;
+  const wxString path = m_offlineTidalFile->GetPath();
+  if (path.empty()) {
+    m_offlineTidalStatus->SetValue(_("File not configured"));
+    return false;
+  }
+  if (!wxFileName::FileExists(path)) {
+    m_offlineTidalStatus->SetValue(
+        wxString::Format(_("File not found: %s"), path));
+    return false;
+  }
+
+  wxArrayString standardOutput;
+  wxArrayString standardError;
+  const wxString command = ShellQuote(m_generatorPath->GetValue()) +
+                           " inspect-xtd " + ShellQuote(path);
+  const long exitCode = wxExecute(command, standardOutput, standardError,
+                                  wxEXEC_SYNC);
+  const wxString output = JoinLines(standardOutput);
+  wxString detail = JoinLines(standardError);
+  if (detail.empty()) detail = output;
+  detail = ConciseText(Redact(detail));
+
+  if (exitCode != 0) {
+    if (detail.empty()) {
+      detail = exitCode == -1
+                   ? _("The native helper could not be launched.")
+                   : wxString::Format(_("The native helper exited with status %ld."),
+                                      exitCode);
+    }
+    m_offlineTidalStatus->SetValue(
+        OfflineTidalFailureStatus(detail) + ": " + detail);
+    return false;
+  }
+
+  wxJSONValue metadata;
+  wxJSONReader reader;
+  int parseErrors = reader.Parse(output, &metadata);
+  if (parseErrors != 0 || !metadata.IsObject()) {
+    const size_t firstBrace = output.find('{');
+    const size_t lastBrace = output.rfind('}');
+    if (firstBrace != wxString::npos && lastBrace != wxString::npos &&
+        lastBrace > firstBrace) {
+      parseErrors = reader.Parse(
+          output.Mid(firstBrace, lastBrace - firstBrace + 1), &metadata);
+    }
+  }
+  if (parseErrors != 0 || !metadata.IsObject()) {
+    m_offlineTidalStatus->SetValue(
+        _("Inspection failed: helper returned invalid metadata"));
+    return false;
+  }
+  if ((metadata.HasMember("valid") &&
+       metadata.ItemAt("valid").IsBool() &&
+       !metadata.ItemAt("valid").AsBool()) ||
+      (metadata.HasMember("authenticated") &&
+       metadata.ItemAt("authenticated").IsBool() &&
+       !metadata.ItemAt("authenticated").AsBool())) {
+    m_offlineTidalStatus->SetValue(
+        _("Authentication/integrity failure: package validation failed"));
+    return false;
+  }
+
+  double coverageWest = 0.0;
+  double coverageSouth = 0.0;
+  double coverageEast = 0.0;
+  double coverageNorth = 0.0;
+  const bool haveCoverage =
+      JsonBoundingBox(metadata, &coverageWest, &coverageSouth, &coverageEast,
+                      &coverageNorth);
+  double requestedWest = 0.0;
+  double requestedSouth = 0.0;
+  double requestedEast = 0.0;
+  double requestedNorth = 0.0;
+  const bool haveRequestedArea =
+      m_west->GetValue().ToDouble(&requestedWest) &&
+      m_south->GetValue().ToDouble(&requestedSouth) &&
+      m_east->GetValue().ToDouble(&requestedEast) &&
+      m_north->GetValue().ToDouble(&requestedNorth);
+  if (haveCoverage && haveRequestedArea &&
+      (requestedWest < coverageWest || requestedSouth < coverageSouth ||
+       requestedEast > coverageEast || requestedNorth > coverageNorth)) {
+    m_offlineTidalStatus->SetValue(wxString::Format(
+        _("Requested area outside coverage: package covers %.4f, %.4f to %.4f, %.4f"),
+        coverageWest, coverageSouth, coverageEast, coverageNorth));
+    return false;
+  }
+
+  wxString model = FirstJsonText(
+      metadata, {"model_name", "model_source", "source"});
+  const wxString description = FirstJsonText(
+      metadata,
+      {"model_source_description", "source_description", "description"});
+  if (!description.empty() && description != model) {
+    if (!model.empty()) model += " - ";
+    model += description;
+  }
+  if (model.empty()) model = _("Not provided");
+
+  wxString coverageText = FirstJsonText(metadata, {"coverage_description"});
+  if (coverageText.empty() && haveCoverage) {
+    coverageText = wxString::Format(_("%.4f, %.4f to %.4f, %.4f"),
+                                    coverageWest, coverageSouth, coverageEast,
+                                    coverageNorth);
+  }
+  if (coverageText.empty() && metadata.HasMember("coverage") &&
+      metadata.ItemAt("coverage").IsString()) {
+    coverageText = metadata.ItemAt("coverage").AsString();
+  }
+  if (coverageText.empty()) coverageText = _("Not provided");
+
+  wxString resolution = FirstJsonText(
+      metadata, {"nominal_resolution", "resolution", "grid_resolution",
+                 "grid_spacing_degrees", "grid_spacing_deg"});
+  if (resolution.empty()) resolution = _("Not provided");
+  wxString formatVersion = FirstJsonText(metadata, {"format_version"});
+  if (formatVersion.empty()) formatVersion = _("Not provided");
+
+  wxString constituentCount;
+  if (metadata.HasMember("constituents") &&
+      metadata.ItemAt("constituents").IsArray()) {
+    constituentCount =
+        wxString::Format("%d", metadata.ItemAt("constituents").Size());
+  } else {
+    constituentCount = FirstJsonText(metadata, {"constituent_count"});
+  }
+  if (constituentCount.empty()) constituentCount = _("Not provided");
+
+  wxString packageVersion = FirstJsonText(metadata, {"package_version"});
+  wxString buildId = FirstJsonText(
+      metadata, {"build_id", "package_build_id", "package_build"});
+  if (metadata.HasMember("package") && metadata.ItemAt("package").IsObject()) {
+    const wxJSONValue package = metadata.ItemAt("package");
+    if (packageVersion.empty()) {
+      packageVersion = FirstJsonText(package, {"version", "package_version"});
+    }
+    if (buildId.empty()) {
+      buildId = FirstJsonText(package, {"build_id", "build"});
+    }
+  }
+  wxString packageBuild = packageVersion;
+  if (!buildId.empty()) {
+    if (!packageBuild.empty()) packageBuild += " / ";
+    packageBuild += buildId;
+  }
+  if (packageBuild.empty()) packageBuild = _("Not provided");
+
+  wxString status = _("Ready");
+  status += "\n" + wxString::Format(_("Model/source: %s"), model);
+  status += "\n" + wxString::Format(_("Coverage: %s"), coverageText);
+  status += "\n" + wxString::Format(_("Nominal resolution: %s"), resolution);
+  status += "\n" + wxString::Format(_("Format version: %s"), formatVersion);
+  status += "\n" + wxString::Format(_("Constituent count: %s"), constituentCount);
+  status += "\n" + wxString::Format(_("Package version/build ID: %s"), packageBuild);
+  m_offlineTidalStatus->SetValue(status);
+  m_offlineTidalPackageValid = true;
+  return true;
+}
+
 void EnvironmentalGribDialog::UpdateProviderUi() {
   int mode = m_mode->GetSelection();
   wxString provider = m_provider->GetStringSelection();
@@ -797,6 +1089,7 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
   bool currentMarine = currentsEnabled && m_currentSource->GetStringSelection().Contains("Marine.ie");
   bool currentRtofs = currentsEnabled && m_currentSource->GetStringSelection().Contains("RTOFS");
   bool currentOfs = currentsEnabled && m_currentSource->GetStringSelection().Contains("OFS");
+  bool currentOfflineTidal = currentsEnabled && IsOfflineTidalSelected();
   bool weatherGfs = weatherEnabled && m_weatherProvider->GetStringSelection().Contains("GFS");
   bool weatherHrrr = weatherEnabled && m_weatherProvider->GetStringSelection().Contains("HRRR");
   bool weatherUkv = weatherEnabled && m_weatherProvider->GetStringSelection().Contains("Met Office UKV");
@@ -825,6 +1118,8 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
   m_existingWeatherFile->Enable(weatherExisting);
   m_currentSource->Enable(m_generateCurrents->GetValue());
   showPair(m_existingCurrentFileLabel, m_existingCurrentFile, currentExisting);
+  showPair(m_offlineTidalFileLabel, m_offlineTidalFile, currentOfflineTidal);
+  showPair(m_offlineTidalStatusLabel, m_offlineTidalStatus, currentOfflineTidal);
   showPair(m_usernameLabel, m_username, needsCopernicusCredentials);
   showPair(m_passwordLabel, m_password, needsCopernicusCredentials);
   showPair(m_tpxoModelDirLabel, m_tpxoModelDir, showTpxoModel);
@@ -836,6 +1131,7 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
   showPair(m_localNetcdfLabel, m_localNetcdf, false);
   m_rememberUsername->Show(needsCopernicusCredentials);
   m_existingCurrentFile->Enable(currentExisting);
+  m_offlineTidalFile->Enable(currentOfflineTidal && !m_processRunning);
   m_username->Enable(needsCopernicusCredentials);
   m_password->Enable(needsCopernicusCredentials);
   m_rememberUsername->Enable(needsCopernicusCredentials);
@@ -849,7 +1145,9 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
   m_localNetcdf->Enable(false);
 
   wxString currentNote;
-  if (currentRtofs) {
+  if (currentOfflineTidal) {
+    currentNote = _("Current source: Offline Tidal package. Astronomical tidal currents are generated locally from the selected authenticated XTD package; no network access or TPXO model directory is used.");
+  } else if (currentRtofs) {
     currentNote =
         "Current source: NOAA RTOFS Global ocean-current forecast. Global/no account. "
         "Useful for offshore ocean-current routing, including Gulf Stream-type circulation where model guidance is available. "
@@ -1352,7 +1650,8 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
   wxString currentSource = "none";
   if (m_generateCurrents->GetValue()) {
     const wxString selected = m_currentSource->GetStringSelection();
-    if (selected.Contains("TPXO cache")) currentSource = "tpxo-cache";
+    if (IsOfflineTidalSelected()) currentSource = "offline-tidal";
+    else if (selected.Contains("TPXO cache")) currentSource = "tpxo-cache";
     else if (selected.Contains("TPXO direct")) currentSource = "tpxo";
     else if (selected.Contains("Existing")) currentSource = "existing-file";
     else if (selected.Contains("Marine.ie")) currentSource = "marine_ie_irish_sea";
@@ -1362,8 +1661,10 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
     else if (selected.Contains("Global")) currentSource = "copernicus_global";
     else if (selected.Contains("Auto")) currentSource = "auto";
   }
-  if (m_mode->GetSelection() == 2) currentSource = "netcdf";
-  if (m_mode->GetSelection() == 3) currentSource = "synthetic";
+  if (!IsOfflineTidalSelected()) {
+    if (m_mode->GetSelection() == 2) currentSource = "netcdf";
+    if (m_mode->GetSelection() == 3) currentSource = "synthetic";
+  }
 
   wxJSONValue root = CreateGeneratorJobEnvelope();
   wxJSONValue& request = root["request"];
@@ -1386,6 +1687,7 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
   request["waveStepHours"] = 3;
   request["currentSource"] = currentSource;
   request["currentFile"] = m_existingCurrentFile->GetPath();
+  request["offlineTidalFile"] = m_offlineTidalFile->GetPath();
   request["inputNetcdf"] = m_localNetcdf->GetPath();
   request["inputCache"] = m_tpxoCacheFile->GetPath();
   request["tpxoModelDirectory"] = m_tpxoModelDir->GetPath();
@@ -1501,7 +1803,8 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
     if (wavesOn) {
       prefix += m_waveProvider->GetStringSelection().Contains("Copernicus") ? "_copernicus_waves" : "_wave";
     }
-    if (currentSource.Contains("TPXO cache")) prefix += "_tpxo_cache";
+    if (IsOfflineTidalSelected()) prefix += "_offline_tidal";
+    else if (currentSource.Contains("TPXO cache")) prefix += "_tpxo_cache";
     else if (currentSource.Contains("TPXO direct")) prefix += "_tpxo";
     else if (currentSource.Contains("Marine.ie")) prefix += "_marine_ie";
     else if (currentSource.Contains("RTOFS")) prefix += "_noaa_rtofs_global";
@@ -1531,7 +1834,8 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
     if (looksIrishSea) prefix += "_irish_sea";
   } else if (currentOn) {
     prefix = "current";
-    if (currentSource.Contains("TPXO cache")) prefix += "_tpxo_cache";
+    if (IsOfflineTidalSelected()) prefix += "_offline_tidal";
+    else if (currentSource.Contains("TPXO cache")) prefix += "_tpxo_cache";
     else if (currentSource.Contains("TPXO direct")) prefix += "_tpxo";
     else if (currentSource.Contains("Marine.ie")) prefix += "_marine_ie";
     else if (currentSource.Contains("RTOFS")) prefix += "_noaa_rtofs_global";
@@ -1613,6 +1917,15 @@ void EnvironmentalGribDialog::LoadSettings() {
   if (config->Read("tpxo_cache_file", &value) && !value.empty()) {
     m_tpxoCacheFile->SetPath(value);
   }
+  if (config->Read("offline_tidal_file", &value) && !value.empty()) {
+    m_offlineTidalFile->SetPath(value);
+  }
+  const long currentSourceSelection = config->ReadLong(
+      "current_source_selection", m_currentSource->GetSelection());
+  if (currentSourceSelection >= 0 &&
+      currentSourceSelection < static_cast<long>(m_currentSource->GetCount())) {
+    m_currentSource->SetSelection(static_cast<int>(currentSourceSelection));
+  }
   m_useTpxoCache->SetValue(config->ReadBool("use_tpxo_cache", false));
   m_durationHours->SetValue(static_cast<int>(config->ReadLong("duration_hours", m_durationHours->GetValue())));
   m_stepHours->SetValue(static_cast<int>(config->ReadLong("step_hours", m_stepHours->GetValue())));
@@ -1634,6 +1947,9 @@ void EnvironmentalGribDialog::SaveSettings() {
   config->Write("tpxo_model_name", m_tpxoModelName->GetValue());
   config->Write("tpxo_grid_spacing", m_tpxoGridSpacing->GetValue());
   config->Write("tpxo_cache_file", m_tpxoCacheFile->GetPath());
+  config->Write("offline_tidal_file", m_offlineTidalFile->GetPath());
+  config->Write("current_source_selection",
+                static_cast<long>(m_currentSource->GetSelection()));
   config->Write("use_tpxo_cache", m_useTpxoCache->GetValue());
   config->Write("duration_hours", static_cast<long>(m_durationHours->GetValue()));
   config->Write("step_hours", static_cast<long>(m_stepHours->GetValue()));

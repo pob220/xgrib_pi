@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: xgrib_pi 0.1.0.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-12 23:47+0100\n"
+"POT-Creation-Date: 2026-07-13 12:25+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -31,12 +31,12 @@ msgstr ""
 msgid "Browse on-line manual"
 msgstr ""
 
-#: src/CursorData.cpp:145 src/CustomGrid.cpp:63 src/GribOverlayFactory.cpp:381
-#: src/GribOverlayFactory.cpp:383 src/GribOverlayFactory.cpp:2047
+#: src/CursorData.cpp:145 src/CustomGrid.cpp:63 src/GribOverlayFactory.cpp:382
+#: src/GribOverlayFactory.cpp:384 src/GribOverlayFactory.cpp:2054
 #: src/GribRequestDialog.cpp:261 src/GribRequestDialog.cpp:351
 #: src/GribRequestDialog.cpp:1252 src/GribTable.cpp:50 src/GribTable.cpp:60
 #: src/GribTable.cpp:61 src/GribUIDialogBase.cpp:3607
-#: src/GribUIDialogBase.cpp:3642 src/grib_pi.cpp:532 src/grib_pi.h:130
+#: src/GribUIDialogBase.cpp:3642 src/grib_pi.cpp:531 src/grib_pi.h:130
 msgid "Dialog"
 msgstr ""
 
@@ -155,45 +155,184 @@ msgstr ""
 msgid "Menu"
 msgstr ""
 
-#: src/GribOverlayFactory.cpp:601
+#: src/EnvironmentalGribDialog.cpp:290
+msgid "Unsupported XTD version"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:294
+msgid "Authentication/integrity failure"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:296
+msgid "Invalid tile index"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:298
+msgid "Requested area outside coverage"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:303
+msgid "Unsupported model data"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:307
+msgid "Corrupt header"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:309
+msgid "Inspection failed"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:389 src/EnvironmentalGribDialog.cpp:913
+msgid "Offline Tidal"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:395
+msgid "Select Offline Tidal package"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:396
+msgid "xGRIB tidal data (*.xtd)|*.xtd|All files (*.*)|*.*"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:469
+msgid "Offline Tidal package"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:470
+msgid "Offline Tidal status"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:659
+msgid "Offline Tidal package is unavailable: "
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:660
+msgid "Offline Tidal package unavailable"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:920
+msgid "File not configured"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:925
+#, c-format
+msgid "File not found: %s"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:943
+msgid "The native helper could not be launched."
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:944
+#, c-format
+msgid "The native helper exited with status %ld."
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:966
+msgid "Inspection failed: helper returned invalid metadata"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:976
+msgid "Authentication/integrity failure: package validation failed"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:1000
+#, c-format
+msgid "Requested area outside coverage: package covers %.4f, %.4f to %.4f, %.4f"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:1014 src/EnvironmentalGribDialog.cpp:1026
+#: src/EnvironmentalGribDialog.cpp:1031 src/EnvironmentalGribDialog.cpp:1033
+#: src/EnvironmentalGribDialog.cpp:1043 src/EnvironmentalGribDialog.cpp:1062
+msgid "Not provided"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:1018
+#, c-format
+msgid "%.4f, %.4f to %.4f, %.4f"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:1064 src/XyGribPanel.cpp:193
+msgid "Ready"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:1065
+#, c-format
+msgid "Model/source: %s"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:1066
+#, c-format
+msgid "Coverage: %s"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:1067
+#, c-format
+msgid "Nominal resolution: %s"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:1068
+#, c-format
+msgid "Format version: %s"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:1069
+#, c-format
+msgid "Constituent count: %s"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:1070
+#, c-format
+msgid "Package version/build ID: %s"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:1149
+msgid ""
+"Current source: Offline Tidal package. Astronomical tidal currents are "
+"generated locally from the selected authenticated XTD package; no network "
+"access or TPXO model directory is used."
+msgstr ""
+
+#: src/GribOverlayFactory.cpp:602
 msgid "Warning : Data at Geopotential Height"
 msgstr ""
 
-#: src/GribOverlayFactory.cpp:1443
+#: src/GribOverlayFactory.cpp:1444
 msgid "IsoBar Unable to compute record magnitude"
 msgstr ""
 
-#: src/GribOverlayFactory.cpp:1473
+#: src/GribOverlayFactory.cpp:1474
 msgid "Building Isobar map"
 msgstr ""
 
-#: src/GribOverlayFactory.cpp:1473 src/GribSettingsDialog.cpp:59
+#: src/GribOverlayFactory.cpp:1474 src/GribSettingsDialog.cpp:59
 #: src/GribUIDialogBase.cpp:636 src/GribUIDialogBase.cpp:1378
 #: src/GribUIDialogBase.cpp:2868
 msgid "Wind"
 msgstr ""
 
-#: src/GribOverlayFactory.cpp:1778
+#: src/GribOverlayFactory.cpp:1785
 msgid "OverlayMap Unable to compute record magnitude"
 msgstr ""
 
-#: src/GribOverlayFactory.cpp:1816
+#: src/GribOverlayFactory.cpp:1823
 msgid "Overlays not supported by this graphics hardware (Disable OpenGL)"
 msgstr ""
 
-#: src/GribOverlayFactory.cpp:1826
+#: src/GribOverlayFactory.cpp:1833
 msgid "Overlays too wide and can't be displayed:"
 msgstr ""
 
-#: src/GribOverlayFactory.cpp:1837
+#: src/GribOverlayFactory.cpp:1844
 msgid "overlays suppressed if not north-up in DC mode (enable OpenGL)"
 msgstr ""
 
-#: src/GribOverlayFactory.cpp:1857
+#: src/GribOverlayFactory.cpp:1864
 msgid "Please Zoom or Scale Out to view invisible overlays:"
 msgstr ""
 
-#: src/GribOverlayFactory.cpp:1888
+#: src/GribOverlayFactory.cpp:1895
 msgid "GribNumbers Unable to compute record magnitude"
 msgstr ""
 
@@ -390,7 +529,7 @@ msgid ""
 msgstr ""
 
 #: src/GribRequestDialog.cpp:1426 src/GribSettingsDialog.cpp:1133
-#: src/GribSettingsDialog.cpp:1182 src/grib_pi.cpp:951
+#: src/GribSettingsDialog.cpp:1182 src/grib_pi.cpp:950
 msgid "Warning!"
 msgstr ""
 
@@ -704,129 +843,129 @@ msgstr ""
 msgid "Current,Speed"
 msgstr ""
 
-#: src/GribUIDialog.cpp:201
+#: src/GribUIDialog.cpp:202
 msgid "Open GRIB"
 msgstr ""
 
-#: src/GribUIDialog.cpp:201
+#: src/GribUIDialog.cpp:202
 msgid "Open an existing GRIB file."
 msgstr ""
 
-#: src/GribUIDialog.cpp:206
+#: src/GribUIDialog.cpp:207
 msgid "Configure GRIB display and behaviour."
 msgstr ""
 
-#: src/GribUIDialog.cpp:206 src/GribUIDialog.cpp:1113
-#: src/GribUIDialogBase.cpp:1825 src/GribUIDialogBase.h:412
+#: src/GribUIDialog.cpp:207 src/GribUIDialog.cpp:1114
+#: src/GribUIDialogBase.cpp:1825 src/GribUIDialogBase.h:413
 msgid "Settings"
 msgstr ""
 
-#: src/GribUIDialog.cpp:211
+#: src/GribUIDialog.cpp:212
 msgid "Download GRIB"
 msgstr ""
 
-#: src/GribUIDialog.cpp:211 src/GribUIDialog.cpp:524
+#: src/GribUIDialog.cpp:212 src/GribUIDialog.cpp:525
 msgid "Download a forecast GRIB."
 msgstr ""
 
-#: src/GribUIDialog.cpp:218
+#: src/GribUIDialog.cpp:219
 msgid "Generate GRIB"
 msgstr ""
 
-#: src/GribUIDialog.cpp:219
+#: src/GribUIDialog.cpp:220
 msgid ""
 "Generate a combined weather, wave and current GRIB for OpenCPN and Weather "
 "Routing."
 msgstr ""
 
-#: src/GribUIDialog.cpp:565
+#: src/GribUIDialog.cpp:566
 msgid "File: "
 msgstr ""
 
-#: src/GribUIDialog.cpp:570
+#: src/GribUIDialog.cpp:571
 msgid " contains no valid data!"
 msgstr ""
 
-#: src/GribUIDialog.cpp:570
+#: src/GribUIDialog.cpp:571
 msgid "Error! "
 msgstr ""
 
-#: src/GribUIDialog.cpp:605
+#: src/GribUIDialog.cpp:606
 msgid "No valid GRIB file"
 msgstr ""
 
-#: src/GribUIDialog.cpp:830 src/GribUIDialog.cpp:1099
+#: src/GribUIDialog.cpp:831 src/GribUIDialog.cpp:1100
 msgid "Hide data at cursor"
 msgstr ""
 
-#: src/GribUIDialog.cpp:831 src/GribUIDialog.cpp:1099
+#: src/GribUIDialog.cpp:832 src/GribUIDialog.cpp:1100
 msgid "Show data at cursor"
 msgstr ""
 
-#: src/GribUIDialog.cpp:832 src/GribUIDialog.cpp:1106 src/GribUIDialog.cpp:1464
+#: src/GribUIDialog.cpp:833 src/GribUIDialog.cpp:1107 src/GribUIDialog.cpp:1465
 msgid "Start play back"
 msgstr ""
 
-#: src/GribUIDialog.cpp:1089
+#: src/GribUIDialog.cpp:1090
 msgid "Select geopotential altitude"
 msgstr ""
 
-#: src/GribUIDialog.cpp:1093 src/GribUIDialogBase.cpp:83
+#: src/GribUIDialog.cpp:1094 src/GribUIDialogBase.cpp:83
 #: src/GribUIDialogBase.cpp:202 src/GribUIDialogBase.cpp:1702
 msgid "Now"
 msgstr ""
 
-#: src/GribUIDialog.cpp:1095 src/GribUIDialogBase.cpp:90
+#: src/GribUIDialog.cpp:1096 src/GribUIDialogBase.cpp:90
 #: src/GribUIDialogBase.cpp:209
 msgid "Zoom To Center"
 msgstr ""
 
-#: src/GribUIDialog.cpp:1106 src/GribUIDialog.cpp:1424
+#: src/GribUIDialog.cpp:1107 src/GribUIDialog.cpp:1425
 msgid "Stop play back"
 msgstr ""
 
-#: src/GribUIDialog.cpp:1111
+#: src/GribUIDialog.cpp:1112
 msgid "Open a new file"
 msgstr ""
 
-#: src/GribUIDialog.cpp:1120
+#: src/GribUIDialog.cpp:1121
 msgid "Request forecast data"
 msgstr ""
 
-#: src/GribUIDialog.cpp:1122
+#: src/GribUIDialog.cpp:1123
 msgid "Draw requested Area or Click here to stop request"
 msgstr ""
 
-#: src/GribUIDialog.cpp:1123
+#: src/GribUIDialog.cpp:1124
 msgid "Valid Area and Continue"
 msgstr ""
 
-#: src/GribUIDialog.cpp:1819 src/GribUIDialog.cpp:1846
+#: src/GribUIDialog.cpp:1820 src/GribUIDialog.cpp:1847
 msgid "Select a GRIB file"
 msgstr ""
 
-#: src/GribUIDialog.cpp:1820
+#: src/GribUIDialog.cpp:1821
 msgid "Grib files"
 msgstr ""
 
-#: src/GribUIDialog.cpp:1822
+#: src/GribUIDialog.cpp:1823
 msgid "All files"
 msgstr ""
 
-#: src/GribUIDialog.cpp:1824
+#: src/GribUIDialog.cpp:1825
 msgid "File Dialog"
 msgstr ""
 
-#: src/GribUIDialog.cpp:2179
+#: src/GribUIDialog.cpp:2180
 msgid " files don't exist!"
 msgstr ""
 
-#: src/GribUIDialog.cpp:2200
+#: src/GribUIDialog.cpp:2201
 msgid " can't be read!"
 msgstr ""
 
-#: src/GribUIDialog.cpp:2547 src/GribUIDialog.cpp:2551
-#: src/GribUIDialogBase.h:241
+#: src/GribUIDialog.cpp:2593 src/GribUIDialog.cpp:2597
+#: src/GribUIDialogBase.h:242
 msgid "GRIB Display Control"
 msgstr ""
 
@@ -1382,15 +1521,15 @@ msgstr ""
 msgid "Project position"
 msgstr ""
 
-#: src/GribUIDialogBase.h:447
+#: src/GribUIDialogBase.h:448
 msgid "Preferences"
 msgstr ""
 
-#: src/GribUIDialogBase.h:603
+#: src/GribUIDialogBase.h:604
 msgid "Get forecast..."
 msgstr ""
 
-#: src/GribUIDialogBase.h:631
+#: src/GribUIDialogBase.h:632
 msgid "Grib Data Table"
 msgstr ""
 
@@ -1454,10 +1593,6 @@ msgstr ""
 msgid "Status :"
 msgstr ""
 
-#: src/XyGribPanel.cpp:193
-msgid "Ready"
-msgstr ""
-
 #: src/XyGribPanel.cpp:199
 msgid "Estimated size :"
 msgstr ""
@@ -1466,15 +1601,15 @@ msgstr ""
 msgid "Unknown"
 msgstr ""
 
-#: src/grib_pi.cpp:165
+#: src/grib_pi.cpp:164
 msgid "xGRIB"
 msgstr ""
 
-#: src/grib_pi.cpp:236
+#: src/grib_pi.cpp:235
 msgid "xGRIB display and environmental GRIB generator for OpenCPN"
 msgstr ""
 
-#: src/grib_pi.cpp:241
+#: src/grib_pi.cpp:240
 msgid ""
 "xGRIB PlugIn for OpenCPN\n"
 "Provides basic GRIB file overlay capabilities for several GRIB file types\n"
@@ -1494,7 +1629,7 @@ msgid ""
 "- wind, altitude, temperature and relative humidity at 300, 500, 700, 850 hPa."
 msgstr ""
 
-#: src/grib_pi.cpp:466
+#: src/grib_pi.cpp:465
 msgid ""
 "xGRIB and the bundled GRIB plugin cannot be active together.\n"
 "\n"
@@ -1502,15 +1637,15 @@ msgid ""
 "OpenCPN."
 msgstr ""
 
-#: src/grib_pi.cpp:469
+#: src/grib_pi.cpp:468
 msgid "xGRIB is inactive"
 msgstr ""
 
-#: src/grib_pi.cpp:500
+#: src/grib_pi.cpp:499
 msgid "Weather table"
 msgstr ""
 
-#: src/grib_pi.cpp:948
+#: src/grib_pi.cpp:947
 msgid ""
 "You have chosen to authorize interpolation.\n"
 "Don't forget that data displayed at current time will not be real but "

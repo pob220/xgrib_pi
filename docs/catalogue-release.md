@@ -6,7 +6,7 @@
 - OpenCPN Frontend2 build prerequisites, wxWidgets 3.2, Jasper, bzip2 and
   zlib for the viewer.
 - Development packages for ecCodes, NetCDF, libcurl, jsoncpp, Qhull,
-  bzip2, Blosc, libzip, and PROJ.
+  bzip2, Blosc, libzip, PROJ, libsodium, and Zstandard.
 - All git submodules initialized at recorded commits.
 
 ## Local verification
@@ -51,6 +51,9 @@ Before publishing:
    provider data, and an unwritable output path all fail cleanly.
 9. Verify xGRIB refuses activation while bundled GRIB is enabled.
 10. Record third-party notices and source offers for bundled libraries.
+11. Where source-model licensing permits distribution, test Offline Tidal
+    against the separately supplied XTD package, verify its checksum, and
+    confirm the package itself is not embedded in the plugin archive.
 
 The release CI image must copy its package copyright/license records for all
 libraries selected by `GET_RUNTIME_DEPENDENCIES` into the package's

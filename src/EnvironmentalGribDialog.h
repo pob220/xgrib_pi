@@ -28,6 +28,7 @@ private:
   void OnGenerate(wxCommandEvent& event);
   void OnBrowseOutput(wxCommandEvent& event);
   void OnOutputFilenameChanged(wxCommandEvent& event);
+  void OnOfflineTidalFileChanged(wxFileDirPickerEvent& event);
   void OnPresetChanged(wxCommandEvent& event);
   void OnProviderChanged(wxCommandEvent& event);
   void OnModeChanged(wxCommandEvent& event);
@@ -51,6 +52,8 @@ private:
   bool ValidateEcmwfRequest();
   bool AutoWouldUseMarineIe() const;
   bool NeedsCopernicusCredentials() const;
+  bool IsOfflineTidalSelected() const;
+  bool ValidateOfflineTidalPackage();
   void UpdateProviderUi();
   void RefreshOutputFilenameDefault();
   void LoadSettings();
@@ -89,6 +92,10 @@ private:
   wxChoice* m_currentSource;
   wxStaticText* m_existingCurrentFileLabel;
   wxFilePickerCtrl* m_existingCurrentFile;
+  wxStaticText* m_offlineTidalFileLabel;
+  wxFilePickerCtrl* m_offlineTidalFile;
+  wxStaticText* m_offlineTidalStatusLabel;
+  wxTextCtrl* m_offlineTidalStatus;
   wxChoice* m_mode;
   wxChoice* m_presetChoice;
   wxChoice* m_provider;
@@ -139,4 +146,5 @@ private:
   GribReadyCallback m_onGribReady;
   bool m_outputFileUserCustomized{false};
   bool m_updatingOutputFilename{false};
+  bool m_offlineTidalPackageValid{false};
 };

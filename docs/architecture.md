@@ -16,13 +16,21 @@ configuration automatically.
 ## Generator process boundary
 
 The wxWidgets dialog owns configuration, viewport presets and progress display.
-Provider downloads, NetCDF parsing, UKV regridding, TPXO current calculation
-and GRIB writing run in the `environmental-grib` helper process.
+Provider downloads, NetCDF parsing, UKV regridding, TPXO/XTD current
+calculation and GRIB writing run in the `environmental-grib` helper process.
 
 The dialog writes a schema-versioned job file, starts the helper asynchronously,
 consumes JSON-lines progress, and reads an atomically written result file.
 Passwords are supplied only through the child environment. Logs, job files and
 displayed commands redact credentials and credential-like URL parameters.
+
+Offline Tidal is implemented inside this same helper boundary. The plugin UI
+passes an `offlineTidalFile` path in the schema-versioned job. The helper
+authenticates package metadata and the tile index, loads only tiles needed by
+the requested output grid, decrypts and decompresses them in memory, and
+reuses interpolated harmonic coefficients for every requested timestamp.
+Decrypted coefficients are never written to temporary files. A bounded LRU
+tile cache prevents a regional request from loading the global package.
 
 On successful strict validation, a typed callback opens the generated file in
 the owning xGRIB control bar. The public `GRIB_APPLY_JSON_CONFIG` message remains
