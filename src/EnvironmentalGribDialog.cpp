@@ -1,5 +1,6 @@
 #include "EnvironmentalGribDialog.h"
 
+#include "GeneratorJobJson.h"
 #include "XgribPaths.h"
 
 #include <wx/config.h>
@@ -768,8 +769,7 @@ bool EnvironmentalGribDialog::AutoWouldUseMarineIe() const {
 }
 
 bool EnvironmentalGribDialog::NeedsCopernicusCredentials() const {
-  bool waveCopernicus = m_generateWeather->GetValue() &&
-      m_includeWaves->GetValue() &&
+  bool waveCopernicus = m_includeWaves->GetValue() &&
       m_waveProvider->GetStringSelection().Contains("Copernicus");
   if (waveCopernicus) {
     return true;
@@ -803,7 +803,7 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
   bool weatherIconEu = weatherEnabled && m_weatherProvider->GetStringSelection().Contains("ICON-EU");
   bool weatherAifs = weatherEnabled && m_weatherProvider->GetStringSelection().Contains("AIFS");
   bool weatherGenerated = weatherEnabled && !weatherExisting;
-  bool waveEnabled = weatherGenerated && m_includeWaves->GetValue();
+  bool waveEnabled = m_includeWaves->GetValue();
   bool waveCopernicus = waveEnabled && m_waveProvider->GetStringSelection().Contains("Copernicus");
   bool needsCopernicusCredentials = NeedsCopernicusCredentials();
   bool showTpxoModel = currentTpxoDirect || currentTpxoCache;
@@ -816,14 +816,11 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
   m_provider->Enable(false);
   m_weatherProvider->Enable(m_generateWeather->GetValue());
   showPair(m_weatherPresetLabel, m_weatherPreset, weatherGenerated);
-  showPair(m_wavesLabel, m_includeWaves, weatherGenerated);
+  showPair(m_wavesLabel, m_includeWaves, true);
   showPair(m_waveProviderLabel, m_waveProvider, waveEnabled);
   showPair(m_existingWeatherFileLabel, m_existingWeatherFile, weatherExisting);
   m_weatherPreset->Enable(weatherGenerated);
-  m_includeWaves->Enable(weatherGenerated);
-  if (!weatherGenerated) {
-    m_includeWaves->SetValue(false);
-  }
+  m_includeWaves->Enable(true);
   m_waveProvider->Enable(waveEnabled);
   m_existingWeatherFile->Enable(weatherExisting);
   m_currentSource->Enable(m_generateCurrents->GetValue());
@@ -863,7 +860,13 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
         "U.S. coastal waters and Great Lakes. Not yet a complete GRIB generator.";
   }
 
-  if (weatherUkv) {
+  if (!weatherEnabled && waveEnabled) {
+    wxString note = waveCopernicus
+                        ? "Wave source: Copernicus Marine Global Waves forecast. Account required; global 3-hourly wave fields."
+                        : "Wave source: NOAA GFS Wave. No account required; includes significant wave height, primary wave period, and primary wave direction.";
+    if (!currentNote.empty()) note += "\n" + currentNote;
+    m_providerNote->SetLabel(note);
+  } else if (weatherUkv) {
     wxString note =
         "Source: Met Office UKV 2 km forecast. Met Office UKV 2 km is a high-resolution UK/Ireland short-range forecast. "
         "The plugin converts the source NetCDF data to OpenCPN GRIB in the background.\n"
@@ -1362,9 +1365,7 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
   if (m_mode->GetSelection() == 2) currentSource = "netcdf";
   if (m_mode->GetSelection() == 3) currentSource = "synthetic";
 
-  wxJSONValue root;
-  root["schemaVersion"] = 1;
-  root["operation"] = "generateEnvironment";
+  wxJSONValue root = CreateGeneratorJobEnvelope();
   wxJSONValue& request = root["request"];
   request["bbox"]["west"] = west;
   request["bbox"]["south"] = south;
@@ -1373,18 +1374,15 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
   request["start"] = m_startUtc->GetValue();
   request["hours"] = m_durationHours->GetValue();
   request["stepHours"] = m_stepHours->GetValue();
-  request["cycle"] = "auto";
   request["weatherProvider"] = weatherProvider;
   request["weatherPreset"] = weatherPreset;
   request["weatherGridSpacingDeg"] = 0.025;
   request["weatherFile"] = m_existingWeatherFile->GetPath();
-  request["includeWaves"] =
-      m_includeWaves->GetValue() && weatherProvider != "none" &&
-      weatherProvider != "existing-file";
-  request["waveProvider"] =
+  request["includeWaves"] = m_includeWaves->GetValue();
+  request["waveProvider"] = wxString(
       m_waveProvider->GetStringSelection().Contains("Copernicus")
           ? "copernicus_global_waves"
-          : "gfs_wave";
+          : "gfs_wave");
   request["waveStepHours"] = 3;
   request["currentSource"] = currentSource;
   request["currentFile"] = m_existingCurrentFile->GetPath();
@@ -1405,9 +1403,6 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
     request["downloadDirectory"] = downloadDir.GetPath();
     request["copernicusUsername"] = m_username->GetValue();
   }
-  root["credentials"]["copernicusPasswordEnvironment"] =
-      "ENVIRONMENTAL_GRIB_COPERNICUS_PASSWORD";
-
   wxJSONWriter writer;
   wxString text;
   writer.Write(root, text);
@@ -1446,7 +1441,7 @@ wxString EnvironmentalGribDialog::SourceLabel() const {
   wxString weather = m_generateWeather->GetValue() ? m_weatherProvider->GetStringSelection() : "None";
   wxString current = m_generateCurrents->GetValue() ? m_currentSource->GetStringSelection() : "None";
   wxString waves = "None";
-  if (m_generateWeather->GetValue() && m_includeWaves->GetValue()) {
+  if (m_includeWaves->GetValue()) {
     waves = m_waveProvider->GetStringSelection();
   }
   return "Environmental GRIB: weather=" + weather + ", currents=" + current + ", waves=" + waves;
@@ -1474,6 +1469,7 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
   wxString prefix;
   bool weatherOn = m_generateWeather->GetValue() && m_weatherProvider->GetStringSelection() != "None";
   bool currentOn = m_generateCurrents->GetValue() && m_currentSource->GetStringSelection() != "None";
+  bool wavesOn = m_includeWaves->GetValue();
   wxString weatherProvider = m_weatherProvider->GetStringSelection();
   wxString currentSource = m_currentSource->GetStringSelection();
   double west = 0.0;
@@ -1490,17 +1486,19 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
       m_east->GetValue().ToDouble(&east) && m_north->GetValue().ToDouble(&north) &&
       west >= -85.0 && east <= -60.0 && south >= 20.0 && north <= 42.0;
   bool ukvMixedCadence = weatherProvider.Contains("UKV") && m_stepHours->GetValue() == 1 && m_durationHours->GetValue() > 54;
-  if (weatherOn && currentOn) {
+  if ((weatherOn || wavesOn) && currentOn) {
     prefix = "environment";
-    if (weatherProvider.Contains("HRRR")) prefix += "_hrrr";
-    else if (weatherProvider.Contains("GFS")) prefix += "_gfs";
-    else if (weatherProvider.Contains("UKV")) prefix += "_ukmo_ukv";
-    else if (weatherProvider.Contains("ICON-EU")) prefix += "_icon_eu";
-    else if (weatherProvider.Contains("AIFS")) prefix += "_ecmwf_aifs";
-    else if (weatherProvider.Contains("ECMWF")) prefix += "_ecmwf_ifs";
-    else if (weatherProvider.Contains("Existing")) prefix += "_existing_weather";
+    if (weatherOn) {
+      if (weatherProvider.Contains("HRRR")) prefix += "_hrrr";
+      else if (weatherProvider.Contains("GFS")) prefix += "_gfs";
+      else if (weatherProvider.Contains("UKV")) prefix += "_ukmo_ukv";
+      else if (weatherProvider.Contains("ICON-EU")) prefix += "_icon_eu";
+      else if (weatherProvider.Contains("AIFS")) prefix += "_ecmwf_aifs";
+      else if (weatherProvider.Contains("ECMWF")) prefix += "_ecmwf_ifs";
+      else if (weatherProvider.Contains("Existing")) prefix += "_existing_weather";
+    }
     if (ukvMixedCadence) prefix += "_mixed";
-    if (m_includeWaves->GetValue()) {
+    if (wavesOn) {
       prefix += m_waveProvider->GetStringSelection().Contains("Copernicus") ? "_copernicus_waves" : "_wave";
     }
     if (currentSource.Contains("TPXO cache")) prefix += "_tpxo_cache";
@@ -1514,18 +1512,20 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
     else if (currentSource.Contains("Existing")) prefix += "_existing_current";
     if (looksIrishSea) prefix += "_irish_sea";
     if (currentSource.Contains("RTOFS") && looksGulfStream) prefix += "_gulf_stream";
-  } else if (weatherOn) {
-    prefix = "weather";
-    if (weatherProvider.Contains("HRRR")) prefix += "_hrrr";
-    else if (weatherProvider.Contains("GFS")) prefix += "_gfs";
-    else if (weatherProvider.Contains("UKV")) prefix += "_ukmo_ukv";
-    else if (weatherProvider.Contains("ICON-EU")) prefix += "_icon_eu";
-    else if (weatherProvider.Contains("AIFS")) prefix += "_ecmwf_aifs";
-    else if (weatherProvider.Contains("ECMWF")) prefix += "_ecmwf_ifs";
-    else prefix += "_existing";
+  } else if (weatherOn || wavesOn) {
+    prefix = weatherOn ? "weather" : "waves";
+    if (weatherOn) {
+      if (weatherProvider.Contains("HRRR")) prefix += "_hrrr";
+      else if (weatherProvider.Contains("GFS")) prefix += "_gfs";
+      else if (weatherProvider.Contains("UKV")) prefix += "_ukmo_ukv";
+      else if (weatherProvider.Contains("ICON-EU")) prefix += "_icon_eu";
+      else if (weatherProvider.Contains("AIFS")) prefix += "_ecmwf_aifs";
+      else if (weatherProvider.Contains("ECMWF")) prefix += "_ecmwf_ifs";
+      else prefix += "_existing";
+    }
     if (ukvMixedCadence) prefix += "_mixed";
-    if (m_weatherPreset->GetStringSelection().Contains("Marine")) prefix += "_marine";
-    if (m_includeWaves->GetValue()) {
+    if (weatherOn && m_weatherPreset->GetStringSelection().Contains("Marine")) prefix += "_marine";
+    if (wavesOn) {
       prefix += m_waveProvider->GetStringSelection().Contains("Copernicus") ? "_copernicus_waves" : "_wave";
     }
     if (looksIrishSea) prefix += "_irish_sea";

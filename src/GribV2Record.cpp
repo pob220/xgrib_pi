@@ -1006,7 +1006,8 @@ static bool unpackDS(GRIBMessage *grib_msg) {
   return true;
 }
 
-static zuchar GRBV2_TO_DATA(int productDiscipline, int dataCat, int dataNum) {
+zuchar GribV2DataTypeForParameter(int productDiscipline, int dataCat,
+                                  int dataNum) {
   zuchar ret = 255;
   // printf("search %d %d %d\n", productDiscipline, dataCat,  dataNum);
   switch (productDiscipline) {  // TABLE 4.2
@@ -1157,6 +1158,12 @@ static zuchar GRBV2_TO_DATA(int productDiscipline, int dataCat, int dataNum) {
             case 6:
               ret = GRB_WVPER;
               break;  // Mean Period of Wind Waves
+            case 10:
+              ret = GRB_WVDIR;
+              break;  // Primary Wave Direction
+            case 11:
+              ret = GRB_WVPER;
+              break;  // Primary Wave Mean Period
             case 14:
               ret = GRB_DIR;
               break;  // Direction of Combined Wind Waves and Swell
@@ -1617,7 +1624,8 @@ void GribV2Record::readDataSet(ZUFILE *file) {
           productTemplate = grib_msg->md.pds_templ_num;
           dataCat = grib_msg->md.param_cat;
           dataNum = grib_msg->md.param_num;
-          dataType = GRBV2_TO_DATA(productDiscipline, dataCat, dataNum);
+          dataType =
+              GribV2DataTypeForParameter(productDiscipline, dataCat, dataNum);
           if (dataType == 255) {
             // printf("unused data type, skip\n");
             skip = true;

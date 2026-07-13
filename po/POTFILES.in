@@ -4,6 +4,7 @@ src/GribUIDialogBase.cpp
 src/GrabberWin.cpp
 src/GribUIDialog.cpp
 src/EnvironmentalGribDialog.cpp
+src/GeneratorJobJson.cpp
 src/XgribPaths.cpp
 src/XgribPluginPolicy.cpp
 src/CursorData.cpp
@@ -32,6 +33,7 @@ src/GribUIDialogBase.h
 src/GrabberWin.h
 src/GribUIDialog.h
 src/EnvironmentalGribDialog.h
+src/GeneratorJobJson.h
 src/XgribPaths.h
 src/XgribPluginPolicy.h
 src/CursorData.h

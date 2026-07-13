@@ -5,6 +5,7 @@
 #include <wx/string.h>
 
 #include "GribReader.h"
+#include "GribV2Record.h"
 
 namespace {
 
@@ -17,6 +18,13 @@ void Expect(bool condition, const char* message) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  Expect(GribV2DataTypeForParameter(10, 0, 3) == GRB_HTSGW,
+         "GRIB2 significant wave height should be recognized");
+  Expect(GribV2DataTypeForParameter(10, 0, 10) == GRB_WVDIR,
+         "GRIB2 primary wave direction should be recognized");
+  Expect(GribV2DataTypeForParameter(10, 0, 11) == GRB_WVPER,
+         "GRIB2 primary wave period should be recognized");
+
   Expect(argc == 2 || argc == 3,
          "usage: xgrib_reader_integration_tests FILE.grb [--any]");
 

@@ -35,6 +35,8 @@
 #include <wx/fileconf.h>
 #include <wx/stdpaths.h>
 
+#include <limits>
+
 #include "grib_pi.h"
 
 #ifdef __WXQT__
@@ -89,6 +91,11 @@ grib_pi::grib_pi(void *ppimgr) : opencpn_plugin_116(ppimgr) {
   m_bZoomToCenterAtInit = false;
   m_bZoomToCenterAtInitExplicit = false;
   m_GUIScaleFactor = -1.;
+  m_boat_lat = std::numeric_limits<double>::quiet_NaN();
+  m_boat_lon = std::numeric_limits<double>::quiet_NaN();
+  m_boat_cog = std::numeric_limits<double>::quiet_NaN();
+  m_boat_sog = std::numeric_limits<double>::quiet_NaN();
+  m_boat_time = 0;
   g_pi = this;
 }
 
@@ -151,14 +158,6 @@ int grib_pi::Init(void) {
     wxString normalIcon = shareLocn + "grib.svg";
     wxString toggledIcon = shareLocn + "grib_toggled.svg";
     wxString rolloverIcon = shareLocn + "grib_rollover.svg";
-
-    //  For journeyman styles, we prefer the built-in raster icons which match
-    //  the rest of the toolbar.
-    if (GetActiveStyleName().Lower() != "traditional") {
-      normalIcon = "";
-      toggledIcon = "";
-      rolloverIcon = "";
-    }
 
     wxLogMessage(normalIcon);
     m_leftclick_tool_id = InsertPlugInToolSVG(

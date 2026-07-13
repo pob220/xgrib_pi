@@ -36,6 +36,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 class GRIBMessage;
 
+zuchar GribV2DataTypeForParameter(int productDiscipline, int dataCat,
+                                  int dataNum);
+
 //----------------------------------------------
 class GribV2Record : public GribRecord {
 public:

@@ -185,6 +185,7 @@ set(SRCS
     src/GrabberWin.cpp
     src/GribUIDialog.cpp
     src/EnvironmentalGribDialog.cpp
+    src/GeneratorJobJson.cpp
     src/XgribPaths.cpp
     src/XgribPluginPolicy.cpp
     src/CursorData.cpp
@@ -214,6 +215,7 @@ set(HDRS
     src/GrabberWin.h
     src/GribUIDialog.h
     src/EnvironmentalGribDialog.h
+    src/GeneratorJobJson.h
     src/XgribPaths.h
     src/XgribPluginPolicy.h
     src/CursorData.h
@@ -381,6 +383,15 @@ if (NOT OCPN_FLATPAK_CONFIG)
                         ZLIB::ZLIB)
 
   if(BUILD_TESTING)
+    add_executable(xgrib_generator_job_json_tests
+      test/GeneratorJobJsonTests.cpp src/GeneratorJobJson.cpp)
+    target_include_directories(xgrib_generator_job_json_tests PRIVATE
+      ${PROJECT_SOURCE_DIR}/src)
+    target_link_libraries(xgrib_generator_job_json_tests PRIVATE
+      ocpn::wxjson ${wxWidgets_LIBRARIES})
+    add_test(NAME xgrib_generator_job_json_tests
+             COMMAND xgrib_generator_job_json_tests)
+
     add_executable(xgrib_plugin_policy_tests
       test/XgribPluginPolicyTests.cpp src/XgribPluginPolicy.cpp)
     target_include_directories(xgrib_plugin_policy_tests PRIVATE
