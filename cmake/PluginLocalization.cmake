@@ -102,8 +102,8 @@ macro (GETTEXT_BUILD_MO)
   file(MAKE_DIRECTORY "Resources")
   message(STATUS "${CMLOC}Creating Resources directory")
   add_custom_target(
-    create_resources_dir ALL COMMAND ${CMAKE_COMMAND} -E make_directory
-                                     "./Resources"
+    ${I18N_NAME}-create-resources-dir ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "./Resources"
   )
   foreach (_poFile ${ARGN})
     get_filename_component(_absFile ${_poFile} ABSOLUTE)
