@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: xgrib_pi 0.1.0.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-13 19:31+0100\n"
+"POT-Creation-Date: 2026-07-13 23:01+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -183,136 +183,144 @@ msgstr ""
 msgid "Inspection failed"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:426 src/EnvironmentalGribDialog.cpp:1041
+#: src/EnvironmentalGribDialog.cpp:426 src/EnvironmentalGribDialog.cpp:1043
 msgid "Offline current (.xtd)"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:434
+#: src/EnvironmentalGribDialog.cpp:427
+msgid "Copernicus IBI high-resolution forecast/model currents"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:428
+msgid "Copernicus Mediterranean forecast/model currents"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:436
 msgid "Select Offline current package"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:435
+#: src/EnvironmentalGribDialog.cpp:437
 msgid "xGRIB current data (*.xtd)|*.xtd|All files (*.*)|*.*"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:441
+#: src/EnvironmentalGribDialog.cpp:443
 msgid "Astronomical tide only"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:442
+#: src/EnvironmentalGribDialog.cpp:444
 msgid "Tide + expected seasonal circulation"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:530
+#: src/EnvironmentalGribDialog.cpp:532
 msgid "Offline current package"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:532
+#: src/EnvironmentalGribDialog.cpp:534
 msgid "Offline current status"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:534
+#: src/EnvironmentalGribDialog.cpp:536
 msgid "Offline current mode"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:756
+#: src/EnvironmentalGribDialog.cpp:758
 msgid "Offline current package is unavailable: "
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:757
+#: src/EnvironmentalGribDialog.cpp:759
 msgid "Offline current package unavailable"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1049
+#: src/EnvironmentalGribDialog.cpp:1051
 msgid "File not configured"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1054
+#: src/EnvironmentalGribDialog.cpp:1056
 #, c-format
 msgid "File not found: %s"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1073
+#: src/EnvironmentalGribDialog.cpp:1075
 msgid "The native helper could not be launched."
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1074
+#: src/EnvironmentalGribDialog.cpp:1076
 #, c-format
 msgid "The native helper exited with status %ld."
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1096
+#: src/EnvironmentalGribDialog.cpp:1098
 msgid "Inspection failed: helper returned invalid metadata"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1105
+#: src/EnvironmentalGribDialog.cpp:1107
 msgid "Authentication/integrity failure: package validation failed"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1137
+#: src/EnvironmentalGribDialog.cpp:1139
 #, c-format
 msgid "Requested area outside coverage: package covers %.4f, %.4f to %.4f, %.4f"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1152 src/EnvironmentalGribDialog.cpp:1163
-#: src/EnvironmentalGribDialog.cpp:1168 src/EnvironmentalGribDialog.cpp:1170
-#: src/EnvironmentalGribDialog.cpp:1180 src/EnvironmentalGribDialog.cpp:1199
+#: src/EnvironmentalGribDialog.cpp:1154 src/EnvironmentalGribDialog.cpp:1165
+#: src/EnvironmentalGribDialog.cpp:1170 src/EnvironmentalGribDialog.cpp:1172
+#: src/EnvironmentalGribDialog.cpp:1182 src/EnvironmentalGribDialog.cpp:1201
 msgid "Not provided"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1156
+#: src/EnvironmentalGribDialog.cpp:1158
 #, c-format
 msgid "%.4f, %.4f to %.4f, %.4f"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1201 src/XyGribPanel.cpp:193
+#: src/EnvironmentalGribDialog.cpp:1203 src/XyGribPanel.cpp:193
 msgid "Ready"
-msgstr ""
-
-#: src/EnvironmentalGribDialog.cpp:1202
-#, c-format
-msgid "Model/source: %s"
-msgstr ""
-
-#: src/EnvironmentalGribDialog.cpp:1203
-#, c-format
-msgid "Coverage: %s"
 msgstr ""
 
 #: src/EnvironmentalGribDialog.cpp:1204
 #, c-format
-msgid "Nominal resolution: %s"
+msgid "Model/source: %s"
 msgstr ""
 
 #: src/EnvironmentalGribDialog.cpp:1205
 #, c-format
-msgid "Format version: %s"
+msgid "Coverage: %s"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:1206
+#, c-format
+msgid "Nominal resolution: %s"
 msgstr ""
 
 #: src/EnvironmentalGribDialog.cpp:1207
 #, c-format
-msgid "Constituent count: %s"
+msgid "Format version: %s"
 msgstr ""
 
 #: src/EnvironmentalGribDialog.cpp:1209
 #, c-format
+msgid "Constituent count: %s"
+msgstr ""
+
+#: src/EnvironmentalGribDialog.cpp:1211
+#, c-format
 msgid "Package version/build ID: %s"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1210
+#: src/EnvironmentalGribDialog.cpp:1212
 #, c-format
 msgid "Expected seasonal circulation: %s"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1212
+#: src/EnvironmentalGribDialog.cpp:1214
 msgid "Available"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1213
+#: src/EnvironmentalGribDialog.cpp:1215
 msgid "Not available"
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1325
+#: src/EnvironmentalGribDialog.cpp:1332
 msgid ""
 "Current source: authenticated offline XTD package. Output combines "
 "deterministic astronomical tide with expected seasonal circulation. The "
@@ -320,7 +328,7 @@ msgid ""
 "surge, storms, or short-term anomalies."
 msgstr ""
 
-#: src/EnvironmentalGribDialog.cpp:1330
+#: src/EnvironmentalGribDialog.cpp:1337
 msgid ""
 "Current source: authenticated offline XTD package. Astronomical tidal "
 "currents are generated locally; no network access or TPXO model directory is "

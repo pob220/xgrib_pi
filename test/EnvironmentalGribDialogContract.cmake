@@ -5,7 +5,8 @@ set(required_patterns
   "m_processTimer\\.Start\\(100\\)"
   "void EnvironmentalGribDialog::OnProcessTimer\\(wxTimerEvent& event\\)[^}]*DrainProcessOutput\\(\\)"
   "DrainStream\\(m_process->GetInputStream\\(\\), &m_stdoutBuffer"
-  "DrainStream\\(m_process->GetErrorStream\\(\\), &m_stderrBuffer")
+  "DrainStream\\(m_process->GetErrorStream\\(\\), &m_stderrBuffer"
+  "request\\[\"offlineCurrentMode\"\\][^;]*wxString\\(")
 
 foreach(pattern IN LISTS required_patterns)
   if(NOT source MATCHES "${pattern}")

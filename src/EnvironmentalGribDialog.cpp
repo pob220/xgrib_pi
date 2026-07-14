@@ -423,7 +423,9 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
       "NOAA RTOFS Global ocean currents",
       "NOAA OFS / S-111 coastal currents (experimental)",
       "Auto forecast/model current provider",
-      _("Offline current (.xtd)")};
+      _("Offline current (.xtd)"),
+      _("Copernicus IBI high-resolution forecast/model currents"),
+      _("Copernicus Mediterranean forecast/model currents")};
   m_currentSource =
       new wxChoice(scrolled, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                    WXSIZEOF(currentSources), currentSources);
@@ -1248,6 +1250,11 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
                       m_currentSource->GetStringSelection().Contains("RTOFS");
   bool currentOfs =
       currentsEnabled && m_currentSource->GetStringSelection().Contains("OFS");
+  bool currentIbi =
+      currentsEnabled && m_currentSource->GetStringSelection().Contains("IBI");
+  bool currentMediterranean = currentsEnabled &&
+                              m_currentSource->GetStringSelection().Contains(
+                                  "Mediterranean");
   bool currentOfflineTidal = currentsEnabled && IsOfflineTidalSelected();
   bool weatherGfs =
       weatherEnabled && m_weatherProvider->GetStringSelection().Contains("GFS");
@@ -1343,6 +1350,18 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
         "stub. "
         "U.S. coastal waters and Great Lakes. Not yet a complete GRIB "
         "generator.";
+  } else if (currentIbi) {
+    currentNote =
+        "Current source: Copernicus Marine IBI 1/36-degree hourly surface "
+        "current analysis/forecast. Includes tidal and non-tidal model "
+        "processes. Coverage is 26.17-56.08 N, 19.08 W-5.08 E; account "
+        "required.";
+  } else if (currentMediterranean) {
+    currentNote =
+        "Current source: Copernicus Marine Mediterranean 4.2 km hourly "
+        "surface current analysis/forecast. Includes tidal and non-tidal "
+        "model processes. Coverage is 30.19-45.98 N, 17.29 W-36.29 E; "
+        "account required.";
   }
 
   if (!weatherEnabled && waveEnabled) {
@@ -1961,6 +1980,10 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
       currentSource = "noaa_ofs_s111";
     else if (selected.Contains("NWS"))
       currentSource = "copernicus_nws";
+    else if (selected.Contains("IBI"))
+      currentSource = "copernicus_ibi";
+    else if (selected.Contains("Mediterranean"))
+      currentSource = "copernicus_mediterranean";
     else if (selected.Contains("Global"))
       currentSource = "copernicus_global";
     else if (selected.Contains("Auto"))
@@ -1993,9 +2016,10 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
   request["currentSource"] = currentSource;
   request["currentFile"] = m_existingCurrentFile->GetPath();
   request["offlineTidalFile"] = m_offlineTidalFile->GetPath();
-  request["offlineCurrentMode"] = m_offlineCurrentMode->GetSelection() == 1
-                                      ? "tide-expected-seasonal"
-                                      : "tide-only";
+  request["offlineCurrentMode"] =
+      wxString(m_offlineCurrentMode->GetSelection() == 1
+                   ? "tide-expected-seasonal"
+                   : "tide-only");
   request["inputNetcdf"] = m_localNetcdf->GetPath();
   request["inputCache"] = m_tpxoCacheFile->GetPath();
   request["tpxoModelDirectory"] = m_tpxoModelDir->GetPath();
@@ -2151,6 +2175,10 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
       prefix += "_noaa_ofs_s111";
     else if (currentSource.Contains("NWS"))
       prefix += "_copernicus_nws";
+    else if (currentSource.Contains("IBI"))
+      prefix += "_copernicus_ibi";
+    else if (currentSource.Contains("Mediterranean"))
+      prefix += "_copernicus_mediterranean";
     else if (currentSource.Contains("Global"))
       prefix += "_copernicus_global";
     else if (currentSource.Contains("Auto"))
@@ -2203,6 +2231,10 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
       prefix += "_noaa_ofs_s111";
     else if (currentSource.Contains("NWS"))
       prefix += "_copernicus_nws";
+    else if (currentSource.Contains("IBI"))
+      prefix += "_copernicus_ibi";
+    else if (currentSource.Contains("Mediterranean"))
+      prefix += "_copernicus_mediterranean";
     else if (currentSource.Contains("Global"))
       prefix += "_copernicus_global";
     else if (currentSource.Contains("Auto"))
@@ -2349,15 +2381,18 @@ wxString EnvironmentalGribDialog::FindDefaultGenerator() const {
     return path;
   }
 
-  wxFileName executable(wxStandardPaths::Get().GetExecutablePath());
-  wxFileName sibling(executable.GetPath(), "environmental-grib");
-  if (IsExecutableFile(sibling.GetFullPath())) return sibling.GetFullPath();
-
   wxFileName packaged(GetXgribDataDirectory(), "");
   packaged.RemoveLastDir();
   packaged.AppendDir("bin");
   packaged.SetFullName("environmental-grib");
   if (IsExecutableFile(packaged.GetFullPath())) return packaged.GetFullPath();
+
+  // A source-build directory may contain an older development helper.  The
+  // helper shipped with this plugin must take precedence so its job schema
+  // and provider set always match the loaded UI.
+  wxFileName executable(wxStandardPaths::Get().GetExecutablePath());
+  wxFileName sibling(executable.GetPath(), "environmental-grib");
+  if (IsExecutableFile(sibling.GetFullPath())) return sibling.GetFullPath();
 
   if (wxFindFileInPath(&path, wxGetenv("PATH"), "environmental-grib")) {
     return path;
