@@ -53,6 +53,7 @@ private:
   bool AutoWouldUseMarineIe() const;
   bool NeedsCopernicusCredentials() const;
   bool IsOfflineTidalSelected() const;
+  bool IsOfflineTidalNeeded() const;
   bool ValidateOfflineTidalPackage();
   void UpdateProviderUi();
   void RefreshOutputFilenameDefault();
@@ -78,6 +79,13 @@ private:
   wxTextCtrl* m_startUtc;
   wxSpinCtrl* m_durationHours;
   wxSpinCtrl* m_stepHours;
+  wxCheckBox* m_extendForecast;
+  wxStaticText* m_fallbackWeatherLabel;
+  wxChoice* m_fallbackWeatherProvider;
+  wxStaticText* m_fallbackWaveLabel;
+  wxChoice* m_fallbackWaveProvider;
+  wxStaticText* m_fallbackCurrentLabel;
+  wxChoice* m_fallbackCurrentSource;
   wxCheckBox* m_generateWeather;
   wxChoice* m_weatherProvider;
   wxStaticText* m_weatherPresetLabel;

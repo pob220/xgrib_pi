@@ -10,6 +10,14 @@ UKV regridding, TPXO current calculation and ecCodes writing therefore do not
 run inside OpenCPN. Generated files open directly in xGRIB after strict GRIB
 validation.
 
+The environmental generator can optionally extend a manually selected
+short-range forecast to 15 days. Preferred weather, wave and current records
+retain priority over explicitly selected long-range sources; xGRIB writes one
+composite GRIB with each provider's native cadence. For example, UKV remains
+hourly through 54 hours and three-hourly through 120 hours before NOAA GFS
+continues the weather timeline. The generator reports the actual component
+coverage after completion.
+
 ## Important installation rule
 
 xGRIB replaces the bundled GRIB plugin; the two must not be active together.

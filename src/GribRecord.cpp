@@ -153,6 +153,155 @@ bool GribRecord::GetInterpolatedParameters(
   return true;
 }
 
+bool GribRecord::GetSpatialInterpolationGrid(
+    const GribRecord &rec1, const GribRecord &rec2, double &La1, double &Lo1,
+    double &La2, double &Lo2, double &Di, double &Dj, int &Ni, int &Nj) {
+  if (!rec1.isOk() || !rec2.isOk() || !rec1.data || !rec2.data ||
+      rec1.getDj() * rec2.getDj() <= 0)
+    return false;
+
+  Di = wxMax(std::abs(rec1.getDi()), std::abs(rec2.getDi()));
+  const double absDj =
+      wxMax(std::abs(rec1.getDj()), std::abs(rec2.getDj()));
+  if (Di <= 0.0 || absDj <= 0.0) return false;
+  Dj = rec1.getDj() > 0.0 ? absDj : -absDj;
+
+  const double lonMin = wxMax(rec1.getLonMin(), rec2.getLonMin());
+  const double lonMax = wxMin(rec1.getLonMax(), rec2.getLonMax());
+  const double latMin = wxMax(rec1.getLatMin(), rec2.getLatMin());
+  const double latMax = wxMin(rec1.getLatMax(), rec2.getLatMax());
+  if (lonMin > lonMax || latMin > latMax) return false;
+
+  Lo1 = lonMin;
+  Ni = static_cast<int>(std::floor((lonMax - lonMin) / Di + 1e-9)) + 1;
+  Lo2 = Lo1 + (Ni - 1) * Di;
+  if (Dj > 0.0) {
+    La1 = latMin;
+    Nj = static_cast<int>(std::floor((latMax - latMin) / Dj + 1e-9)) + 1;
+  } else {
+    La1 = latMax;
+    Nj = static_cast<int>(std::floor((latMax - latMin) / -Dj + 1e-9)) + 1;
+  }
+  La2 = La1 + (Nj - 1) * Dj;
+  return Ni > 0 && Nj > 0;
+}
+
+GribRecord *GribRecord::SpatiallyInterpolatedRecord(
+    const GribRecord &rec1, const GribRecord &rec2, double d, bool dir) {
+  double La1, Lo1, La2, Lo2, Di, Dj;
+  int Ni, Nj;
+  if (!GetSpatialInterpolationGrid(rec1, rec2, La1, Lo1, La2, Lo2, Di, Dj,
+                                   Ni, Nj))
+    return nullptr;
+
+  double *values = new double[Ni * Nj];
+  for (int j = 0; j < Nj; ++j) {
+    const double lat = La1 + j * Dj;
+    for (int i = 0; i < Ni; ++i) {
+      const double lon = Lo1 + i * Di;
+      const double first = rec1.getInterpolatedValue(lon, lat, true, dir);
+      const double second = rec2.getInterpolatedValue(lon, lat, true, dir);
+      const int index = j * Ni + i;
+      if (first == GRIB_NOTDEF || second == GRIB_NOTDEF) {
+        values[index] = GRIB_NOTDEF;
+      } else if (dir) {
+        values[index] = interp_angle(first, second, d, 180.0);
+      } else {
+        values[index] = (1.0 - d) * first + d * second;
+      }
+    }
+  }
+
+  GribRecord *result = new GribRecord;
+  *result = rec1;
+  result->Di = Di;
+  result->Dj = Dj;
+  result->Ni = Ni;
+  result->Nj = Nj;
+  result->La1 = La1;
+  result->La2 = La2;
+  result->Lo1 = Lo1;
+  result->Lo2 = Lo2;
+  result->latMin = wxMin(La1, La2);
+  result->latMax = wxMax(La1, La2);
+  result->lonMin = Lo1;
+  result->lonMax = Lo2;
+  result->data = values;
+  result->hasBMS = false;
+  result->BMSbits = nullptr;
+  result->m_bfilled = false;
+  return result;
+}
+
+GribRecord *GribRecord::SpatiallyInterpolated2DRecord(
+    GribRecord *&rety, const GribRecord &rec1x, const GribRecord &rec1y,
+    const GribRecord &rec2x, const GribRecord &rec2y, double d) {
+  rety = nullptr;
+  double La1, Lo1, La2, Lo2, Di, Dj;
+  int Ni, Nj;
+  if (!GetSpatialInterpolationGrid(rec1x, rec2x, La1, Lo1, La2, Lo2, Di, Dj,
+                                   Ni, Nj) ||
+      !rec1y.isOk() || !rec2y.isOk())
+    return nullptr;
+
+  double *valuesX = new double[Ni * Nj];
+  double *valuesY = new double[Ni * Nj];
+  for (int j = 0; j < Nj; ++j) {
+    const double lat = La1 + j * Dj;
+    for (int i = 0; i < Ni; ++i) {
+      const double lon = Lo1 + i * Di;
+      const double firstX = rec1x.getInterpolatedValue(lon, lat, true);
+      const double firstY = rec1y.getInterpolatedValue(lon, lat, true);
+      const double secondX = rec2x.getInterpolatedValue(lon, lat, true);
+      const double secondY = rec2y.getInterpolatedValue(lon, lat, true);
+      const int index = j * Ni + i;
+      if (firstX == GRIB_NOTDEF || firstY == GRIB_NOTDEF ||
+          secondX == GRIB_NOTDEF || secondY == GRIB_NOTDEF) {
+        valuesX[index] = valuesY[index] = GRIB_NOTDEF;
+        continue;
+      }
+      const double firstMagnitude = std::hypot(firstX, firstY);
+      const double secondMagnitude = std::hypot(secondX, secondY);
+      const double magnitude =
+          (1.0 - d) * firstMagnitude + d * secondMagnitude;
+      double firstAngle = std::atan2(firstY, firstX);
+      double secondAngle = std::atan2(secondY, secondX);
+      if (firstAngle - secondAngle > M_PI)
+        firstAngle -= 2.0 * M_PI;
+      else if (secondAngle - firstAngle > M_PI)
+        secondAngle -= 2.0 * M_PI;
+      const double angle = (1.0 - d) * firstAngle + d * secondAngle;
+      valuesX[index] = magnitude * std::cos(angle);
+      valuesY[index] = magnitude * std::sin(angle);
+    }
+  }
+
+  GribRecord *resultX = new GribRecord;
+  *resultX = rec1x;
+  rety = new GribRecord;
+  *rety = rec1y;
+  for (GribRecord *result : {resultX, rety}) {
+    result->Di = Di;
+    result->Dj = Dj;
+    result->Ni = Ni;
+    result->Nj = Nj;
+    result->La1 = La1;
+    result->La2 = La2;
+    result->Lo1 = Lo1;
+    result->Lo2 = Lo2;
+    result->latMin = wxMin(La1, La2);
+    result->latMax = wxMax(La1, La2);
+    result->lonMin = Lo1;
+    result->lonMax = Lo2;
+    result->hasBMS = false;
+    result->BMSbits = nullptr;
+    result->m_bfilled = false;
+  }
+  resultX->data = valuesX;
+  rety->data = valuesY;
+  return resultX;
+}
+
 //-------------------------------------------------------------------------------
 // Constructeur de interpolate
 //-------------------------------------------------------------------------------
@@ -165,7 +314,7 @@ GribRecord *GribRecord::InterpolatedRecord(const GribRecord &rec1,
   if (!GetInterpolatedParameters(rec1, rec2, La1, Lo1, La2, Lo2, Di, Dj, im1,
                                  jm1, im2, jm2, Ni, Nj, rec1offi, rec1offj,
                                  rec2offi, rec2offj))
-    return nullptr;
+    return SpatiallyInterpolatedRecord(rec1, rec2, d, dir);
 
   // recopie les champs de bits
   int size = Ni * Nj;
@@ -236,7 +385,8 @@ GribRecord *GribRecord::Interpolated2DRecord(
   if (!GetInterpolatedParameters(rec1x, rec2x, La1, Lo1, La2, Lo2, Di, Dj, im1,
                                  jm1, im2, jm2, Ni, Nj, rec1offi, rec1offj,
                                  rec2offi, rec2offj))
-    return nullptr;
+    return SpatiallyInterpolated2DRecord(rety, rec1x, rec1y, rec2x, rec2y,
+                                         d);
 
   if (!rec1y.data || !rec2y.data || !rec1y.isOk() || !rec2y.isOk() ||
       rec1x.Di != rec1y.Di || rec1x.Dj != rec1y.Dj || rec2x.Di != rec2y.Di ||

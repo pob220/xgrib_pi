@@ -603,6 +603,16 @@ protected:
                                         int &jm1, int &im2, int &jm2, int &Ni,
                                         int &Nj, int &rec1offi, int &rec1offj,
                                         int &rec2offi, int &rec2offj);
+  static bool GetSpatialInterpolationGrid(
+      const GribRecord &rec1, const GribRecord &rec2, double &La1,
+      double &Lo1, double &La2, double &Lo2, double &Di, double &Dj, int &Ni,
+      int &Nj);
+  static GribRecord *SpatiallyInterpolatedRecord(const GribRecord &rec1,
+                                                  const GribRecord &rec2,
+                                                  double d, bool dir);
+  static GribRecord *SpatiallyInterpolated2DRecord(
+      GribRecord *&rety, const GribRecord &rec1x, const GribRecord &rec1y,
+      const GribRecord &rec2x, const GribRecord &rec2y, double d);
 
   /**
    * Unique identifier for this record.

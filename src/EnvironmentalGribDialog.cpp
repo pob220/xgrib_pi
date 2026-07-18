@@ -362,11 +362,32 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   m_presetChoice->SetSelection(0);
   m_startUtc = new wxTextCtrl(scrolled, wxID_ANY, DefaultStartUtc());
   m_durationHours = new wxSpinCtrl(scrolled, wxID_ANY);
-  m_durationHours->SetRange(1, 240);
+  m_durationHours->SetRange(1, 360);
   m_durationHours->SetValue(72);
   m_stepHours = new wxSpinCtrl(scrolled, wxID_ANY);
   m_stepHours->SetRange(1, 24);
   m_stepHours->SetValue(1);
+  m_extendForecast = new wxCheckBox(
+      scrolled, wxID_ANY, "Extend forecast using long-range sources");
+  m_extendForecast->SetToolTip(
+      "Manually enables selected fallback models. Preferred model records "
+      "are retained wherever available; fallback records extend the combined "
+      "GRIB to the requested duration.");
+  wxString fallbackWeatherProviders[] = {"None", "NOAA GFS forecast"};
+  m_fallbackWeatherProvider = new wxChoice(
+      scrolled, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+      WXSIZEOF(fallbackWeatherProviders), fallbackWeatherProviders);
+  m_fallbackWeatherProvider->SetSelection(1);
+  wxString fallbackWaveProviders[] = {"None", "NOAA GFS Wave"};
+  m_fallbackWaveProvider = new wxChoice(
+      scrolled, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+      WXSIZEOF(fallbackWaveProviders), fallbackWaveProviders);
+  m_fallbackWaveProvider->SetSelection(1);
+  wxString fallbackCurrentSources[] = {"None", _("Offline current (.xtd)")};
+  m_fallbackCurrentSource = new wxChoice(
+      scrolled, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+      WXSIZEOF(fallbackCurrentSources), fallbackCurrentSources);
+  m_fallbackCurrentSource->SetSelection(1);
 
   m_generateWeather =
       new wxCheckBox(scrolled, wxID_ANY, "Generate/include weather");
@@ -509,8 +530,16 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   addRow("North latitude", m_north);
   addRow("Area preset", m_presetChoice);
   addRow("Start UTC", m_startUtc);
-  addRow("Duration hours", m_durationHours);
+  addRow("Forecast duration hours (maximum 15 days)", m_durationHours);
   addRow("Step hours", m_stepHours);
+  grid->Add(new wxStaticText(scrolled, wxID_ANY, "Forecast extension"), 0,
+            wxALIGN_CENTER_VERTICAL);
+  grid->Add(m_extendForecast, 0);
+  m_fallbackWeatherLabel =
+      addRow("Long-range weather", m_fallbackWeatherProvider);
+  m_fallbackWaveLabel = addRow("Long-range waves", m_fallbackWaveProvider);
+  m_fallbackCurrentLabel =
+      addRow("Long-range currents", m_fallbackCurrentSource);
   grid->Add(new wxStaticText(scrolled, wxID_ANY, "Weather"), 0,
             wxALIGN_CENTER_VERTICAL);
   grid->Add(m_generateWeather, 0);
@@ -629,6 +658,14 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
                            &EnvironmentalGribDialog::OnProviderChanged, this);
   m_includeWaves->Bind(wxEVT_CHECKBOX,
                        &EnvironmentalGribDialog::OnProviderChanged, this);
+  m_extendForecast->Bind(wxEVT_CHECKBOX,
+                         &EnvironmentalGribDialog::OnProviderChanged, this);
+  m_fallbackWeatherProvider->Bind(
+      wxEVT_CHOICE, &EnvironmentalGribDialog::OnProviderChanged, this);
+  m_fallbackWaveProvider->Bind(
+      wxEVT_CHOICE, &EnvironmentalGribDialog::OnProviderChanged, this);
+  m_fallbackCurrentSource->Bind(
+      wxEVT_CHOICE, &EnvironmentalGribDialog::OnProviderChanged, this);
   m_cancelButton->Bind(wxEVT_BUTTON, &EnvironmentalGribDialog::OnCancel, this);
   m_closeButton->Bind(wxEVT_BUTTON, &EnvironmentalGribDialog::OnClose, this);
   Bind(wxEVT_CLOSE_WINDOW, &EnvironmentalGribDialog::OnDialogClose, this);
@@ -751,7 +788,7 @@ void EnvironmentalGribDialog::OnGenerate(wxCommandEvent&) {
     wxMessageBox(message, "Missing current GRIB", wxOK | wxICON_WARNING, this);
     return;
   }
-  if (m_generateCurrents->GetValue() && IsOfflineTidalSelected()) {
+  if (m_generateCurrents->GetValue() && IsOfflineTidalNeeded()) {
     ValidateOfflineTidalPackage();
     if (!m_offlineTidalPackageValid) {
       const wxString message = m_offlineTidalStatus->GetValue();
@@ -924,12 +961,14 @@ void EnvironmentalGribDialog::OnOfflineTidalFileChanged(wxFileDirPickerEvent&) {
 
 void EnvironmentalGribDialog::OnPresetChanged(wxCommandEvent& event) {
   ApplyPreset(event.GetSelection());
-  if (IsOfflineTidalSelected()) ValidateOfflineTidalPackage();
+  if (IsOfflineTidalNeeded()) ValidateOfflineTidalPackage();
 }
 
 void EnvironmentalGribDialog::OnProviderChanged(wxCommandEvent& event) {
-  if (event.GetEventObject() == m_currentSource) {
-    if (IsOfflineTidalSelected()) ValidateOfflineTidalPackage();
+  if (event.GetEventObject() == m_currentSource ||
+      event.GetEventObject() == m_fallbackCurrentSource ||
+      event.GetEventObject() == m_extendForecast) {
+    if (IsOfflineTidalNeeded()) ValidateOfflineTidalPackage();
     SaveSettings();
   }
   RefreshOutputFilenameDefault();
@@ -1041,6 +1080,14 @@ bool EnvironmentalGribDialog::NeedsCopernicusCredentials() const {
 bool EnvironmentalGribDialog::IsOfflineTidalSelected() const {
   return m_currentSource &&
          m_currentSource->GetStringSelection() == _("Offline current (.xtd)");
+}
+
+bool EnvironmentalGribDialog::IsOfflineTidalNeeded() const {
+  if (IsOfflineTidalSelected()) return true;
+  return m_extendForecast && m_extendForecast->GetValue() &&
+         m_fallbackCurrentSource &&
+         m_fallbackCurrentSource->GetStringSelection() ==
+             _("Offline current (.xtd)");
 }
 
 bool EnvironmentalGribDialog::ValidateOfflineTidalPackage() {
@@ -1256,6 +1303,7 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
                               m_currentSource->GetStringSelection().Contains(
                                   "Mediterranean");
   bool currentOfflineTidal = currentsEnabled && IsOfflineTidalSelected();
+  bool currentOfflineNeeded = currentsEnabled && IsOfflineTidalNeeded();
   bool weatherGfs =
       weatherEnabled && m_weatherProvider->GetStringSelection().Contains("GFS");
   bool weatherHrrr = weatherEnabled &&
@@ -1275,6 +1323,7 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
       m_waveProvider->GetStringSelection().Contains("Copernicus");
   bool needsCopernicusCredentials = NeedsCopernicusCredentials();
   bool showTpxoModel = currentTpxoDirect || currentTpxoCache;
+  bool extensionEnabled = m_extendForecast->GetValue();
 
   auto showPair = [](wxWindow* label, wxWindow* control, bool show) {
     if (label) label->Show(show);
@@ -1282,6 +1331,20 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
   };
 
   m_provider->Enable(false);
+  showPair(m_fallbackWeatherLabel, m_fallbackWeatherProvider,
+           extensionEnabled && weatherEnabled);
+  showPair(m_fallbackWaveLabel, m_fallbackWaveProvider,
+           extensionEnabled && waveEnabled);
+  showPair(m_fallbackCurrentLabel, m_fallbackCurrentSource,
+           extensionEnabled && currentsEnabled);
+  m_fallbackWeatherProvider->Enable(extensionEnabled && weatherEnabled &&
+                                    !weatherGfs && !m_processRunning);
+  m_fallbackWaveProvider->Enable(
+      extensionEnabled && waveEnabled &&
+      !m_waveProvider->GetStringSelection().Contains("NOAA GFS") &&
+      !m_processRunning);
+  m_fallbackCurrentSource->Enable(extensionEnabled && currentsEnabled &&
+                                  !currentOfflineTidal && !m_processRunning);
   m_weatherProvider->Enable(m_generateWeather->GetValue());
   showPair(m_weatherPresetLabel, m_weatherPreset, weatherGenerated);
   showPair(m_wavesLabel, m_includeWaves, true);
@@ -1293,11 +1356,11 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
   m_existingWeatherFile->Enable(weatherExisting);
   m_currentSource->Enable(m_generateCurrents->GetValue());
   showPair(m_existingCurrentFileLabel, m_existingCurrentFile, currentExisting);
-  showPair(m_offlineTidalFileLabel, m_offlineTidalFile, currentOfflineTidal);
+  showPair(m_offlineTidalFileLabel, m_offlineTidalFile, currentOfflineNeeded);
   showPair(m_offlineTidalStatusLabel, m_offlineTidalStatus,
-           currentOfflineTidal);
+           currentOfflineNeeded);
   showPair(m_offlineCurrentModeLabel, m_offlineCurrentMode,
-           currentOfflineTidal);
+           currentOfflineNeeded);
   showPair(m_usernameLabel, m_username, needsCopernicusCredentials);
   showPair(m_passwordLabel, m_password, needsCopernicusCredentials);
   showPair(m_tpxoModelDirLabel, m_tpxoModelDir, showTpxoModel);
@@ -1309,8 +1372,8 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
   showPair(m_localNetcdfLabel, m_localNetcdf, false);
   m_rememberUsername->Show(needsCopernicusCredentials);
   m_existingCurrentFile->Enable(currentExisting);
-  m_offlineTidalFile->Enable(currentOfflineTidal && !m_processRunning);
-  m_offlineCurrentMode->Enable(currentOfflineTidal &&
+  m_offlineTidalFile->Enable(currentOfflineNeeded && !m_processRunning);
+  m_offlineCurrentMode->Enable(currentOfflineNeeded &&
                                m_offlineClimatologyAvailable &&
                                !m_processRunning);
   m_username->Enable(needsCopernicusCredentials);
@@ -1801,17 +1864,36 @@ void EnvironmentalGribDialog::FinishCommand(long exit_code, bool launched) {
   SetBusy(false);
 
   wxString nativeError;
+  wxString extensionSummary;
   if (!m_resultPath.empty() && wxFileName::FileExists(m_resultPath)) {
     wxFile resultFile(m_resultPath);
     wxString resultText;
     if (resultFile.IsOpened() && resultFile.ReadAll(&resultText)) {
       wxJSONValue resultValue;
       wxJSONReader reader;
-      if (reader.Parse(resultText, &resultValue) == 0 &&
-          resultValue.HasMember("error") &&
-          resultValue["error"].HasMember("message")) {
-        nativeError = resultValue["error"]["message"].AsString();
-        AppendLog("Native generator error: " + Redact(nativeError));
+      if (reader.Parse(resultText, &resultValue) == 0) {
+        if (resultValue.HasMember("error") &&
+            resultValue["error"].HasMember("message")) {
+          nativeError = resultValue["error"]["message"].AsString();
+          AppendLog("Native generator error: " + Redact(nativeError));
+        }
+        wxJSONValue coverage =
+            resultValue["diagnostics"]["forecast_extension"]["coverage"];
+        for (const wxString& component : {wxString("weather"),
+                                          wxString("waves"),
+                                          wxString("current")}) {
+          wxJSONValue entries = coverage[component];
+          if (!entries.IsArray()) continue;
+          for (int i = 0; i < entries.Size(); ++i) {
+            wxJSONValue entry = entries.ItemAt(i);
+            if (!extensionSummary.empty()) extensionSummary += "\n";
+            extensionSummary +=
+                component + ": " + entry["role"].AsString() + " " +
+                entry["source"].AsString() + " through " +
+                wxString::Format("%dh", entry["through_hour"].AsInt()) +
+                " (" + entry["status"].AsString() + ")";
+          }
+        }
       }
     }
     wxRemoveFile(m_resultPath);
@@ -1846,6 +1928,8 @@ void EnvironmentalGribDialog::FinishCommand(long exit_code, bool launched) {
         "\nValid time: " + ValidTimeSummary() +
         "\nMessages: see validation summary in log" +
         "\nOutput: " + OutputPath();
+    if (!extensionSummary.empty())
+      message += "\n\nActual forecast composition:\n" + extensionSummary;
     if (m_openAfter->GetValue()) {
       TryOpenGeneratedGrib();
       message += "\n\nThe generated file was opened in xGRIB.";
@@ -2004,6 +2088,23 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
   request["hours"] = m_durationHours->GetValue();
   request["stepHours"] = m_stepHours->GetValue();
   request["weatherProvider"] = weatherProvider;
+  request["extendForecast"] = m_extendForecast->GetValue();
+  request["fallbackWeatherProvider"] = wxString(
+      m_extendForecast->GetValue() &&
+              m_fallbackWeatherProvider->GetStringSelection().Contains("GFS")
+          ? "gfs"
+          : "none");
+  request["fallbackWaveProvider"] = wxString(
+      m_extendForecast->GetValue() &&
+              m_fallbackWaveProvider->GetStringSelection().Contains("GFS")
+          ? "gfs_wave"
+          : "none");
+  request["fallbackCurrentSource"] = wxString(
+      m_extendForecast->GetValue() &&
+              m_fallbackCurrentSource->GetStringSelection().Contains(
+                  "Offline")
+          ? "offline-tidal"
+          : "none");
   request["weatherPreset"] = weatherPreset;
   request["weatherGridSpacingDeg"] = 0.025;
   request["weatherFile"] = m_existingWeatherFile->GetPath();
@@ -2084,8 +2185,15 @@ wxString EnvironmentalGribDialog::SourceLabel() const {
   if (m_includeWaves->GetValue()) {
     waves = m_waveProvider->GetStringSelection();
   }
-  return "Environmental GRIB: weather=" + weather + ", currents=" + current +
-         ", waves=" + waves;
+  wxString label = "Environmental GRIB: weather=" + weather +
+                   ", currents=" + current + ", waves=" + waves;
+  if (m_extendForecast->GetValue()) {
+    label += "; long-range weather=" +
+             m_fallbackWeatherProvider->GetStringSelection() +
+             ", waves=" + m_fallbackWaveProvider->GetStringSelection() +
+             ", currents=" + m_fallbackCurrentSource->GetStringSelection();
+  }
+  return label;
 }
 
 wxString EnvironmentalGribDialog::ValidTimeSummary() const {
@@ -2336,6 +2444,25 @@ void EnvironmentalGribDialog::LoadSettings() {
       config->ReadLong("duration_hours", m_durationHours->GetValue())));
   m_stepHours->SetValue(static_cast<int>(
       config->ReadLong("step_hours", m_stepHours->GetValue())));
+  m_extendForecast->SetValue(
+      config->ReadBool("extend_forecast", m_extendForecast->GetValue()));
+  const long fallbackWeather = config->ReadLong(
+      "fallback_weather_selection", m_fallbackWeatherProvider->GetSelection());
+  if (fallbackWeather >= 0 &&
+      fallbackWeather <
+          static_cast<long>(m_fallbackWeatherProvider->GetCount()))
+    m_fallbackWeatherProvider->SetSelection(static_cast<int>(fallbackWeather));
+  const long fallbackWave = config->ReadLong(
+      "fallback_wave_selection", m_fallbackWaveProvider->GetSelection());
+  if (fallbackWave >= 0 &&
+      fallbackWave < static_cast<long>(m_fallbackWaveProvider->GetCount()))
+    m_fallbackWaveProvider->SetSelection(static_cast<int>(fallbackWave));
+  const long fallbackCurrent = config->ReadLong(
+      "fallback_current_selection", m_fallbackCurrentSource->GetSelection());
+  if (fallbackCurrent >= 0 &&
+      fallbackCurrent <
+          static_cast<long>(m_fallbackCurrentSource->GetCount()))
+    m_fallbackCurrentSource->SetSelection(static_cast<int>(fallbackCurrent));
   bool rememberUsername =
       config->ReadBool("remember_copernicus_username", false);
   m_rememberUsername->SetValue(rememberUsername);
@@ -2364,6 +2491,13 @@ void EnvironmentalGribDialog::SaveSettings() {
   config->Write("duration_hours",
                 static_cast<long>(m_durationHours->GetValue()));
   config->Write("step_hours", static_cast<long>(m_stepHours->GetValue()));
+  config->Write("extend_forecast", m_extendForecast->GetValue());
+  config->Write("fallback_weather_selection",
+                static_cast<long>(m_fallbackWeatherProvider->GetSelection()));
+  config->Write("fallback_wave_selection",
+                static_cast<long>(m_fallbackWaveProvider->GetSelection()));
+  config->Write("fallback_current_selection",
+                static_cast<long>(m_fallbackCurrentSource->GetSelection()));
   config->Write("remember_copernicus_username", m_rememberUsername->GetValue());
   if (m_rememberUsername->GetValue()) {
     config->Write("copernicus_username", m_username->GetValue());

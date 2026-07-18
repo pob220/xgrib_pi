@@ -1,5 +1,8 @@
+#include <algorithm>
 #include <cstdlib>
+#include <cmath>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #include <wx/string.h>
@@ -9,6 +12,25 @@
 #include "GribV2Record.h"
 
 namespace {
+
+class InterpolationFixtureRecord : public GribRecord {
+public:
+  InterpolationFixtureRecord(double spacing, double u, double origin = 0.0) {
+    ok = true;
+    knownData = true;
+    hasBMS = false;
+    BMSbits = nullptr;
+    isAdjacentI = true;
+    Lo1 = La1 = origin;
+    Lo2 = La2 = origin + 1.0;
+    lonMin = latMin = origin;
+    lonMax = latMax = origin + 1.0;
+    Di = Dj = spacing;
+    Ni = Nj = static_cast<zuint>(std::lround(1.0 / spacing)) + 1;
+    data = new double[Ni * Nj];
+    std::fill(data, data + Ni * Nj, u);
+  }
+};
 
 void Expect(bool condition, const char* message) {
   if (condition) return;
@@ -25,6 +47,35 @@ int main(int argc, char** argv) {
          "GRIB2 primary wave direction should be recognized");
   Expect(GribV2DataTypeForParameter(10, 0, 11) == GRB_WVPER,
          "GRIB2 primary wave period should be recognized");
+
+  // Weather Routing requests arbitrary timeline times from xGRIB. Verify the
+  // interpolation used for a regional-to-global model handover can bridge
+  // aligned grids with different resolutions (UKV/GFS is a 10:1 ratio).
+  InterpolationFixtureRecord fineU(0.1, 2.0), fineV(0.1, 0.0);
+  InterpolationFixtureRecord coarseU(1.0, 4.0), coarseV(1.0, 0.0);
+  GribRecord* interpolatedV = nullptr;
+  std::unique_ptr<GribRecord> interpolatedU(
+      GribRecord::Interpolated2DRecord(interpolatedV, fineU, fineV, coarseU,
+                                       coarseV, 0.5));
+  std::unique_ptr<GribRecord> interpolatedVOwner(interpolatedV);
+  Expect(interpolatedU && interpolatedVOwner,
+         "mixed-resolution vector interpolation should succeed");
+  Expect(interpolatedU->getNi() == 2 && interpolatedU->getNj() == 2,
+         "mixed-resolution interpolation should use the common coarse grid");
+  Expect(std::abs(interpolatedU->getValue(0, 0) - 3.0) < 1e-9,
+         "mixed-resolution interpolation should blend vector magnitude");
+
+  InterpolationFixtureRecord offsetCoarseU(1.0, 4.0, 0.03);
+  InterpolationFixtureRecord offsetCoarseV(1.0, 0.0, 0.03);
+  interpolatedV = nullptr;
+  std::unique_ptr<GribRecord> offsetInterpolatedU(
+      GribRecord::Interpolated2DRecord(interpolatedV, fineU, fineV,
+                                       offsetCoarseU, offsetCoarseV, 0.5));
+  std::unique_ptr<GribRecord> offsetInterpolatedVOwner(interpolatedV);
+  Expect(offsetInterpolatedU && offsetInterpolatedVOwner,
+         "misaligned regional/global grids should use spatial sampling");
+  Expect(std::abs(offsetInterpolatedU->getValue(0, 0) - 3.0) < 1e-9,
+         "misaligned-grid sampling should preserve the temporal blend");
 
   Expect(argc == 2 || argc == 3,
          "usage: xgrib_reader_integration_tests FILE.grb [--any]");
