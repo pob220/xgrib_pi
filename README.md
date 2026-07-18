@@ -16,7 +16,10 @@ retain priority over explicitly selected long-range sources; xGRIB writes one
 composite GRIB with each provider's native cadence. For example, UKV remains
 hourly through 54 hours and three-hourly through 120 hours before NOAA GFS
 continues the weather timeline. The generator reports the actual component
-coverage after completion.
+coverage after completion. Forecast duration is measured from the requested
+UTC start; model-cycle age is allowed for and the final file is capped at the
+requested end so weather, waves and currents cannot silently leave a
+current-only tail.
 
 ## Important installation rule
 
