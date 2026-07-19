@@ -564,7 +564,7 @@ void GRIBUICtrlBar::OpenFile(bool newestFile) {
   if (m_bGRIBActiveFile->IsOK()) {
     wxFileName fn(m_bGRIBActiveFile->GetFileNames()[0]);
     title = (_("File: "));
-    title.Append(fn.GetFullName());
+    title.Append(fn.GetFullPath());
     if (rsa->GetCount() == 0) {  // valid but empty file
       delete m_bGRIBActiveFile;
       m_bGRIBActiveFile = nullptr;
@@ -1829,6 +1829,10 @@ void GRIBUICtrlBar::OnOpenFile(wxCommandEvent &event) {
 
     m_grib_dir = dialog->GetDirectory();
     dialog->GetPaths(m_file_names);
+    if (!m_file_names.IsEmpty()) {
+      SetTitle(_("File: ") + m_file_names[0]);
+      Update();
+    }
     OpenFile();
     if (g_pi) {
       if (g_pi->m_bZoomToCenterAtInit) DoZoomToCenter();
