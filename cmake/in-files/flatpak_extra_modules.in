@@ -1,14 +1,160 @@
-# add flatpak-options args in here like this:
-#    - name: libusb
-#      config-opts:
-#          - --disable-shared
-#          - --enable-static
-#          - --disable-udev
-#          - --prefix=/app/extensions/${PACKAGE}
-#      sources:
-#          - type: archive
-#            url: https://downloads.sourceforge.net/project/libusb/libusb-1.0/libusb-1.0.24/libusb-1.0.24.tar.bz2
-#            sha256: 7efd2685f7b327326dcfb85cee426d9b871fd70e22caa15bb68d595ce2a2b12a
-#      cleanup: ["/include", "/lib/*.a", "/lib/*.la", "/lib/pkgconfig"]
-#
-# be carefull about indents and naming.
+  - name: jsoncpp
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_INSTALL_PREFIX=/app/extensions/xgrib_pi
+      - -DBUILD_SHARED_LIBS=ON
+      - -DBUILD_STATIC_LIBS=OFF
+      - -DJSONCPP_WITH_TESTS=OFF
+      - -DJSONCPP_WITH_POST_BUILD_UNITTEST=OFF
+    sources:
+      - type: git
+        url: https://github.com/open-source-parsers/jsoncpp.git
+        tag: 1.9.6
+        commit: 89e2973c754a9c02a49974d839779b151e95afd6
+
+  - name: qhull
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_INSTALL_PREFIX=/app/extensions/xgrib_pi
+      - -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      - -DBUILD_STATIC_LIBS=OFF
+      - -DBUILD_TESTING=OFF
+    sources:
+      - type: git
+        url: https://github.com/qhull/qhull.git
+        tag: v8.0.2
+        commit: 613debeaea72ee66626dace9ba1a2eff11b5d37d
+
+  - name: c-blosc
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_INSTALL_PREFIX=/app/extensions/xgrib_pi
+      - -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      - -DBUILD_SHARED=ON
+      - -DBUILD_STATIC=OFF
+      - -DBUILD_TESTS=OFF
+      - -DBUILD_BENCHMARKS=OFF
+      - -DPREFER_EXTERNAL_LZ4=ON
+      - -DPREFER_EXTERNAL_ZLIB=ON
+      - -DPREFER_EXTERNAL_ZSTD=ON
+    sources:
+      - type: git
+        url: https://github.com/Blosc/c-blosc.git
+        tag: v1.21.6
+        commit: 616f4b7343a8479f7e71dd3d7025bd92c9a6bbd0
+
+  - name: libzip
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_INSTALL_PREFIX=/app/extensions/xgrib_pi
+      - -DBUILD_SHARED_LIBS=ON
+      - -DBUILD_TOOLS=OFF
+      - -DBUILD_REGRESS=OFF
+      - -DBUILD_EXAMPLES=OFF
+      - -DBUILD_DOC=OFF
+    sources:
+      - type: git
+        url: https://github.com/nih-at/libzip.git
+        tag: v1.11.4
+        commit: 6f8a0cdd24a0dc6cce9dac4a7679da784ab124ea
+
+  - name: libsodium
+    config-opts:
+      - --prefix=/app/extensions/xgrib_pi
+      - --disable-static
+      - --enable-shared
+    sources:
+      - type: git
+        url: https://github.com/jedisct1/libsodium.git
+        tag: 1.0.20-RELEASE
+        commit: 9511c982fb1d046470a8b42aa36556cdb7da15de
+
+  - name: proj
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_INSTALL_PREFIX=/app/extensions/xgrib_pi
+      - -DBUILD_SHARED_LIBS=ON
+      - -DBUILD_APPS=OFF
+      - -DBUILD_TESTING=OFF
+      - -DENABLE_CURL=OFF
+      - -DENABLE_TIFF=OFF
+    sources:
+      - type: git
+        url: https://github.com/OSGeo/PROJ.git
+        tag: 9.6.2
+        commit: 7c3d4a1fa9c1d5a3941b5eaee7c8d149f5936f54
+
+  - name: hdf5
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_INSTALL_PREFIX=/app/extensions/xgrib_pi
+      - -DBUILD_SHARED_LIBS=ON
+      - -DONLY_SHARED_LIBS=ON
+      - -DHDF5_BUILD_CPP_LIB=OFF
+      - -DHDF5_BUILD_FORTRAN=OFF
+      - -DHDF5_BUILD_JAVA=OFF
+      - -DHDF5_BUILD_TOOLS=OFF
+      - -DHDF5_BUILD_EXAMPLES=OFF
+      - -DBUILD_TESTING=OFF
+    sources:
+      - type: git
+        url: https://github.com/HDFGroup/hdf5.git
+        tag: hdf5_1.14.6
+        commit: 7bf340440909d468dbb3cf41f0ea0d87f5050cea
+
+  - name: netcdf-c
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_INSTALL_PREFIX=/app/extensions/xgrib_pi
+      - -DBUILD_SHARED_LIBS=ON
+      - -DNETCDF_ENABLE_NETCDF_4=ON
+      - -DNETCDF_ENABLE_HDF5=ON
+      - -DNETCDF_ENABLE_DAP=OFF
+      - -DNETCDF_ENABLE_TESTS=OFF
+      - -DNETCDF_BUILD_UTILITIES=OFF
+      - -DBUILD_TESTING=OFF
+    sources:
+      - type: git
+        url: https://github.com/Unidata/netcdf-c.git
+        tag: v4.9.3
+        commit: 3a6b1debf1557f07b606ce3653e44f0d711203be
+
+  - name: libaec
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_INSTALL_PREFIX=/app/extensions/xgrib_pi
+      - -DBUILD_SHARED_LIBS=ON
+      - -DBUILD_TESTING=OFF
+    sources:
+      - type: git
+        url: https://github.com/MathisRosenhauer/libaec.git
+        tag: v1.1.4
+        commit: 7204505af7d6635734fc12a38d6bd0a6253c9c6d
+
+  - name: eccodes
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_INSTALL_PREFIX=/app/extensions/xgrib_pi
+      - -DBUILD_SHARED_LIBS=ON
+      - -DENABLE_FORTRAN=OFF
+      - -DENABLE_PYTHON=OFF
+      - -DENABLE_NETCDF=OFF
+      - -DENABLE_BUILD_TOOLS=OFF
+      - -DENABLE_PRODUCT_BUFR=OFF
+      - -DENABLE_TESTS=OFF
+      - -DENABLE_EXAMPLES=OFF
+      - -DENABLE_MEMFS=OFF
+    sources:
+      - type: git
+        url: https://github.com/ecmwf/eccodes.git
+        tag: 2.43.0
+        commit: 616b004cf5cd473e101a665dc140a75a6bd1a0a0

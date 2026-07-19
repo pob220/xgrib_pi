@@ -89,7 +89,8 @@ uncertainty tiles are not loaded for ordinary prediction.
 ## Build
 
 The xGRIB viewer requires the normal OpenCPN plugin toolchain plus development
-packages for wxWidgets, Jasper, bzip2 and zlib. Building the bundled native
+packages for wxWidgets, bzip2 and zlib. A pinned Jasper 4.2.9 is built
+statically by default. Building the bundled native
 generator also requires ecCodes, NetCDF, libcurl, jsoncpp, Qhull, Blosc,
 libzip, PROJ, libsodium and Zstandard.
 

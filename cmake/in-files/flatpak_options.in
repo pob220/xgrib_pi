@@ -6,3 +6,7 @@
 build-options:
     build-args:
         - --share=network
+    env:
+        CMAKE_PREFIX_PATH: /app/extensions/xgrib_pi
+        PKG_CONFIG_PATH: /app/extensions/xgrib_pi/lib/pkgconfig:/app/extensions/xgrib_pi/lib64/pkgconfig
+        LD_LIBRARY_PATH: /app/extensions/xgrib_pi/lib:/app/extensions/xgrib_pi/lib64:/app/lib:/usr/lib

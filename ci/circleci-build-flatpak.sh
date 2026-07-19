@@ -40,7 +40,7 @@ if test -f "$EXTRA_LIBS"; then
 fi
 
 git config --global protocol.file.allow always
-git submodule update --init opencpn-libs
+git submodule update --init --recursive
 
 if [ -n "$CI" ]; then
     sudo apt update
@@ -93,3 +93,4 @@ fi
 
 make flatpak-build
 make flatpak-pkg
+../scripts/test-flatpak-archive.sh .

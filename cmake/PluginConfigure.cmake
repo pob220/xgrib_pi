@@ -104,6 +104,12 @@ else ()
     set(GIT_REPOSITORY_TAG "")
   endif ()
 endif ()
+if ("${GIT_REPOSITORY}" STREQUAL "")
+  set(GIT_REPOSITORY "pob220/xgrib_pi")
+  set(GIT_REPOSITORY_BRANCH "main")
+  set(GIT_REPOSITORY_TAG "")
+  message(STATUS "${CMLOC}Using configured xGRIB repository fallback")
+endif ()
 message(STATUS "${CMLOC}GIT_REPOSITORY: ${GIT_REPOSITORY}")
 message(STATUS "${CMLOC}Git Branch: \"${GIT_REPOSITORY_BRANCH}\"")
 message(STATUS "${CMLOC}Git Tag: \"${GIT_REPOSITORY_TAG}\"")
@@ -461,6 +467,14 @@ if (OCPN_FLATPAK_CONFIG)
   # cmake/in-files/org.opencpn.OpenCPN.Plugin.yaml.in
   message(STATUS "${CMLOC}FLATPAK_BRANCH: ${FLATPAK_BRANCH}")
   set(RUNTIME_VERSION ${FLATPAK_BRANCH})
+
+  if(XGRIB_FLATPAK_SOURCE_DIR)
+    set(flatpak_plugin_source
+        "       - type: dir\n         path: ${XGRIB_FLATPAK_SOURCE_DIR}")
+  else()
+    set(flatpak_plugin_source
+        "       - type: git\n         url: https://${GIT_REPOSITORY_SERVER}/${GIT_REPOSITORY}\n         ${GIT_BRANCH_OR_TAG}: ${GIT_REPOSITORY_ITEM}")
+  endif()
 
   message(
     STATUS

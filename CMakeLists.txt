@@ -74,8 +74,8 @@ set(LONG_DESCRIPTION
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "1")
 set(VERSION_PATCH "0")
-set(VERSION_TWEAK "0")
-set(VERSION_DATE "12/07/2026") # DD/MM/YYYY format
+set(VERSION_TWEAK "1")
+set(VERSION_DATE "19/07/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -119,6 +119,8 @@ set(XML_DESCRIPTION ${LONG_DESCRIPTION})
 option(PLUGIN_USE_SVG "Use SVG graphics" ON)
 option(BUNDLE_GENERATOR_RUNTIME
        "Bundle the native helper's non-system runtime dependencies" ON)
+option(XGRIB_USE_BUNDLED_JASPER
+       "Build the pinned static Jasper dependency" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -311,10 +313,61 @@ target_sources(${PACKAGE_NAME} PUBLIC ${SRC})
 # address space isolates network/model parsing failures from OpenCPN while
 # sharing one pinned implementation across development and catalogue builds.
 include(CTest)
+
+# Debian 12's ecCodes package expands its multiarch pkg-config prefix to
+# /usr/lib instead of /usr. CMake rejects the resulting /usr/lib/include path
+# before compiling, although the headers are correctly installed in
+# /usr/include. Keep the workaround in the parent packaging project so the
+# generator submodule stays an independently buildable upstream checkout.
+find_package(PkgConfig REQUIRED)
+execute_process(
+  COMMAND ${PKG_CONFIG_EXECUTABLE} --variable=includedir eccodes
+  OUTPUT_VARIABLE XGRIB_ECCODES_INCLUDEDIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  RESULT_VARIABLE XGRIB_ECCODES_PKGCONFIG_RESULT)
+if(XGRIB_ECCODES_PKGCONFIG_RESULT EQUAL 0
+   AND NOT IS_DIRECTORY "${XGRIB_ECCODES_INCLUDEDIR}")
+  execute_process(
+    COMMAND ${PKG_CONFIG_EXECUTABLE} --variable=pcfiledir eccodes
+    OUTPUT_VARIABLE XGRIB_ECCODES_PCDIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  file(READ "${XGRIB_ECCODES_PCDIR}/eccodes.pc" XGRIB_ECCODES_PC)
+  string(REGEX REPLACE "prefix=[^\n]*" "prefix=/usr"
+         XGRIB_ECCODES_PC "${XGRIB_ECCODES_PC}")
+  set(XGRIB_PKGCONFIG_DIR "${CMAKE_CURRENT_BINARY_DIR}/pkgconfig")
+  file(MAKE_DIRECTORY "${XGRIB_PKGCONFIG_DIR}")
+  file(WRITE "${XGRIB_PKGCONFIG_DIR}/eccodes.pc" "${XGRIB_ECCODES_PC}")
+  set(ENV{PKG_CONFIG_PATH}
+      "${XGRIB_PKGCONFIG_DIR}:$ENV{PKG_CONFIG_PATH}")
+  unset(__pkg_config_checked_ECCODES CACHE)
+  message(STATUS "${CMLOC}Corrected Debian ecCodes pkg-config prefix")
+endif()
+
+# Ubuntu 22.04 ships ecCodes 2.24, whose public constructor still uses the
+# legacy grib_ prefix.  Keep the generator source portable without carrying a
+# distro-specific patch in the pinned submodule.
+pkg_check_modules(XGRIB_ECCODES REQUIRED eccodes)
+include(CheckCXXSymbolExists)
+set(CMAKE_REQUIRED_INCLUDES "${XGRIB_ECCODES_INCLUDE_DIRS}")
+set(CMAKE_REQUIRED_LIBRARIES "${XGRIB_ECCODES_LINK_LIBRARIES}")
+check_cxx_symbol_exists(codes_handle_new_from_samples "eccodes.h"
+                        XGRIB_HAVE_CODES_HANDLE_NEW_FROM_SAMPLES)
+unset(CMAKE_REQUIRED_INCLUDES)
+unset(CMAKE_REQUIRED_LIBRARIES)
+
 add_subdirectory(generator EXCLUDE_FROM_ALL)
+if(NOT XGRIB_HAVE_CODES_HANDLE_NEW_FROM_SAMPLES)
+  target_compile_definitions(environmental_grib_engine PRIVATE
+    codes_handle_new_from_samples=grib_handle_new_from_samples)
+  message(STATUS "${CMLOC}Using legacy ecCodes sample constructor")
+endif()
+
 add_dependencies(${PACKAGE_NAME} environmental-grib)
 if(BUILD_TESTING AND TARGET environmental_grib_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_tests)
+endif()
+if(BUILD_TESTING AND TARGET environmental_grib_xtd_tests)
+  add_dependencies(${PACKAGE_NAME} environmental_grib_xtd_tests)
 endif()
 
 if(UNIX AND NOT APPLE)
@@ -328,11 +381,14 @@ if(UNIX AND NOT APPLE)
 
   if(BUNDLE_GENERATOR_RUNTIME)
     find_path(ECCODES_DEFINITIONS_DIR NAMES grib1/boot.def
-      PATHS /usr/share/eccodes/definitions /usr/local/share/eccodes/definitions)
+      PATHS /usr/share/eccodes/definitions /usr/local/share/eccodes/definitions
+            ${CMAKE_INSTALL_PREFIX}/share/eccodes/definitions)
     find_path(ECCODES_SAMPLES_DIR NAMES regular_ll_sfc_grib1.tmpl
-      PATHS /usr/share/eccodes/samples /usr/local/share/eccodes/samples)
+      PATHS /usr/share/eccodes/samples /usr/local/share/eccodes/samples
+            ${CMAKE_INSTALL_PREFIX}/share/eccodes/samples)
     find_path(PROJ_DATA_DIR NAMES proj.db
-      PATHS /usr/share/proj /usr/local/share/proj)
+      PATHS /usr/share/proj /usr/local/share/proj
+            ${CMAKE_INSTALL_PREFIX}/share/proj)
     if(NOT IS_DIRECTORY "${ECCODES_DEFINITIONS_DIR}" OR
        NOT IS_DIRECTORY "${ECCODES_SAMPLES_DIR}" OR
        NOT IS_DIRECTORY "${PROJ_DATA_DIR}")
@@ -378,11 +434,23 @@ if (NOT OCPN_FLATPAK_CONFIG)
   add_subdirectory(opencpn-libs/wxJSON)
   target_link_libraries(${PACKAGE_NAME} ocpn::wxjson)
 
-  find_package(Jasper REQUIRED)
+  if(XGRIB_USE_BUNDLED_JASPER)
+    include(BundledJasper)
+  else()
+    find_package(Jasper REQUIRED)
+    set(XGRIB_JASPER_TARGET Jasper::Jasper)
+  endif()
   find_package(BZip2 REQUIRED)
   find_package(ZLIB REQUIRED)
-  target_link_libraries(${PACKAGE_NAME} Jasper::Jasper BZip2::BZip2
+  target_link_libraries(${PACKAGE_NAME} ${XGRIB_JASPER_TARGET} BZip2::BZip2
                         ZLIB::ZLIB)
+
+  if(XGRIB_USE_BUNDLED_JASPER AND EXISTS "${XGRIB_JASPER_LICENSE}")
+    install(FILES "${XGRIB_JASPER_LICENSE}"
+      DESTINATION
+        "share/opencpn/plugins/${PACKAGE_NAME}/runtime/licenses/jasper"
+      RENAME LICENSE.txt)
+  endif()
 
   if(BUILD_TESTING)
     add_executable(xgrib_generator_job_json_tests
@@ -415,7 +483,8 @@ if (NOT OCPN_FLATPAK_CONFIG)
     target_include_directories(xgrib_reader_integration_tests PRIVATE
       ${PROJECT_SOURCE_DIR}/src)
     target_link_libraries(xgrib_reader_integration_tests PRIVATE
-      Jasper::Jasper BZip2::BZip2 ZLIB::ZLIB ${wxWidgets_LIBRARIES})
+      ${XGRIB_JASPER_TARGET} BZip2::BZip2 ZLIB::ZLIB
+      ${wxWidgets_LIBRARIES})
 
     set(XGRIB_TEST_GRIB "${CMAKE_CURRENT_BINARY_DIR}/xgrib-test-current.grb")
     add_test(NAME xgrib_generate_reader_fixture

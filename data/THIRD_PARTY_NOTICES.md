@@ -12,6 +12,10 @@ the following runtime components. They remain under their own licenses:
 - c-blosc (BSD-3-Clause)
 - libzip (BSD-3-Clause)
 - PROJ (MIT)
+- libsodium (ISC)
+- Zstandard (BSD-3-Clause/GPL-2.0-only dual terms)
+- Jasper 4.2.9 (JasPer License 2.0; pinned and statically linked into the
+  viewer plugin)
 
 Their transitive runtime libraries retain their respective distribution and
 upstream licenses. Release builds must collect the corresponding license files

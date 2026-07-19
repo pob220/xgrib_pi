@@ -52,12 +52,16 @@ fi
 tag=$(git tag --contains HEAD)
 current_branch=$(git branch --show-current)
 
-if [ -n "$tag" ] || [ "$current_branch" = "master" ]; then
+if [ -n "$tag" ] || [ "$current_branch" = "master" ] || [ "$current_branch" = "main" ]; then
   cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local ..
 else
   cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=/usr/local ..
 fi
 
 make -j2
+ctest --output-on-failure
+cmake --install . --prefix /tmp/xgrib-stage
+../scripts/test-packaged-helper.sh /tmp/xgrib-stage
 make package
+../scripts/test-catalogue-archive.sh .
 ls -l

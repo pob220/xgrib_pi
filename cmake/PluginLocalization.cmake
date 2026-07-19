@@ -12,9 +12,9 @@ endif (OCPN_FLATPAK_CONFIG)
 
 message(STATUS "${CMLOC}Starting POTFILE generation")
 
-set(POTFILE ${CMAKE_CURRENT_SOURCE_DIR}/po/POTFILES.in)
-file(REMOVE ${POTFILE}.test)
-file(WRITE ${POTFILE}.test "")
+set(POTFILE ${CMAKE_CURRENT_BINARY_DIR}/po/POTFILES.in)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/po)
+file(WRITE ${POTFILE} "")
 message(
   STATUS
     "${CMLOC}Checking file: ${CMAKE_CURRENT_SOURCE_DIR}/po/${PACKAGE_NAME}.pot"
@@ -31,17 +31,11 @@ else ()
   )
 endif ()
 foreach (POTLINE IN ITEMS ${SRCS})
-  file(APPEND ${POTFILE}.test "${POTLINE}\n")
+  file(APPEND ${POTFILE} "${POTLINE}\n")
 endforeach (POTLINE)
 foreach (POTLINE IN ITEMS ${HDRS})
-  file(APPEND ${POTFILE}.test "${POTLINE}\n")
+  file(APPEND ${POTFILE} "${POTLINE}\n")
 endforeach (POTLINE)
-# convert crlf to lf for consistency and make copy_if_different work correctly
-configure_file(${POTFILE}.test ${POTFILE}.test NEWLINE_STYLE UNIX)
-execute_process(
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${POTFILE}.test ${POTFILE}
-  OUTPUT_QUIET ERROR_QUIET
-)
 
 find_program(GETTEXT_XGETTEXT_EXECUTABLE xgettext)
 string(REPLACE "_pi" "" I18N_NAME ${PACKAGE_NAME})
@@ -52,8 +46,8 @@ if (GETTEXT_XGETTEXT_EXECUTABLE)
       ${GETTEXT_XGETTEXT_EXECUTABLE} --force-po -F
       --package-name=${PACKAGE_NAME} --package-version="${PACKAGE_VERSION}"
       --output=po/${PACKAGE_NAME}.pot --keyword=_ --width=80
-      --files-from=${CMAKE_CURRENT_SOURCE_DIR}/po/POTFILES.in
-    DEPENDS po/POTFILES.in po/${PACKAGE_NAME}.pot
+      --files-from=${POTFILE}
+    DEPENDS ${POTFILE} po/${PACKAGE_NAME}.pot
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "${I18N_NAME}-pot-update [${PACKAGE_NAME}]: Generated pot file."
   )

@@ -54,7 +54,8 @@ set(PKG_URL
 
 # check to make sure we have a git repository
 execute_process(
-  COMMAND git status $>/dev/null
+  COMMAND git status --porcelain
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
   RESULT_VARIABLE GIT_REPOSITORY_EXISTS
   OUTPUT_QUIET ERROR_QUIET
 )

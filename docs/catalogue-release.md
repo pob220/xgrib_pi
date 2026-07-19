@@ -3,8 +3,9 @@
 ## Prerequisites
 
 - CMake 3.20 or newer and a C++20 compiler for the helper.
-- OpenCPN Frontend2 build prerequisites, wxWidgets 3.2, Jasper, bzip2 and
-  zlib for the viewer.
+- OpenCPN Frontend2 build prerequisites, wxWidgets 3.2, bzip2 and zlib for
+  the viewer. Jasper 4.2.9 is fetched at a pinned commit and linked statically
+  by default.
 - Development packages for ecCodes, NetCDF, libcurl, jsoncpp, Qhull,
   bzip2, Blosc, libzip, PROJ, libsodium, and Zstandard.
 - All git submodules initialized at recorded commits.
@@ -17,6 +18,8 @@ cmake --build build -j"$(nproc)"
 ctest --test-dir build --output-on-failure
 cmake --install build --prefix /tmp/xgrib-stage
 scripts/test-packaged-helper.sh /tmp/xgrib-stage
+cmake --build build --target package
+scripts/test-catalogue-archive.sh build
 ```
 
 Run `git diff --check` and verify the generated archive contains the plugin
@@ -60,9 +63,80 @@ libraries selected by `GET_RUNTIME_DEPENDENCIES` into the package's
 `runtime/licenses` directory. The checked-in third-party notice is an index,
 not a replacement for required license texts.
 
-## Platform policy
+## Linux target policy
 
-Only platforms built and tested by CI should appear in catalogue metadata.
-Linux x86_64 is the initial release target. Add Windows and macOS entries only
-after their helper runtime bundles pass the same protocol and generation
-tests.
+The oldest workable native build baseline is Debian 12 (Bookworm), not Debian
+11. The generator requires CMake 3.20 and the C++20 calendar/chrono library
+implemented by GCC 11 or newer; stock Bullseye has CMake 3.18 and GCC 10.
+Building on an old image only lowers libc and library requirements. It does
+not make one archive universal: OpenCPN still selects artifacts using target,
+target version, architecture, wxWidgets and GTK ABI metadata.
+
+Release candidates, in priority order, are:
+
+| Artifact | OpenCPN hosts it can target |
+| --- | --- |
+| Debian 12 arm64 | 64-bit Raspberry Pi OS/Debian 12; OpenCPN also maps it to Ubuntu arm64 23.04, 23.10 and 24.04 |
+| Debian 12 armhf | 32-bit Raspberry Pi OS/Debian 12; corresponding Ubuntu armhf mappings |
+| Flatpak aarch64/x86_64 | OpenCPN Flatpak with the matching runtime/SDK branch |
+| Debian 12 x86_64 | Debian 12; OpenCPN also maps it to Ubuntu x86_64 23.04, 23.10 and 24.04 |
+| Ubuntu 22.04 x86_64 wx3.2 | Ubuntu 22.04 only |
+| Debian 13 x86_64/arm64 | Debian 13, without pretending it is compatible with Debian 12 |
+
+Only a row which completes its clean container build, all tests, staged-helper
+test and archive test should be enabled for upload. A real Pi test is still
+required before publishing ARM metadata. Add Windows and macOS only after
+their helper runtime bundles pass the same protocol and generation tests.
+CircleCI builds the Bookworm x86_64/arm64, Jammy x86_64, Trixie x86_64 and
+Flatpak x86_64/aarch64 candidates, but `run_workflow_deploy` defaults to false.
+Set it true only for an intentional release after the checks above pass and
+the Cloudsmith repositories have been provisioned.
+
+### Verification snapshot (19 July 2026)
+
+The current tree completed clean builds, all seven CTest tests, staged-helper
+execution and extracted-archive execution for these locally tested candidates:
+
+| Candidate | Archive | ABI observation |
+| --- | ---: | --- |
+| Debian 12 x86_64 | 45 MiB | plugin and helper require at most GLIBC 2.35 |
+| Debian 12 arm64 | 45 MiB | emulated ARM64 ELF; at most GLIBC 2.35 |
+| Ubuntu 22.04 x86_64 wx3.2 | 35 MiB | at most GLIBC 2.35; ecCodes 2.24 compatibility path |
+| Debian 13 x86_64 | 36 MiB | at most GLIBC 2.38 |
+| Flatpak 25.08 x86_64 | 20 MiB | built against the stable OpenCPN Flatpak runtime |
+
+The ARM64 result is a package-level test under binfmt/QEMU, not a substitute
+for loading the plugin in OpenCPN on a physical Raspberry Pi. Flatpak aarch64
+uses the same pinned manifest and has a native ARM CircleCI job, but was not
+built on this x86_64 laptop. Debian armhf remains a later candidate rather than
+an asserted supported target.
+
+## Raspberry Pi release-candidate test
+
+Build the ARM64 archive in CI or an emulated `debian:bookworm` container, then
+create a temporary local catalogue (replace the address with the serving
+machine's LAN address):
+
+```sh
+scripts/make-local-catalogue.sh build local-catalogue \
+  http://192.168.1.10:8000
+python3 -m http.server 8000 --directory local-catalogue
+```
+
+On the Pi, first record `dpkg --print-architecture`, the OS details from
+`/etc/os-release`, and `opencpn --version`. In OpenCPN's plugin catalogue
+settings, set the custom URL to
+`http://192.168.1.10:8000/ocpn-plugins.xml`, update the catalogue and install
+xGRIB. Then:
+
+1. Confirm the stock GRIB plugin is disabled, enable xGRIB and restart.
+2. Open the xGRIB control bar and a known GRIB file.
+3. Generate a small synthetic file, open it, move the timeline and inspect
+   cursor values/overlays.
+4. Open the generator and run one small public-provider request.
+5. Restart OpenCPN, repeat enable/disable once, and inspect the OpenCPN log for
+   loader errors, missing shared libraries or helper failures.
+6. Confirm uninstall removes xGRIB and does not alter the bundled GRIB plugin.
+
+Do not add the ARM XML to the public catalogue until this test passes on the
+actual Pi.
