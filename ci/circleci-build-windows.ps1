@@ -30,6 +30,45 @@ function Invoke-NativeLogged(
     }
 }
 
+function Find-Dumpbin {
+    $command = Get-Command dumpbin.exe -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+
+    $programFilesX86 = ${env:ProgramFiles(x86)}
+    $vswhere = Join-Path $programFilesX86 `
+        "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (-not (Test-Path $vswhere)) {
+        throw "Cannot locate vswhere.exe or dumpbin.exe on this Windows runner"
+    }
+
+    $installation = (& $vswhere -latest -products * `
+        -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+        -property installationPath | Select-Object -First 1)
+    if (-not $installation) {
+        throw "No Visual Studio installation with the C++ toolchain was found"
+    }
+
+    $msvcRoot = Join-Path $installation "VC\Tools\MSVC"
+    $toolsets = @(Get-ChildItem $msvcRoot -Directory -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending)
+    foreach ($toolset in $toolsets) {
+        foreach ($relative in @(
+            "bin\Hostx64\x64\dumpbin.exe",
+            "bin\Hostx64\x86\dumpbin.exe",
+            "bin\Hostx86\x86\dumpbin.exe"
+        )) {
+            $candidate = Join-Path $toolset.FullName $relative
+            if (Test-Path $candidate) {
+                return $candidate
+            }
+        }
+    }
+
+    throw "Visual Studio was found, but its dumpbin.exe could not be located"
+}
+
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repo
 $build = Join-Path $repo "build"
@@ -42,6 +81,7 @@ $testDir = Join-Path $artifact "tests"
 $packageDir = Join-Path $artifact "package"
 $fixtureDir = Join-Path $artifact "fixtures"
 $diagnosticDir = Join-Path $artifact "diagnostics"
+$dumpbin = Find-Dumpbin
 New-Item -ItemType Directory -Force `
     $build,$generatorBuild,$generatorStage,$stage,$logDir,$testDir,$packageDir,$fixtureDir,$diagnosticDir | Out-Null
 Copy-Item (Join-Path $repo "test\fixtures\*") $fixtureDir
@@ -297,7 +337,7 @@ Invoke-NativeLogged `
     { cmake --build $build --config Release --parallel 2 } `
     (Join-Path $logDir "build.log") "CMake build"
 $firstPluginTest = Join-Path $build "Release\xgrib_generator_job_json_tests.exe"
-& dumpbin.exe /dependents $firstPluginTest 2>&1 | Set-Content -Encoding utf8 `
+& $dumpbin /dependents $firstPluginTest 2>&1 | Set-Content -Encoding utf8 `
     (Join-Path $logDir "plugin-test-dependencies.log")
 Assert-NativeSuccess "Inspecting standalone plugin-test dependencies"
 $env:ECCODES_DEFINITION_PATH = Join-Path $runtimeEccodes "definitions"
@@ -352,11 +392,11 @@ Invoke-NativeLogged `
     (Join-Path $logDir "install.log") "Staged installation"
 $pluginBinary = Join-Path $stage "plugins\xgrib_pi.dll"
 $packagedHelper = Join-Path $stage "plugins\xgrib_pi\bin\environmental-grib.exe"
-$pluginHeaders = & dumpbin.exe /headers $pluginBinary 2>&1
+$pluginHeaders = & $dumpbin /headers $pluginBinary 2>&1
 Assert-NativeSuccess "Inspecting xGRIB plugin architecture"
 $pluginHeaders | Set-Content -Encoding utf8 `
     (Join-Path $logDir "plugin-headers.log")
-$helperHeaders = & dumpbin.exe /headers $packagedHelper 2>&1
+$helperHeaders = & $dumpbin /headers $packagedHelper 2>&1
 Assert-NativeSuccess "Inspecting environmental helper architecture"
 $helperHeaders | Set-Content -Encoding utf8 `
     (Join-Path $logDir "helper-headers.log")
@@ -366,10 +406,10 @@ if (-not ($pluginHeaders -match "14C machine \(x86\)")) {
 if (-not ($helperHeaders -match "8664 machine \(x64\)")) {
     throw "Packaged environmental helper is not an x64 PE binary"
 }
-& dumpbin.exe /dependents $pluginBinary 2>&1 | Set-Content -Encoding utf8 `
+& $dumpbin /dependents $pluginBinary 2>&1 | Set-Content -Encoding utf8 `
     (Join-Path $logDir "plugin-dependencies.log")
 Assert-NativeSuccess "Inspecting xGRIB plugin dependencies"
-& dumpbin.exe /dependents $packagedHelper 2>&1 | Set-Content -Encoding utf8 `
+& $dumpbin /dependents $packagedHelper 2>&1 | Set-Content -Encoding utf8 `
     (Join-Path $logDir "helper-dependencies.log")
 Assert-NativeSuccess "Inspecting environmental helper dependencies"
 & $packagedHelper capabilities | Set-Content -Encoding utf8 `
