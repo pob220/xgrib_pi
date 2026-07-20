@@ -252,6 +252,14 @@ foreach ($entry in $downloads.GetEnumerator()) {
     Assert-NativeSuccess "Extracting $archive"
 }
 $wxLib = Join-Path $wxRoot "lib\vc14x_dll"
+$wxRuntimeDlls = @(Get-ChildItem $wxLib -Filter "wxbase32u_*.dll" -File)
+if ($wxRuntimeDlls.Count -eq 0) {
+    throw "The wxWidgets release archive did not provide runtime DLLs"
+}
+# CTest launches the standalone x86 test executables before OpenCPN is
+# installed. Make their wxWidgets runtime explicit so a missing-DLL loader
+# dialog cannot silently hold the non-interactive CI job open.
+$env:PATH = "$wxLib;$env:PATH"
 
 $generatorBin = Join-Path $generatorStage "bin"
 Copy-Item (Join-Path $generatorInstalled "bin\*.dll") $generatorBin
@@ -288,11 +296,16 @@ Invoke-NativeLogged {
 Invoke-NativeLogged `
     { cmake --build $build --config Release --parallel 2 } `
     (Join-Path $logDir "build.log") "CMake build"
+$firstPluginTest = Join-Path $build "Release\xgrib_generator_job_json_tests.exe"
+& dumpbin.exe /dependents $firstPluginTest 2>&1 | Set-Content -Encoding utf8 `
+    (Join-Path $logDir "plugin-test-dependencies.log")
+Assert-NativeSuccess "Inspecting standalone plugin-test dependencies"
 $env:ECCODES_DEFINITION_PATH = Join-Path $runtimeEccodes "definitions"
 $env:ECCODES_SAMPLES_PATH = Join-Path $runtimeEccodes "samples"
 $env:PROJ_DATA = Join-Path $runtimeShare "proj"
 Invoke-NativeLogged {
     ctest --test-dir $build -C Release --output-on-failure `
+        --timeout 120 `
         --output-junit (Join-Path $testDir "ctest.xml")
 } (Join-Path $logDir "test.log") "CTest"
 

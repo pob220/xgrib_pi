@@ -48,6 +48,9 @@ set(script_patterns
   "-A x64"
   "-A Win32"
   "-DXGRIB_EXTERNAL_GENERATOR_DIR=\\$generatorStage"
+  "\\$env:PATH = \"\\$wxLib;\\$env:PATH\""
+  "plugin-test-dependencies.log"
+  "--timeout 120"
   "helper_architecture = \"x86_64\"")
 foreach(pattern IN LISTS script_patterns)
   if(NOT windows_script MATCHES "${pattern}")
