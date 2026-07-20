@@ -152,13 +152,17 @@ if ($env:XGRIB_WINDOWS_DEPS_ONLY -eq "1") {
 }
 
 $diagnosticsOnly = $env:XGRIB_WINDOWS_DIAGNOSTICS_ONLY -eq "1"
-$buildTools = if ($diagnosticsOnly) { @("cmake") } else {
-    @("cmake", "pkgconfiglite", "nsis")
+if ($diagnosticsOnly) {
+    Invoke-NativeLogged `
+        { choco install cmake -y --no-progress } `
+        (Join-Path $logDir "chocolatey-build-tools.log") `
+        "Chocolatey build-tool installation"
+} else {
+    Invoke-NativeLogged `
+        { choco install cmake pkgconfiglite nsis -y --no-progress } `
+        (Join-Path $logDir "chocolatey-build-tools.log") `
+        "Chocolatey build-tool installation"
 }
-Invoke-NativeLogged `
-    { choco install @buildTools -y --no-progress } `
-    (Join-Path $logDir "chocolatey-build-tools.log") `
-    "Chocolatey build-tool installation"
 if (-not $diagnosticsOnly) {
     Invoke-NativeLogged `
         { choco install gettext --version 1.0.0.20260310 -y --no-progress } `
