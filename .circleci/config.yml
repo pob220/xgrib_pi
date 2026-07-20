@@ -245,7 +245,7 @@ workflows:
     when:
       not: << pipeline.parameters.run_workflow_deploy >>
     jobs:
-      - windows-generator-diagnostics:
+      - windows-x86:
           filters: &windows-focused-filters
             branches:
               only: windows-focused-validation

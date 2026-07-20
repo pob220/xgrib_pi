@@ -1,4 +1,6 @@
 file(READ "${CMAKE_SOURCE_FILE}" cmake_source)
+file(READ "${GENERATOR_CMAKE_SOURCE}" generator_cmake_source)
+file(READ "${WINDOWS_UTF8_MANIFEST}" windows_utf8_manifest)
 file(READ "${WINDOWS_SCRIPT}" windows_script)
 file(READ "${DIALOG_SOURCE}" dialog_source)
 
@@ -14,6 +16,24 @@ foreach(pattern IN LISTS cmake_patterns)
     message(FATAL_ERROR "Windows split-ABI CMake contract is missing: ${pattern}")
   endif()
 endforeach()
+
+set(generator_cmake_patterns
+  "environmental_grib_enable_windows_utf8"
+  "/MANIFEST:EMBED"
+  "/MANIFESTINPUT:"
+  "environmental_grib_enable_windows_utf8\\(environmental-grib\\)"
+  "environmental_grib_enable_windows_utf8\\(environmental_grib_tests\\)"
+  "environmental_grib_enable_windows_utf8\\(environmental_grib_xtd_tests\\)"
+  "environmental_grib_enable_windows_utf8\\(environmental_grib_merge_tests\\)")
+foreach(pattern IN LISTS generator_cmake_patterns)
+  if(NOT generator_cmake_source MATCHES "${pattern}")
+    message(FATAL_ERROR "Windows UTF-8 generator contract is missing: ${pattern}")
+  endif()
+endforeach()
+if(NOT windows_utf8_manifest MATCHES
+   "<activeCodePage[^>]*>UTF-8</activeCodePage>")
+  message(FATAL_ERROR "Windows generator manifest does not select UTF-8")
+endif()
 
 set(script_patterns
   "generatorTriplet = \"x64-windows-release\""
