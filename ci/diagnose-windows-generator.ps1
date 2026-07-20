@@ -94,11 +94,14 @@ foreach ($test in $tests) {
     $commands = Join-Path $logDirectory "$test-cdb-commands.txt"
     $dumpCommandPath = $dump.Replace("\", "/")
     $symbolPath = $releaseDirectory.Replace("\", "/")
+    $captureCommands =
+        ".dump /ma $dumpCommandPath; !analyze -v; .ecxr; kv 100; lm; q"
     @(
         ".symfix"
         ".sympath+ $symbolPath"
         ".reload /f"
-        "sxe -c `".dump /ma $dumpCommandPath; !analyze -v; .ecxr; kv 100; lm; q`" 0xc0000409"
+        "sxd -c `"$captureCommands`" 0xe06d7363"
+        "sxe -c `"$captureCommands`" 0xc0000409"
         "g"
     ) | Set-Content -Encoding ascii $commands
 
@@ -140,7 +143,10 @@ $manifest = [ordered]@{
     debugger = $cdb
     debugger_version = $cdbVersion
     build_configuration = "Release with MSVC PDBs"
-    exception = "0xc0000409"
+    exceptions = @(
+        "0xe06d7363 second-chance unhandled C++ exception",
+        "0xc0000409 fail-fast fallback"
+    )
     tests = $results
     pdb_count = $symbolIndex
 }

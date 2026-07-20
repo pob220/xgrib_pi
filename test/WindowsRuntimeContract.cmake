@@ -39,6 +39,8 @@ set(diagnostic_patterns
   "OptionId.WindowsDesktopDebuggers"
   "Get-AuthenticodeSignature"
   "sxe -c"
+  "sxd -c"
+  "0xe06d7363"
   "0xc0000409"
   "\\.dump /ma"
   "!analyze -v"
