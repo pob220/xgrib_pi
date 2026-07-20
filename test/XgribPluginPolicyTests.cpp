@@ -3,6 +3,7 @@
 #include <limits>
 
 #include <wx/fileconf.h>
+#include <wx/init.h>
 
 #include "XgribPluginPolicy.h"
 #include "GribVectorPolicy.h"
@@ -18,6 +19,9 @@ void Expect(bool condition, const char* message) {
 }  // namespace
 
 int main() {
+  wxInitializer initializer;
+  Expect(initializer.IsOk(), "wxWidgets must initialize for config tests");
+
   wxFileConfig config;
   config.SetPath("/Unrelated");
   const wxString originalPath = config.GetPath();
