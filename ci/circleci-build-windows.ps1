@@ -7,6 +7,29 @@ function Assert-NativeSuccess([string] $operation) {
     }
 }
 
+function Invoke-NativeLogged(
+    [scriptblock] $command,
+    [string] $logPath,
+    [string] $operation
+) {
+    # Windows PowerShell converts native stderr into ErrorRecord objects.  With
+    # ErrorActionPreference=Stop this can abort at the first diagnostic line,
+    # before the native process exits and before its useful error is logged.
+    $savedPreference = $ErrorActionPreference
+    $nativeExit = 1
+    try {
+        $ErrorActionPreference = "Continue"
+        & $command 2>&1 | Tee-Object -FilePath $logPath
+        $nativeExit = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $savedPreference
+    }
+    if ($nativeExit -ne 0) {
+        throw "$operation failed with exit code $nativeExit"
+    }
+}
+
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repo
 $build = Join-Path $repo "build"
@@ -51,11 +74,18 @@ $overlayTriplets = Join-Path $repo "ci\vcpkg-triplets"
 $vcpkgExit = 1
 $retryDelays = @(30,45,60)
 for ($attempt = 1; $attempt -le 4; $attempt++) {
-    & (Join-Path $vcpkg "vcpkg.exe") install --triplet $triplet `
-        "--overlay-ports=$overlayPorts" `
-        "--overlay-triplets=$overlayTriplets" @vcpkgPackages 2>&1 | Tee-Object -FilePath `
-        (Join-Path $logDir "vcpkg-attempt-$attempt.log")
-    $vcpkgExit = $LASTEXITCODE
+    $savedPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & (Join-Path $vcpkg "vcpkg.exe") install --triplet $triplet `
+            "--overlay-ports=$overlayPorts" `
+            "--overlay-triplets=$overlayTriplets" @vcpkgPackages 2>&1 | Tee-Object -FilePath `
+            (Join-Path $logDir "vcpkg-attempt-$attempt.log")
+        $vcpkgExit = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $savedPreference
+    }
     if ($vcpkgExit -eq 0) { break }
     if ($attempt -lt 4) {
         $delay = $retryDelays[$attempt - 1]
@@ -85,14 +115,26 @@ if ($env:XGRIB_WINDOWS_DEPS_ONLY -eq "1") {
     exit 0
 }
 
-choco install cmake pkgconfiglite nsis -y --no-progress 2>&1 | Tee-Object -FilePath `
-    (Join-Path $logDir "chocolatey.log")
-Assert-NativeSuccess "Chocolatey build-tool installation"
+Invoke-NativeLogged `
+    { choco install cmake pkgconfiglite nsis -y --no-progress } `
+    (Join-Path $logDir "chocolatey-build-tools.log") `
+    "Chocolatey build-tool installation"
+Invoke-NativeLogged `
+    { choco install gettext --version 1.0.0.20260310 -y --no-progress } `
+    (Join-Path $logDir "chocolatey-gettext.log") `
+    "Chocolatey gettext installation"
+$machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+$env:PATH = "$machinePath;$userPath;$env:PATH"
 if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
     $env:PATH = "C:\Program Files\CMake\bin;$env:PATH"
 }
 if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
     throw "CMake installation did not provide cmake.exe"
+}
+if (-not (Get-Command msgfmt -ErrorAction SilentlyContinue) -or
+    -not (Get-Command msgmerge -ErrorAction SilentlyContinue)) {
+    throw "GNU gettext installation did not provide msgfmt.exe and msgmerge.exe"
 }
 
 $installed = Join-Path $vcpkg "installed\$triplet"
@@ -123,23 +165,23 @@ foreach ($entry in $downloads.GetEnumerator()) {
 $toolchain = Join-Path $vcpkg "scripts\buildsystems\vcpkg.cmake"
 $wxLib = Join-Path $wxRoot "lib\vc14x_x64_dll"
 
-cmake -S $repo -B $build -G "Visual Studio 17 2022" -A x64 `
-    "-DCMAKE_TOOLCHAIN_FILE=$toolchain" `
-    "-DVCPKG_TARGET_TRIPLET=$triplet" `
-    "-DVCPKG_OVERLAY_TRIPLETS=$overlayTriplets" `
-    "-DwxWidgets_ROOT_DIR=$wxRoot" `
-    "-DwxWidgets_LIB_DIR=$wxLib" `
-    -DCMAKE_BUILD_TYPE=Release `
-    -DBUNDLE_GENERATOR_RUNTIME=ON `
-    2>&1 | Tee-Object -FilePath (Join-Path $logDir "configure.log")
-Assert-NativeSuccess "CMake configure"
-cmake --build $build --config Release --parallel 2 2>&1 | Tee-Object -FilePath `
-    (Join-Path $logDir "build.log")
-Assert-NativeSuccess "CMake build"
-ctest --test-dir $build -C Release --output-on-failure `
-    --output-junit (Join-Path $testDir "ctest.xml") `
-    2>&1 | Tee-Object -FilePath (Join-Path $logDir "test.log")
-Assert-NativeSuccess "CTest"
+Invoke-NativeLogged {
+    cmake -S $repo -B $build -G "Visual Studio 17 2022" -A x64 `
+        "-DCMAKE_TOOLCHAIN_FILE=$toolchain" `
+        "-DVCPKG_TARGET_TRIPLET=$triplet" `
+        "-DVCPKG_OVERLAY_TRIPLETS=$overlayTriplets" `
+        "-DwxWidgets_ROOT_DIR=$wxRoot" `
+        "-DwxWidgets_LIB_DIR=$wxLib" `
+        -DCMAKE_BUILD_TYPE=Release `
+        -DBUNDLE_GENERATOR_RUNTIME=ON
+} (Join-Path $logDir "configure.log") "CMake configure"
+Invoke-NativeLogged `
+    { cmake --build $build --config Release --parallel 2 } `
+    (Join-Path $logDir "build.log") "CMake build"
+Invoke-NativeLogged {
+    ctest --test-dir $build -C Release --output-on-failure `
+        --output-junit (Join-Path $testDir "ctest.xml")
+} (Join-Path $logDir "test.log") "CTest"
 
 $merge = Join-Path $build "generator\Release\environmental-grib.exe"
 $reader = Join-Path $build "Release\xgrib_reader_integration_tests.exe"
@@ -179,18 +221,18 @@ $testChecksums = foreach ($relative in $checksumFiles) {
 $testChecksums | Set-Content -Encoding ascii `
     (Join-Path $testDir "checksums.txt")
 
-cmake --install $build --config Release --prefix $stage 2>&1 | Tee-Object `
-    -FilePath (Join-Path $logDir "install.log")
-Assert-NativeSuccess "Staged installation"
+Invoke-NativeLogged `
+    { cmake --install $build --config Release --prefix $stage } `
+    (Join-Path $logDir "install.log") "Staged installation"
 $packagedHelper = Join-Path $stage "plugins\xgrib_pi\bin\environmental-grib.exe"
 & $packagedHelper capabilities | Set-Content -Encoding utf8 `
     (Join-Path $testDir "packaged-helper-capabilities.json")
 Assert-NativeSuccess "Packaged helper execution"
 
 Push-Location $build
-cpack -G TGZ -C Release --config CPackConfig.cmake 2>&1 | Tee-Object `
-    -FilePath (Join-Path $logDir "package.log")
-Assert-NativeSuccess "CPack TGZ package"
+Invoke-NativeLogged `
+    { cpack -G TGZ -C Release --config CPackConfig.cmake } `
+    (Join-Path $logDir "package.log") "CPack TGZ package"
 Pop-Location
 $archive = Get-ChildItem $build -Filter "xgrib_pi-*.tar.gz" | Select-Object -First 1
 $metadata = Get-ChildItem $build -Filter "xgrib_pi-*.xml" | Select-Object -First 1
@@ -231,7 +273,8 @@ $result = [ordered]@{
     graphical_test_status = "not-run"; file_path_display_status = "contract-tested"
     merge_status = "passed"; output_validation_status = "passed"
     screenshot_paths = @(); log_paths = @(
-        "logs/chocolatey.log", "logs/vcpkg.log", "logs/dependencies.log",
+        "logs/chocolatey-build-tools.log", "logs/chocolatey-gettext.log",
+        "logs/vcpkg.log", "logs/dependencies.log",
         "logs/configure.log", "logs/build.log", "logs/test.log",
         "logs/install.log", "logs/package.log", "tests/ctest.xml",
         "tests/checksums.txt")
