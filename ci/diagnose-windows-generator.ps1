@@ -38,6 +38,25 @@ function Install-Cdb {
     }
 }
 
+function Get-ProcDump {
+    $toolDirectory = Join-Path $env:TEMP "xgrib-procdump"
+    $executable = Join-Path $toolDirectory "procdump64.exe"
+    if (-not (Test-Path $executable)) {
+        $archive = Join-Path $env:TEMP "xgrib-procdump.zip"
+        Invoke-WebRequest "https://download.sysinternals.com/files/Procdump.zip" `
+            -OutFile $archive
+        New-Item -ItemType Directory -Force $toolDirectory | Out-Null
+        Expand-Archive -Path $archive -DestinationPath $toolDirectory -Force
+    }
+    $signature = Get-AuthenticodeSignature $executable
+    if ($signature.Status -ne "Valid" -or
+        -not $signature.SignerCertificate -or
+        $signature.SignerCertificate.Subject -notmatch "Microsoft") {
+        throw "ProcDump does not have a valid Microsoft signature"
+    }
+    return (Resolve-Path $executable).Path
+}
+
 $Repository = (Resolve-Path $Repository).Path
 $GeneratorBuild = (Resolve-Path $GeneratorBuild).Path
 $GeneratorInstalled = (Resolve-Path $GeneratorInstalled).Path
@@ -65,6 +84,7 @@ if (-not $cdb) {
 if (-not $cdb) {
     throw "cdb.exe was not found after installing Windows Desktop Debuggers"
 }
+$procdump = Get-ProcDump
 
 $symbolIndex = 0
 Get-ChildItem $GeneratorBuild -Recurse -Filter "*.pdb" -File |
@@ -90,30 +110,50 @@ foreach ($test in $tests) {
     }
     $dump = Join-Path $dumpDirectory "$test.dmp"
     $log = Join-Path $logDirectory "$test-cdb.log"
-    $console = Join-Path $logDirectory "$test-cdb-console.log"
+    $console = Join-Path $logDirectory "$test-procdump-console.log"
     $commands = Join-Path $logDirectory "$test-cdb-commands.txt"
-    $dumpCommandPath = $dump.Replace("\", "/")
     $symbolPath = $releaseDirectory.Replace("\", "/")
-    $captureCommands =
-        ".dump /ma $dumpCommandPath; !analyze -v; .ecxr; kv 100; lm; q"
-    @(
-        ".symfix"
-        ".sympath+ $symbolPath"
-        ".reload /f"
-        "sxd -c `"$captureCommands`" 0xe06d7363"
-        "sxe -c `"$captureCommands`" 0xc0000409"
-        "g"
-    ) | Set-Content -Encoding ascii $commands
+    Get-ChildItem $dumpDirectory -Filter "$test*.dmp" -File |
+        Remove-Item -Force
 
     $savedPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        & $cdb -lines -cf $commands -logo $log $executable 2>&1 |
+        & $procdump -accepteula -ma -e -x $dumpDirectory $executable 2>&1 |
             Tee-Object -FilePath $console
-        $debuggerExit = $LASTEXITCODE
+        $procdumpExit = $LASTEXITCODE
     }
     finally {
         $ErrorActionPreference = $savedPreference
+    }
+    $generatedDump = Get-ChildItem $dumpDirectory -Filter "$test*.dmp" -File |
+        Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+    if ($generatedDump -and $generatedDump.FullName -ne $dump) {
+        Move-Item $generatedDump.FullName $dump -Force
+    }
+
+    @(
+        ".symfix"
+        ".sympath+ $symbolPath"
+        ".reload /f"
+        "!analyze -v"
+        ".ecxr"
+        "kv 100"
+        "lm"
+        "q"
+    ) | Set-Content -Encoding ascii $commands
+
+    $debuggerExit = $null
+    if (Test-Path $dump) {
+        try {
+            $ErrorActionPreference = "Continue"
+            & $cdb -lines -z $dump -cf $commands -logo $log 2>&1 |
+                Add-Content -Encoding utf8 $console
+            $debuggerExit = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $savedPreference
+        }
     }
     $dumpPresent = Test-Path $dump
     $dumpSize = if ($dumpPresent) { (Get-Item $dump).Length } else { 0 }
@@ -125,13 +165,14 @@ foreach ($test in $tests) {
     }
     $results += [ordered]@{
         test = $test
+        procdump_exit_code = $procdumpExit
         debugger_exit_code = $debuggerExit
         dump_captured = $dumpPresent -and $dumpSize -gt 0
         dump_path = "diagnostics/dumps/$test.dmp"
         dump_size_bytes = $dumpSize
         dump_sha256 = $dumpHash
         stack_trace_path = "diagnostics/logs/$test-cdb.log"
-        debugger_console_path = "diagnostics/logs/$test-cdb-console.log"
+        procdump_console_path = "diagnostics/logs/$test-procdump-console.log"
         debugger_commands_path = "diagnostics/logs/$test-cdb-commands.txt"
     }
 }
@@ -142,11 +183,10 @@ $manifest = [ordered]@{
     repository_commit = (git -C $Repository rev-parse HEAD)
     debugger = $cdb
     debugger_version = $cdbVersion
+    dump_capture = $procdump
+    dump_capture_version = (Get-Item $procdump).VersionInfo.FileVersion
     build_configuration = "Release with MSVC PDBs"
-    exceptions = @(
-        "0xe06d7363 second-chance unhandled C++ exception",
-        "0xc0000409 fail-fast fallback"
-    )
+    capture_policy = "ProcDump full dump on unhandled exception; CDB offline analysis"
     tests = $results
     pdb_count = $symbolIndex
 }
