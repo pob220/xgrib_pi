@@ -39,7 +39,17 @@
 #include <GLES2/gl2.h>
 #elif defined(__MSVC__)
 #include <GL/glew.h>
+// GLEW supplies these Windows calling-convention macros while parsing its
+// own declarations, then removes them again if windows.h was not included.
+// The lightweight OpenCPN GLU header expects them to remain available.
+#ifndef APIENTRY
+#define APIENTRY __stdcall
+#endif
+#ifndef CALLBACK
+#define CALLBACK __stdcall
+#endif
 #include <GL/glu.h>
+typedef void(CALLBACK *_GLUfuncptr)();
 #elif defined(__WXOSX__)
 #include <OpenGL/gl.h>
 #include <OpenGL/glu.h>
