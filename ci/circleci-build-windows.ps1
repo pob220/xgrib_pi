@@ -41,9 +41,6 @@ if (-not (Test-Path (Join-Path $vcpkg "vcpkg.exe"))) {
     throw "vcpkg bootstrap did not create vcpkg.exe"
 }
 
-choco install pkgconfiglite nsis -y --no-progress 2>&1 | Tee-Object -FilePath `
-    (Join-Path $logDir "chocolatey.log")
-Assert-NativeSuccess "Chocolatey dependency installation"
 $vcpkgPackages = Get-Content (Join-Path $repo "ci\windows-vcpkg-deps.txt") |
     Where-Object { $_.Trim() -and -not $_.Trim().StartsWith("#") } |
     ForEach-Object { $_.Trim() }
@@ -81,6 +78,21 @@ function Get-VcpkgVersion([string] $package) {
         Select-Object -First 1
     if (-not $line) { throw "Installed vcpkg package not found: $package" }
     return $line
+}
+
+if ($env:XGRIB_WINDOWS_DEPS_ONLY -eq "1") {
+    Write-Host "Release-only vcpkg dependency cache prepared successfully"
+    exit 0
+}
+
+choco install cmake pkgconfiglite nsis -y --no-progress 2>&1 | Tee-Object -FilePath `
+    (Join-Path $logDir "chocolatey.log")
+Assert-NativeSuccess "Chocolatey build-tool installation"
+if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
+    $env:PATH = "C:\Program Files\CMake\bin;$env:PATH"
+}
+if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
+    throw "CMake installation did not provide cmake.exe"
 }
 
 $installed = Join-Path $vcpkg "installed\$triplet"

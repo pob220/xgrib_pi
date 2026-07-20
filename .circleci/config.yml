@@ -73,6 +73,27 @@ jobs:
           no_output_timeout: 45m
       - retain-linux-artifacts
 
+  windows-vcpkg-dependencies:
+    machine:
+      image: windows-server-2022-gui:current
+      shell: powershell.exe -ExecutionPolicy Bypass
+    resource_class: windows.medium
+    environment:
+      XGRIB_WINDOWS_DEPS_ONLY: "1"
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - windows-vcpkg-2026-06-24-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}
+      - run:
+          name: Prepare cached Release-only Windows dependencies
+          command: .\ci\circleci-build-windows.ps1
+          no_output_timeout: 45m
+      - save_cache:
+          key: windows-vcpkg-2026-06-24-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}
+          paths:
+            - cache/vcpkg-binary
+
   windows-x86_64:
     machine:
       image: windows-server-2022-gui:current
@@ -85,15 +106,11 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - windows-vcpkg-2026-06-24-release-v2-{{ checksum "ci/windows-vcpkg-deps.txt" }}
+            - windows-vcpkg-2026-06-24-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}
       - run:
           name: Native Windows build, tests and package
           command: .\ci\circleci-build-windows.ps1
           no_output_timeout: 45m
-      - save_cache:
-          key: windows-vcpkg-2026-06-24-release-v2-{{ checksum "ci/windows-vcpkg-deps.txt" }}
-          paths:
-            - cache/vcpkg-binary
       - store_test_results:
           path: artifacts
       - store_artifacts:
@@ -189,7 +206,10 @@ workflows:
           arch: aarch64
           resource_class: arm.medium
           filters: *std-filters
+      - windows-vcpkg-dependencies:
+          filters: *std-filters
       - windows-x86_64:
+          requires: [windows-vcpkg-dependencies]
           filters: *std-filters
       - macos-arm64:
           filters: *std-filters
@@ -231,8 +251,11 @@ workflows:
           name: release-flatpak25.08-arm64
           arch: aarch64
           resource_class: arm.medium
+      - windows-vcpkg-dependencies:
+          name: release-windows-vcpkg-dependencies
       - windows-x86_64:
           name: release-windows-x86_64
+          requires: [release-windows-vcpkg-dependencies]
       - macos-arm64:
           name: release-macos-arm64
       - hold-for-alpha-approval:

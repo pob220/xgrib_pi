@@ -105,7 +105,10 @@ retains only vcpkg's reusable binary packages, reducing later Windows compute
 without caching mutable source or credentials. The custom Windows triplet
 builds Release dependencies only: the Release-only xGRIB validation never uses
 vcpkg's Debug libraries, and omitting them keeps a clean job within the free
-executor's one-hour limit. Initial installs use bounded
+executor's one-hour limit. A bounded dependency-preparation job saves that
+Release binary cache first; the dependent validation job restores it before
+building, testing and packaging xGRIB. This prevents a clean dependency build
+from consuming the validation job's one-hour allowance. Initial installs use bounded
 resume-safe retries for transient upstream archive rate limits, retaining every
 attempt log. The pinned `libaec` vcpkg overlay uses DKRZ's official GitHub
 release archive because its GitLab archive endpoint rate-limits CircleCI's
