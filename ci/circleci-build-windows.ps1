@@ -211,7 +211,7 @@ if ($diagnosticsOnly) {
         "Chocolatey build-tool installation"
 } else {
     Invoke-NativeLogged `
-        { choco install cmake pkgconfiglite nsis -y --no-progress } `
+        { choco install cmake nsis -y --no-progress } `
         (Join-Path $logDir "chocolatey-build-tools.log") `
         "Chocolatey build-tool installation"
 }

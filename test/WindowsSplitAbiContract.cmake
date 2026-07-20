@@ -48,6 +48,7 @@ set(script_patterns
   "-A x64"
   "-A Win32"
   "-DXGRIB_EXTERNAL_GENERATOR_DIR=\\$generatorStage"
+  "choco install cmake nsis"
   "Assert-PowerShellSyntax"
   "Find-Dumpbin"
   "\\$dumpbin = Find-Dumpbin"
