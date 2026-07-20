@@ -450,7 +450,7 @@ if (NOT OCPN_FLATPAK_CONFIG)
   if (WIN32)
     add_subdirectory(opencpn-libs/WindowsHeaders)
     find_package(GLEW REQUIRED)
-    target_link_libraries(${PACKAGE_NAME} windows::headers GLEW::GLEW)
+    target_link_libraries(${PACKAGE_NAME} windows::headers GLEW::GLEW glu32)
   endif (WIN32)
 
   add_subdirectory(opencpn-libs/api-${OCPN_API_VERSION_MINOR})
