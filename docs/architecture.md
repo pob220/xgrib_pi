@@ -66,7 +66,8 @@ errors stay visible in the dialog and do not replace a currently open GRIB.
 ## Platform scope
 
 The validation matrix covers native Linux x86_64 and ARM64, Flatpak x86_64 and
-aarch64, genuine Windows x86_64, and genuine Apple-Silicon macOS. Platform
+aarch64, genuine Windows x86 using OpenCPN's official API 1.21 MSVC import
+library, and genuine Apple-Silicon macOS. Platform
 build success is not treated as runtime success: each target manifest records
 packaging, installation, OpenCPN discovery/load, graphical inspection and
 merge/reopen results separately. Intel macOS and physical Raspberry Pi runtime

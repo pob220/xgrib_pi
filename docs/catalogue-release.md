@@ -85,11 +85,14 @@ Release candidates, in priority order, are:
 
 Only a row which completes its clean container build, all tests, staged-helper
 test and archive test should be enabled for upload. A real Pi test is still
-required before publishing ARM metadata. Windows x86_64 and native
+required before publishing ARM metadata. Windows x86 and native
 Apple-Silicon macOS now have genuine hosted build, test and package jobs; they
 are publishable only when retained manifests support the claimed validation.
 CircleCI builds Bookworm x86_64/arm64, Jammy x86_64, Noble x86_64, Trixie
-x86_64, Flatpak x86_64/aarch64, Windows x86_64 and macOS arm64.
+x86_64, Flatpak x86_64/aarch64, Windows x86 and macOS arm64. The official
+OpenCPN API 1.21 MSVC import library is 32-bit, so the supported Windows
+catalogue ABI is `msvc-x86`; an x64 link cannot be claimed until OpenCPN
+provides a matching x64 import library.
 `run_workflow_deploy` defaults to false and the separate deployment workflow
 still stops at a manual approval gate. See `docs/alpha-validation.md`.
 

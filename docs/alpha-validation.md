@@ -17,13 +17,19 @@ development build. The CI packaging matrix is:
 | Ubuntu 22.04 and 24.04 | x86_64 | clean containers |
 | Debian 12 | arm64 | CircleCI native `arm.medium` |
 | Flatpak 25.08 | x86_64 and aarch64 | CircleCI machine executors |
-| Windows Server 2022 | x86_64 | genuine CircleCI Windows executor |
+| Windows Server 2022 | x86 | genuine CircleCI Windows executor |
 | macOS / Xcode 16.4 | Apple Silicon arm64 | genuine CircleCI M4 executor |
 
 An Intel macOS runtime is not available in the current free hosted executor.
 Do not describe an Apple-Silicon build or cross-build as Intel runtime testing.
 A physical Raspberry Pi smoke test remains recommended after the native ARM64
 CI package passes.
+
+OpenCPN's checked-in API 1.21 MSVC import library is 32-bit COFF and the
+catalogue target is `msvc-x86`. A genuine x64 build was attempted and reached
+the final plugin link, where the linker correctly rejected the official x86
+import library. Windows x64 is therefore not a supported OpenCPN plugin target
+for this matrix; the genuine hosted validation builds the supported x86 ABI.
 
 ## Local Arch build and functional test
 

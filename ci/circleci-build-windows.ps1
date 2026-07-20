@@ -34,7 +34,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repo
 $build = Join-Path $repo "build"
 $stage = Join-Path $repo "stage"
-$artifact = Join-Path $repo "artifacts\windows-x86_64"
+$artifact = Join-Path $repo "artifacts\windows-x86"
 $logDir = Join-Path $artifact "logs"
 $testDir = Join-Path $artifact "tests"
 $packageDir = Join-Path $artifact "package"
@@ -46,7 +46,7 @@ Copy-Item (Join-Path $repo "test\fixtures\*") $fixtureDir
 git submodule update --init --recursive
 Assert-NativeSuccess "git submodule update"
 
-$triplet = "x64-windows-release"
+$triplet = "x86-windows-release"
 $vcpkg = $env:VCPKG_ROOT
 if (-not $vcpkg) { $vcpkg = "C:\vcpkg" }
 if (-not (Test-Path (Join-Path $vcpkg "vcpkg.exe"))) {
@@ -147,8 +147,8 @@ New-Item -ItemType Directory -Force $wxRoot | Out-Null
 $wxBase = "https://github.com/wxWidgets/wxWidgets/releases/download/v$wxVersion"
 $downloads = [ordered]@{
     "wxWidgets-$wxVersion-headers.7z" = "86a2c99b4e9608b7cfc0b59e0f5a6d200a9d2541"
-    "wxMSW-$($wxVersion)_vc14x_x64_Dev.7z" = "abf0be396b7648405883058090e4ad5f4d13918e"
-    "wxMSW-$($wxVersion)_vc14x_x64_ReleaseDLL.7z" = "2ad8fcc7bf28db8126eae55284eccbdfa7d02e27"
+    "wxMSW-$($wxVersion)_vc14x_Dev.7z" = "65112a99d3e253796081d1ec80df294290403398"
+    "wxMSW-$($wxVersion)_vc14x_ReleaseDLL.7z" = "44ceee6ddcbb6aa60de6b6fc26c57491c189477f"
 }
 foreach ($entry in $downloads.GetEnumerator()) {
     $archive = $entry.Key
@@ -163,10 +163,10 @@ foreach ($entry in $downloads.GetEnumerator()) {
 }
 
 $toolchain = Join-Path $vcpkg "scripts\buildsystems\vcpkg.cmake"
-$wxLib = Join-Path $wxRoot "lib\vc14x_x64_dll"
+$wxLib = Join-Path $wxRoot "lib\vc14x_dll"
 
 Invoke-NativeLogged {
-    cmake -S $repo -B $build -G "Visual Studio 17 2022" -A x64 `
+    cmake -S $repo -B $build -G "Visual Studio 17 2022" -A Win32 `
         "-DCMAKE_TOOLCHAIN_FILE=$toolchain" `
         "-DVCPKG_TARGET_TRIPLET=$triplet" `
         "-DVCPKG_OVERLAY_TRIPLETS=$overlayTriplets" `
@@ -251,13 +251,13 @@ $checksum = (Get-FileHash -Algorithm SHA256 $packagedArchive).Hash.ToLowerInvari
 
 $result = [ordered]@{
     schema = "xgrib-target-result-v1"
-    target = "windows-x86_64"
+    target = "windows-x86"
     xgrib_repository_commit = (git rev-parse HEAD)
     xgrib_version = "0.1.0.1"
     opencpn_version = "not installed by build job"
     operating_system = "Windows Server 2022"
     operating_system_version = [Environment]::OSVersion.VersionString
-    architecture = "x86_64"
+    architecture = "x86"
     compiler = "Visual Studio 2022 MSVC"
     cmake_version = (cmake --version | Select-Object -First 1)
     wxwidgets_version = $wxVersion
