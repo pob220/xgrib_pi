@@ -133,6 +133,7 @@ $packageExtract = Join-Path $runtimeRoot "xgrib-package"
 $installer = Join-Path $downloadDirectory "opencpn_5.14.0_setup.exe"
 $opencpnLog = Join-Path $opencpnRoot "opencpn.log"
 $runtimeLog = Join-Path $logDirectory "opencpn.log"
+$openCpnExtractLog = Join-Path $logDirectory "opencpn-extract.log"
 $runtimeResultPath = Join-Path $testDirectory "windows-opencpn-runtime.json"
 New-Item -ItemType Directory -Force $logDirectory,$testDirectory,
     $screenshotDirectory,$runtimeRoot,$downloadDirectory,$packageExtract | Out-Null
@@ -145,11 +146,14 @@ if ($actualInstallerHash -ne $installerSha256) {
     throw "OpenCPN installer checksum mismatch"
 }
 
-$installProcess = Start-Process -FilePath $installer -ArgumentList @(
-    "/S", "/D=$opencpnRoot") -Wait -PassThru
-if ($installProcess.ExitCode -ne 0 -or
+# The signed NSIS release is also a valid 7-Zip archive. Extracting it gives
+# CI the genuine runtime without UAC, registry writes or a machine-wide
+# installation, and makes the isolated test directory fully disposable.
+& 7z.exe x -y "-o$opencpnRoot" $installer 2>&1 |
+    Set-Content -Encoding utf8 $openCpnExtractLog
+if ($LASTEXITCODE -ne 0 -or
     -not (Test-Path (Join-Path $opencpnRoot "opencpn.exe"))) {
-    throw "OpenCPN 5.14.0 silent installation failed"
+    throw "OpenCPN 5.14.0 archive extraction failed"
 }
 
 & tar.exe -xf $packageArchivePath -C $packageExtract

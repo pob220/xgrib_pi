@@ -5,6 +5,8 @@ file(READ "${CIRCLE_CONFIG}" circle_config)
 set(runtime_patterns
   "opencpn_5\\.14\\.0-0\\+4418\\.91f3b67_setup\\.exe"
   "f049075bd3411dc3d5ba2954229ecebf8510abd36529fd27d961d37f275c1076"
+  "7z\.exe x"
+  "opencpn-extract\.log"
   "PackageArchive"
   "tar\\.exe -xf"
   "XGRIB_TEST_OPEN_GENERATOR"
