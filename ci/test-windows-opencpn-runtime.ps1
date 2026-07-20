@@ -231,8 +231,7 @@ try {
     if ($null -eq $generatorWindow) {
         throw "xGRIB did not open its environmental generator window"
     }
-    if (-not (Wait-FileContains $opencpnLog
-            "xGRIB smoke test accepted current path:" 10)) {
+    if (-not (Wait-FileContains $opencpnLog "xGRIB smoke test accepted current path:" 10)) {
         throw "xGRIB did not log acceptance of both deterministic paths"
     }
 

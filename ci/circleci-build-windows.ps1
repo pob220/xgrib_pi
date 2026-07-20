@@ -30,6 +30,17 @@ function Invoke-NativeLogged(
     }
 }
 
+function Assert-PowerShellSyntax([string] $path) {
+    $parseTokens = $null
+    $parseErrors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile(
+        $path, [ref]$parseTokens, [ref]$parseErrors)
+    if ($parseErrors.Count -ne 0) {
+        $details = ($parseErrors | ForEach-Object { $_.Message }) -join "; "
+        throw "PowerShell syntax check failed for $path`: $details"
+    }
+}
+
 function Find-Dumpbin {
     $command = Get-Command dumpbin.exe -ErrorAction SilentlyContinue
     if ($command) {
@@ -81,6 +92,7 @@ $testDir = Join-Path $artifact "tests"
 $packageDir = Join-Path $artifact "package"
 $fixtureDir = Join-Path $artifact "fixtures"
 $diagnosticDir = Join-Path $artifact "diagnostics"
+Assert-PowerShellSyntax (Join-Path $repo "ci\test-windows-opencpn-runtime.ps1")
 $dumpbin = Find-Dumpbin
 New-Item -ItemType Directory -Force `
     $build,$generatorBuild,$generatorStage,$stage,$logDir,$testDir,$packageDir,$fixtureDir,$diagnosticDir | Out-Null
