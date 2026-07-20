@@ -41,8 +41,9 @@ $logDir = Join-Path $artifact "logs"
 $testDir = Join-Path $artifact "tests"
 $packageDir = Join-Path $artifact "package"
 $fixtureDir = Join-Path $artifact "fixtures"
+$diagnosticDir = Join-Path $artifact "diagnostics"
 New-Item -ItemType Directory -Force `
-    $build,$generatorBuild,$generatorStage,$stage,$logDir,$testDir,$packageDir,$fixtureDir | Out-Null
+    $build,$generatorBuild,$generatorStage,$stage,$logDir,$testDir,$packageDir,$fixtureDir,$diagnosticDir | Out-Null
 Copy-Item (Join-Path $repo "test\fixtures\*") $fixtureDir
 
 git submodule update --init --recursive
@@ -150,14 +151,20 @@ if ($env:XGRIB_WINDOWS_DEPS_ONLY -eq "1") {
     exit 0
 }
 
+$diagnosticsOnly = $env:XGRIB_WINDOWS_DIAGNOSTICS_ONLY -eq "1"
+$buildTools = if ($diagnosticsOnly) { @("cmake") } else {
+    @("cmake", "pkgconfiglite", "nsis")
+}
 Invoke-NativeLogged `
-    { choco install cmake pkgconfiglite nsis -y --no-progress } `
+    { choco install @buildTools -y --no-progress } `
     (Join-Path $logDir "chocolatey-build-tools.log") `
     "Chocolatey build-tool installation"
-Invoke-NativeLogged `
-    { choco install gettext --version 1.0.0.20260310 -y --no-progress } `
-    (Join-Path $logDir "chocolatey-gettext.log") `
-    "Chocolatey gettext installation"
+if (-not $diagnosticsOnly) {
+    Invoke-NativeLogged `
+        { choco install gettext --version 1.0.0.20260310 -y --no-progress } `
+        (Join-Path $logDir "chocolatey-gettext.log") `
+        "Chocolatey gettext installation"
+}
 $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 $env:PATH = "$machinePath;$userPath;$env:PATH"
@@ -167,8 +174,9 @@ if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
     throw "CMake installation did not provide cmake.exe"
 }
-if (-not (Get-Command msgfmt -ErrorAction SilentlyContinue) -or
-    -not (Get-Command msgmerge -ErrorAction SilentlyContinue)) {
+if (-not $diagnosticsOnly -and
+    (-not (Get-Command msgfmt -ErrorAction SilentlyContinue) -or
+    -not (Get-Command msgmerge -ErrorAction SilentlyContinue))) {
     throw "GNU gettext installation did not provide msgfmt.exe and msgmerge.exe"
 }
 
@@ -176,6 +184,48 @@ $generatorInstalled = Join-Path $vcpkg "installed\$generatorTriplet"
 $pluginInstalled = Join-Path $vcpkg "installed\$pluginTriplet"
 $env:PATH = "$(Join-Path $generatorInstalled 'bin');$(Join-Path $pluginInstalled 'bin');$env:PATH"
 $env:PROJ_DATA = Join-Path $generatorInstalled "share\proj"
+$env:ECCODES_DEFINITION_PATH = Join-Path $generatorInstalled "share\eccodes\definitions"
+$env:ECCODES_SAMPLES_PATH = Join-Path $generatorInstalled "share\eccodes\samples"
+
+$toolchain = Join-Path $vcpkg "scripts\buildsystems\vcpkg.cmake"
+$generatorDiagnosticCmakeArgs = @()
+if ($diagnosticsOnly) {
+    $generatorDiagnosticCmakeArgs = @(
+        "-DCMAKE_CXX_FLAGS_RELEASE=/Zi /O2 /Ob2 /DNDEBUG",
+        "-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG /INCREMENTAL:NO"
+    )
+}
+
+Invoke-NativeLogged {
+    cmake -S (Join-Path $repo "generator") -B $generatorBuild `
+        -G "Visual Studio 17 2022" -A x64 `
+        "-DCMAKE_TOOLCHAIN_FILE=$toolchain" `
+        "-DVCPKG_TARGET_TRIPLET=$generatorTriplet" `
+        "-DVCPKG_OVERLAY_TRIPLETS=$overlayTriplets" `
+        -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON `
+        @generatorDiagnosticCmakeArgs
+} (Join-Path $logDir "configure-generator-x64.log") `
+    "x64 generator CMake configure"
+Invoke-NativeLogged `
+    { cmake --build $generatorBuild --config Release --parallel 2 } `
+    (Join-Path $logDir "build-generator-x64.log") "x64 generator build"
+if ($diagnosticsOnly) {
+    & (Join-Path $repo "ci\diagnose-windows-generator.ps1") `
+        -Repository $repo -GeneratorBuild $generatorBuild `
+        -GeneratorInstalled $generatorInstalled -ArtifactDirectory $artifact
+    if ($LASTEXITCODE -ne 0) {
+        throw "Windows generator CDB diagnostics failed with exit code $LASTEXITCODE"
+    }
+    exit 0
+}
+Invoke-NativeLogged {
+    ctest --test-dir $generatorBuild -C Release --output-on-failure `
+        --output-junit (Join-Path $testDir "generator-x64-ctest.xml")
+} (Join-Path $logDir "test-generator-x64.log") "x64 generator CTest"
+Invoke-NativeLogged `
+    { cmake --install $generatorBuild --config Release --prefix $generatorStage } `
+    (Join-Path $logDir "install-generator-x64.log") `
+    "x64 generator staged installation"
 
 $wxVersion = "3.2.8"
 $wxRoot = Join-Path $repo "cache\wxWidgets-$wxVersion"
@@ -197,30 +247,7 @@ foreach ($entry in $downloads.GetEnumerator()) {
     & 7z x -y "-o$wxRoot" $path | Out-Null
     Assert-NativeSuccess "Extracting $archive"
 }
-
-$toolchain = Join-Path $vcpkg "scripts\buildsystems\vcpkg.cmake"
 $wxLib = Join-Path $wxRoot "lib\vc14x_dll"
-
-Invoke-NativeLogged {
-    cmake -S (Join-Path $repo "generator") -B $generatorBuild `
-        -G "Visual Studio 17 2022" -A x64 `
-        "-DCMAKE_TOOLCHAIN_FILE=$toolchain" `
-        "-DVCPKG_TARGET_TRIPLET=$generatorTriplet" `
-        "-DVCPKG_OVERLAY_TRIPLETS=$overlayTriplets" `
-        -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
-} (Join-Path $logDir "configure-generator-x64.log") `
-    "x64 generator CMake configure"
-Invoke-NativeLogged `
-    { cmake --build $generatorBuild --config Release --parallel 2 } `
-    (Join-Path $logDir "build-generator-x64.log") "x64 generator build"
-Invoke-NativeLogged {
-    ctest --test-dir $generatorBuild -C Release --output-on-failure `
-        --output-junit (Join-Path $testDir "generator-x64-ctest.xml")
-} (Join-Path $logDir "test-generator-x64.log") "x64 generator CTest"
-Invoke-NativeLogged `
-    { cmake --install $generatorBuild --config Release --prefix $generatorStage } `
-    (Join-Path $logDir "install-generator-x64.log") `
-    "x64 generator staged installation"
 
 $generatorBin = Join-Path $generatorStage "bin"
 Copy-Item (Join-Path $generatorInstalled "bin\*.dll") $generatorBin

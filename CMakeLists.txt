@@ -565,6 +565,7 @@ if (NOT OCPN_FLATPAK_CONFIG)
     add_test(NAME xgrib_windows_runtime_contract
       COMMAND ${CMAKE_COMMAND}
         -DRUNTIME_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/ci/test-windows-opencpn-runtime.ps1
+        -DDIAGNOSTIC_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/ci/diagnose-windows-generator.ps1
         -DCIRCLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/.circleci/config.yml
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/WindowsRuntimeContract.cmake)
 

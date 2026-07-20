@@ -123,6 +123,29 @@ jobs:
           root: .
           paths: [artifacts]
 
+  windows-generator-diagnostics:
+    machine:
+      image: windows-server-2022-gui:current
+      shell: powershell.exe -ExecutionPolicy Bypass
+    resource_class: windows.medium
+    environment:
+      XGRIB_WINDOWS_DIAGNOSTICS_ONLY: "1"
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - windows-vcpkg-2026-06-24-mixed-release-v2-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
+      - run:
+          name: Capture Windows generator crash dumps and stack traces
+          command: .\ci\circleci-build-windows.ps1
+          no_output_timeout: 30m
+      - store_artifacts:
+          path: artifacts/windows-x86/diagnostics
+          destination: windows-generator-diagnostics
+      - store_artifacts:
+          path: artifacts/windows-x86/logs
+          destination: windows-generator-build-logs
+
   macos-arm64:
     macos:
       xcode: 16.4.0
@@ -222,15 +245,12 @@ workflows:
     when:
       not: << pipeline.parameters.run_workflow_deploy >>
     jobs:
-      - windows-vcpkg-dependencies:
+      - windows-generator-diagnostics:
           filters: &windows-focused-filters
             branches:
               only: windows-focused-validation
             tags:
               ignore: /.*/
-      - windows-x86:
-          requires: [windows-vcpkg-dependencies]
-          filters: *windows-focused-filters
 
   deploy_reviewed_alpha:
     when: << pipeline.parameters.run_workflow_deploy >>

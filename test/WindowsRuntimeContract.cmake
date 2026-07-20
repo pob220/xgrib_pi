@@ -1,4 +1,5 @@
 file(READ "${RUNTIME_SCRIPT}" runtime_script)
+file(READ "${DIAGNOSTIC_SCRIPT}" diagnostic_script)
 file(READ "${CIRCLE_CONFIG}" circle_config)
 
 set(runtime_patterns
@@ -26,9 +27,28 @@ set(circle_patterns
   "windows-focused-validation"
   "windows-focused:"
   "only: windows-focused-validation"
-  "requires: \\[windows-vcpkg-dependencies\\]")
+  "windows-generator-diagnostics:"
+  "XGRIB_WINDOWS_DIAGNOSTICS_ONLY")
 foreach(pattern IN LISTS circle_patterns)
   if(NOT circle_config MATCHES "${pattern}")
     message(FATAL_ERROR "Focused Windows workflow contract is missing: ${pattern}")
+  endif()
+endforeach()
+
+set(diagnostic_patterns
+  "OptionId.WindowsDesktopDebuggers"
+  "Get-AuthenticodeSignature"
+  "sxe -c"
+  "0xc0000409"
+  "\\.dump /ma"
+  "!analyze -v"
+  "\\.ecxr"
+  "kv 100"
+  "environmental_grib_tests"
+  "environmental_grib_xtd_tests"
+  "diagnostic-result\\.json")
+foreach(pattern IN LISTS diagnostic_patterns)
+  if(NOT diagnostic_script MATCHES "${pattern}")
+    message(FATAL_ERROR "Windows CDB diagnostic contract is missing: ${pattern}")
   endif()
 endforeach()
