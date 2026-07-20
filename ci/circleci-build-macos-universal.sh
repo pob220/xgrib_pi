@@ -13,7 +13,9 @@ while IFS= read -r package; do
   case "$package" in
     ''|'#'*) continue ;;
   esac
-  brew list --versions "$package" >/dev/null 2>&1 || brew install "$package"
+  # Homebrew may read stdin while installing a formula.  Keep it from
+  # consuming the remaining entries in macos-deps.
+  brew list --versions "$package" >/dev/null 2>&1 || brew install "$package" </dev/null
 done <build-deps/macos-deps
 
 brew_prefix=$(brew --prefix)

@@ -27,7 +27,18 @@ $triplet = "x64-windows"
 $vcpkg = $env:VCPKG_ROOT
 if (-not $vcpkg) { $vcpkg = "C:\vcpkg" }
 if (-not (Test-Path (Join-Path $vcpkg "vcpkg.exe"))) {
-    throw "The CircleCI Windows image does not provide vcpkg at $vcpkg"
+    $vcpkgVersion = "2026.06.24"
+    $vcpkg = Join-Path $repo "cache\vcpkg-$vcpkgVersion"
+    if (-not (Test-Path (Join-Path $vcpkg ".git"))) {
+        git clone --branch $vcpkgVersion --depth 1 `
+            https://github.com/microsoft/vcpkg.git $vcpkg
+        Assert-NativeSuccess "Pinned vcpkg checkout"
+    }
+    & (Join-Path $vcpkg "bootstrap-vcpkg.bat") -disableMetrics
+    Assert-NativeSuccess "vcpkg bootstrap"
+}
+if (-not (Test-Path (Join-Path $vcpkg "vcpkg.exe"))) {
+    throw "vcpkg bootstrap did not create vcpkg.exe"
 }
 
 choco install pkgconfiglite nsis -y --no-progress 2>&1 | Tee-Object -FilePath `

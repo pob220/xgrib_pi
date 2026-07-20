@@ -93,12 +93,9 @@ endif (GETTEXT_MSGMERGE_EXECUTABLE)
 
 set(_gmoFiles)
 macro (GETTEXT_BUILD_MO)
-  file(MAKE_DIRECTORY "Resources")
-  message(STATUS "${CMLOC}Creating Resources directory")
-  add_custom_target(
-    ${I18N_NAME}-create-resources-dir ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory "./Resources"
-  )
+  set(_resourceBuildDir "${CMAKE_CURRENT_BINARY_DIR}/Resources")
+  file(MAKE_DIRECTORY "${_resourceBuildDir}")
+  message(STATUS "${CMLOC}Creating build-tree Resources directory")
   foreach (_poFile ${ARGN})
     get_filename_component(_absFile ${_poFile} ABSOLUTE)
     get_filename_component(_poBasename ${_absFile} NAME_WE)
@@ -106,9 +103,11 @@ macro (GETTEXT_BUILD_MO)
 
     add_custom_command(
       OUTPUT ${_gmoFile}
+      COMMAND ${CMAKE_COMMAND} -E make_directory
+              "${_resourceBuildDir}/${_poBasename}.lproj"
       COMMAND ${GETTEXT_MSGFMT_EXECUTABLE} --check -o ${_gmoFile} ${_absFile}
       COMMAND ${CMAKE_COMMAND} -E copy ${_gmoFile}
-              "Resources/${_poBasename}.lproj/opencpn-${PACKAGE_NAME}.mo"
+              "${_resourceBuildDir}/${_poBasename}.lproj/opencpn-${PACKAGE_NAME}.mo"
       DEPENDS ${_absFile}
       COMMENT "${I18N_NAME}-i18n [${_poBasename}]: Created mo file."
     )

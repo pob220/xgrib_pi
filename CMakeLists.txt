@@ -312,6 +312,7 @@ target_sources(${PACKAGE_NAME} PUBLIC ${SRC})
 # The generator is a separate native process.  Keeping it out of the plugin
 # address space isolates network/model parsing failures from OpenCPN while
 # sharing one pinned implementation across development and catalogue builds.
+if(NOT OCPN_FLATPAK_CONFIG)
 include(CTest)
 
 # Debian 12's ecCodes package expands its multiarch pkg-config prefix to
@@ -435,6 +436,7 @@ elseif(APPLE)
       "${CMAKE_CURRENT_BINARY_DIR}/BundleMacGeneratorRuntime.cmake" @ONLY)
     install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/BundleMacGeneratorRuntime.cmake")
   endif()
+endif()
 endif()
 
 # ==============================================================
