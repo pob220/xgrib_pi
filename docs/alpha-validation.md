@@ -99,6 +99,17 @@ stage/archive (runtime bundling or packaging), metadata (target naming), or
 OpenCPN log (discovery/ABI/runtime loading). Never suppress a valid test merely
 to make the workflow green.
 
+The Windows job bootstraps the pinned official vcpkg `2026.06.24` checkout if
+the executor image does not provide vcpkg. A checksum-keyed CircleCI cache
+retains only vcpkg's reusable binary packages, reducing later Windows compute
+without caching mutable source or credentials. Initial installs use bounded
+resume-safe retries for transient upstream archive rate limits, retaining every
+attempt log. The macOS job smoke-tests
+Homebrew's `msgfmt` against the real Traditional Chinese catalogue and rebuilds
+gettext from its formula source only if the installed Apple-Silicon bottle
+crashes. Flatpak manifests use the canonical public repository and pin the
+exact CircleCI commit instead of a moving branch.
+
 ## Results and classifications
 
 Evidence uses `artifacts/<target>/{package,logs,tests,screenshots}` plus

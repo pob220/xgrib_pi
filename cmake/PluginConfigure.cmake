@@ -104,6 +104,11 @@ else ()
     set(GIT_REPOSITORY_TAG "")
   endif ()
 endif ()
+if (DEFINED PLUGIN_GIT_REPOSITORY
+    AND NOT "${PLUGIN_GIT_REPOSITORY}" STREQUAL "")
+  set(GIT_REPOSITORY "${PLUGIN_GIT_REPOSITORY}")
+  message(STATUS "${CMLOC}Using configured canonical plugin repository")
+endif ()
 if ("${GIT_REPOSITORY}" STREQUAL "")
   set(GIT_REPOSITORY "pob220/xgrib_pi")
   set(GIT_REPOSITORY_BRANCH "main")
@@ -471,6 +476,9 @@ if (OCPN_FLATPAK_CONFIG)
   if(XGRIB_FLATPAK_SOURCE_DIR)
     set(flatpak_plugin_source
         "       - type: dir\n         path: ${XGRIB_FLATPAK_SOURCE_DIR}")
+  elseif(DEFINED ENV{CIRCLE_SHA1} AND NOT "$ENV{CIRCLE_SHA1}" STREQUAL "")
+    set(flatpak_plugin_source
+        "       - type: git\n         url: https://${GIT_REPOSITORY_SERVER}/${GIT_REPOSITORY}\n         commit: $ENV{CIRCLE_SHA1}")
   else()
     set(flatpak_plugin_source
         "       - type: git\n         url: https://${GIT_REPOSITORY_SERVER}/${GIT_REPOSITORY}\n         ${GIT_BRANCH_OR_TAG}: ${GIT_REPOSITORY_ITEM}")

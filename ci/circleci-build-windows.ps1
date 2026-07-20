@@ -44,10 +44,32 @@ if (-not (Test-Path (Join-Path $vcpkg "vcpkg.exe"))) {
 choco install pkgconfiglite nsis -y --no-progress 2>&1 | Tee-Object -FilePath `
     (Join-Path $logDir "chocolatey.log")
 Assert-NativeSuccess "Chocolatey dependency installation"
-& (Join-Path $vcpkg "vcpkg.exe") install --triplet $triplet `
-    bzip2 blosc curl eccodes jsoncpp libzip libsodium netcdf-c proj qhull zstd `
-    2>&1 | Tee-Object -FilePath (Join-Path $logDir "vcpkg.log")
-Assert-NativeSuccess "vcpkg dependency installation"
+$vcpkgPackages = Get-Content (Join-Path $repo "ci\windows-vcpkg-deps.txt") |
+    Where-Object { $_.Trim() -and -not $_.Trim().StartsWith("#") } |
+    ForEach-Object { $_.Trim() }
+$env:VCPKG_DEFAULT_BINARY_CACHE = Join-Path $repo "cache\vcpkg-binary"
+New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+$vcpkgExit = 1
+$retryDelays = @(30,45,60)
+for ($attempt = 1; $attempt -le 4; $attempt++) {
+    & (Join-Path $vcpkg "vcpkg.exe") install --triplet $triplet `
+        @vcpkgPackages 2>&1 | Tee-Object -FilePath `
+        (Join-Path $logDir "vcpkg-attempt-$attempt.log")
+    $vcpkgExit = $LASTEXITCODE
+    if ($vcpkgExit -eq 0) { break }
+    if ($attempt -lt 4) {
+        $delay = $retryDelays[$attempt - 1]
+        Write-Warning "vcpkg attempt $attempt failed; retrying in $delay seconds"
+        Start-Sleep -Seconds $delay
+    }
+}
+$vcpkgAttemptLogs = Get-ChildItem $logDir -Filter "vcpkg-attempt-*.log" |
+    Sort-Object Name | ForEach-Object { $_.FullName }
+Get-Content -Path $vcpkgAttemptLogs | Set-Content -Encoding utf8 `
+    (Join-Path $logDir "vcpkg.log")
+if ($vcpkgExit -ne 0) {
+    throw "vcpkg dependency installation failed after 4 attempts"
+}
 $vcpkgList = & (Join-Path $vcpkg "vcpkg.exe") list
 Assert-NativeSuccess "vcpkg version inventory"
 $vcpkgList | Set-Content -Encoding utf8 (Join-Path $logDir "dependencies.log")
@@ -159,6 +181,10 @@ $metadata = Get-ChildItem $build -Filter "xgrib_pi-*.xml" | Select-Object -First
 if (-not $archive -or -not $metadata) { throw "Windows package or metadata missing" }
 if (-not (Select-String -Quiet -Path $metadata.FullName -Pattern "<target>msvc")) {
     throw "Windows metadata target is invalid"
+}
+if (-not (Select-String -Quiet -Path $metadata.FullName `
+        -SimpleMatch "<source> https://github.com/pob220/xgrib_pi </source>")) {
+    throw "Windows metadata source repository is invalid"
 }
 Copy-Item $archive.FullName,$metadata.FullName $packageDir
 $packagedArchive = Join-Path $packageDir $archive.Name

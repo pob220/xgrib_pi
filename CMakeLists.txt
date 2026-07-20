@@ -101,6 +101,7 @@ set(ALPHA "alpha") # Standard Repos
 # name. set(CLOUDSMITH_BASE_REPOSITORY "${GIT_REPOSITORY_NAME}")
 # set(CLOUDSMITH_BASE_REPOSITORY "opencpn-plugins")  #Ricks's customization
 set(CLOUDSMITH_BASE_REPOSITORY "xgrib")
+set(PLUGIN_GIT_REPOSITORY "pob220/xgrib_pi")
 
 # Set the following to use OpenCPN cloudsmith repositories instead of own
 # repositories

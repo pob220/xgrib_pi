@@ -99,6 +99,12 @@ else
     cmake -DOCPN_TARGET=$OCPN_TARGET -DBUILD_ARCH=$BUILD_ARCH -DOCPN_FLATPAK_CONFIG=ON -DSDK_VER=$SDK_VER -DFLATPAK_BRANCH=$FLATPAK_BRANCH $SET_WX_VER .. 2>&1 | tee "$log_dir/configure.log"
 fi
 
+manifest="flatpak/org.opencpn.OpenCPN.Plugin.xgrib_pi.yaml"
+grep -q 'url: https://github.com/pob220/xgrib_pi' "$manifest"
+if [ -n "${CIRCLE_SHA1:-}" ]; then
+    grep -q "commit: ${CIRCLE_SHA1}" "$manifest"
+fi
+
 make flatpak-build 2>&1 | tee "$log_dir/build-and-test.log"
 make flatpak-pkg 2>&1 | tee "$log_dir/package.log"
 ../scripts/test-flatpak-archive.sh . 2>&1 | tee "$log_dir/archive-validation.log"

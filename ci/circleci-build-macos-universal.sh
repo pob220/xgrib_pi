@@ -27,6 +27,16 @@ export WX_CONFIG="${wx_prefix}/bin/wx-config-3.2"
 export OCPN_TARGET=macos-arm64
 export WX_VER=32
 
+# Some Apple-Silicon Homebrew images have shipped a gettext bottle whose
+# msgfmt crashes with SIGSEGV.  Test the actual largest catalogue and rebuild
+# only a broken bottle from the same official formula source.
+msgfmt_smoke="${TMPDIR:-/tmp}/xgrib-msgfmt-smoke.mo"
+if ! msgfmt --check -o "$msgfmt_smoke" po/zh_TW.po; then
+  brew reinstall --build-from-source gettext </dev/null
+  msgfmt --check -o "$msgfmt_smoke" po/zh_TW.po
+fi
+rm -f "$msgfmt_smoke"
+
 build="$repo/build"
 stage="$repo/stage"
 artifact="$repo/artifacts/macos-arm64"
@@ -67,6 +77,7 @@ metadata=$(find "$package_dir" -name 'xgrib_pi-*.xml' -print -quit)
 test -n "$archive"
 test -n "$metadata"
 grep -q '<target>darwin-wx32</target>' "$metadata"
+grep -q '<source> https://github.com/pob220/xgrib_pi </source>' "$metadata"
 tar -tzf "$archive" >"$test_dir/archive-contents.txt"
 grep -q 'libxgrib_pi.dylib' "$test_dir/archive-contents.txt"
 grep -q 'environmental-grib' "$test_dir/archive-contents.txt"

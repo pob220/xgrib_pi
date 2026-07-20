@@ -11,6 +11,7 @@ test -n "$archive"
 test -n "$metadata"
 grep -q '<name> xGRIB </name>' "$metadata"
 grep -q '<api-version> 1.21 </api-version>' "$metadata"
+grep -q '<source> https://github.com/pob220/xgrib_pi </source>' "$metadata"
 grep -q '<tarball-url>' "$metadata"
 
 tmp=${TMPDIR:-/tmp}/xgrib-archive-test-$$

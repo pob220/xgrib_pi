@@ -11,6 +11,7 @@ test -n "$metadata"
 grep -q '<name> xGRIB </name>' "$metadata"
 grep -q '<target>flatpak-' "$metadata"
 grep -q '<target-version>' "$metadata"
+grep -q '<source> https://github.com/pob220/xgrib_pi </source>' "$metadata"
 grep -q '<tarball-url>' "$metadata"
 
 tmp=${TMPDIR:-/tmp}/xgrib-flatpak-archive-test-$$
