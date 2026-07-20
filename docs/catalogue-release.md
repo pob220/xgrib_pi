@@ -92,13 +92,16 @@ CircleCI builds Bookworm x86_64/arm64, Jammy x86_64, Noble x86_64, Trixie
 x86_64, Flatpak x86_64/aarch64, Windows x86 and macOS arm64. The official
 OpenCPN API 1.21 MSVC import library is 32-bit, so the supported Windows
 catalogue ABI is `msvc-x86`; an x64 link cannot be claimed until OpenCPN
-provides a matching x64 import library.
+provides a matching x64 import library. Current ecCodes is 64-bit-only, so the
+Windows archive pairs that x86 in-process plugin with the existing isolated
+x86_64 generator process and its private runtime. Both architectures are
+built and tested natively; no unsupported x86 ecCodes build is used.
 `run_workflow_deploy` defaults to false and the separate deployment workflow
 still stops at a manual approval gate. See `docs/alpha-validation.md`.
 
 ### Verification snapshot (20 July 2026)
 
-The current tree completed clean builds, all ten CTest tests, staged-helper
+The current tree completed clean builds, all twelve CTest tests, staged-helper
 execution and extracted-archive execution for these locally tested candidates:
 
 | Candidate | Archive | ABI observation |

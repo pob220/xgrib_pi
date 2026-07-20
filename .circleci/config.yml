@@ -84,16 +84,19 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - windows-vcpkg-2026-06-24-x86-release-v1-{{ checksum "ci/windows-vcpkg-deps.txt" }}
-            - windows-vcpkg-2026-06-24-x86-release-v1-
+            - windows-vcpkg-2026-06-24-mixed-release-v2-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
+            - windows-vcpkg-2026-06-24-mixed-release-v2-
       - run:
           name: Prepare cached Release-only Windows dependencies
           command: .\ci\circleci-build-windows.ps1
           no_output_timeout: 45m
       - save_cache:
-          key: windows-vcpkg-2026-06-24-x86-release-v1-{{ checksum "ci/windows-vcpkg-deps.txt" }}
+          key: windows-vcpkg-2026-06-24-mixed-release-v2-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
           paths:
             - cache/vcpkg-binary
+      - store_artifacts:
+          path: artifacts/windows-x86/logs
+          destination: windows-dependency-logs
 
   windows-x86:
     machine:
@@ -107,7 +110,7 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - windows-vcpkg-2026-06-24-x86-release-v1-{{ checksum "ci/windows-vcpkg-deps.txt" }}
+            - windows-vcpkg-2026-06-24-mixed-release-v2-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
       - run:
           name: Native Windows build, tests and package
           command: .\ci\circleci-build-windows.ps1

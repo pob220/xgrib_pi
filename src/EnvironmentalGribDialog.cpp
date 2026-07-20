@@ -1910,12 +1910,37 @@ void EnvironmentalGribDialog::StartCommand(const wxString& command,
   process->Redirect();
 
   wxExecuteEnv env;
+  // wxExecuteEnv replaces rather than augments the child environment when its
+  // map is non-empty. Preserve the parent environment before adding the
+  // secret or packaged runtime paths.
+  wxGetEnvMap(&env.env);
   if (!password.empty()) {
     env.env["ENVIRONMENTAL_GRIB_COPERNICUS_PASSWORD"] = password;
   }
 
+  wxFileName generator(m_generatorPath->GetValue());
+  wxFileName pluginRoot(generator.GetPath(), "");
+  pluginRoot.RemoveLastDir();
+  wxFileName runtime(pluginRoot.GetPath(), "");
+  runtime.AppendDir("runtime");
+  wxFileName definitions(runtime.GetPath(), "");
+  definitions.AppendDir("share");
+  definitions.AppendDir("eccodes");
+  definitions.AppendDir("definitions");
+  wxFileName samples(runtime.GetPath(), "");
+  samples.AppendDir("share");
+  samples.AppendDir("eccodes");
+  samples.AppendDir("samples");
+  wxFileName proj(runtime.GetPath(), "");
+  proj.AppendDir("share");
+  proj.AppendDir("proj");
+  if (definitions.DirExists())
+    env.env["ECCODES_DEFINITION_PATH"] = definitions.GetPath();
+  if (samples.DirExists()) env.env["ECCODES_SAMPLES_PATH"] = samples.GetPath();
+  if (proj.DirExists()) env.env["PROJ_DATA"] = proj.GetPath();
+
   long pid = wxExecute(command, wxEXEC_ASYNC | wxEXEC_NODISABLE, process,
-                       password.empty() ? nullptr : &env);
+                       &env);
   if (pid == 0) {
     AppendLog("Process failed to launch");
     delete process;
@@ -2606,14 +2631,22 @@ wxString EnvironmentalGribDialog::FindDefaultGenerator() const {
   wxFileName packaged(GetXgribDataDirectory(), "");
   packaged.RemoveLastDir();
   packaged.AppendDir("bin");
+#ifdef __WXMSW__
+  packaged.SetFullName("environmental-grib.exe");
+#else
   packaged.SetFullName("environmental-grib");
+#endif
   if (IsExecutableFile(packaged.GetFullPath())) return packaged.GetFullPath();
 
   // A source-build directory may contain an older development helper.  The
   // helper shipped with this plugin must take precedence so its job schema
   // and provider set always match the loaded UI.
   wxFileName executable(wxStandardPaths::Get().GetExecutablePath());
+#ifdef __WXMSW__
+  wxFileName sibling(executable.GetPath(), "environmental-grib.exe");
+#else
   wxFileName sibling(executable.GetPath(), "environmental-grib");
+#endif
   if (IsExecutableFile(sibling.GetFullPath())) return sibling.GetFullPath();
 
   if (wxFindFileInPath(&path, wxGetenv("PATH"), "environmental-grib")) {

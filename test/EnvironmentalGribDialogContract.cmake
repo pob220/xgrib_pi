@@ -6,7 +6,12 @@ set(required_patterns
   "void EnvironmentalGribDialog::OnProcessTimer\\(wxTimerEvent& event\\)[^}]*DrainProcessOutput\\(\\)"
   "DrainStream\\(m_process->GetInputStream\\(\\), &m_stdoutBuffer"
   "DrainStream\\(m_process->GetErrorStream\\(\\), &m_stderrBuffer"
-  "request\\[\"offlineCurrentMode\"\\][^;]*wxString\\(")
+  "request\\[\"offlineCurrentMode\"\\][^;]*wxString\\("
+  "wxGetEnvMap\\(&env\\.env\\)"
+  "env\\.env\\[\"ECCODES_DEFINITION_PATH\"\\]"
+  "env\\.env\\[\"ECCODES_SAMPLES_PATH\"\\]"
+  "env\\.env\\[\"PROJ_DATA\"\\]"
+  "packaged\\.SetFullName\\(\"environmental-grib\\.exe\"\\)")
 
 foreach(pattern IN LISTS required_patterns)
   if(NOT source MATCHES "${pattern}")

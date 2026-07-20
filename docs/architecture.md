@@ -56,6 +56,14 @@ The launcher sets private runtime paths before executing the helper. It does
 not alter OpenCPN's library path. Catalogue resources are located through
 OpenCPN's `GetPluginDataDir`, so both system and per-user installs work.
 
+On Windows, OpenCPN's official API 1.21 MSVC import library requires an x86
+in-process plugin, while current ecCodes supports only 64-bit platforms. The
+package therefore contains an x86 plugin and a separate x86_64
+`environmental-grib.exe`. This is a supported process boundary, not a mixed-ABI
+link: the dialog exchanges job/result files and JSON-lines progress with the
+helper and supplies its private ecCodes and PROJ data paths in the child
+environment.
+
 ## Lifecycle and failure handling
 
 Only one modeless generator dialog exists per xGRIB control bar. Closing it
@@ -66,8 +74,8 @@ errors stay visible in the dialog and do not replace a currently open GRIB.
 ## Platform scope
 
 The validation matrix covers native Linux x86_64 and ARM64, Flatpak x86_64 and
-aarch64, genuine Windows x86 using OpenCPN's official API 1.21 MSVC import
-library, and genuine Apple-Silicon macOS. Platform
+aarch64, genuine Windows with an x86 OpenCPN plugin and x86_64 helper, and
+genuine Apple-Silicon macOS. Platform
 build success is not treated as runtime success: each target manifest records
 packaging, installation, OpenCPN discovery/load, graphical inspection and
 merge/reopen results separately. Intel macOS and physical Raspberry Pi runtime

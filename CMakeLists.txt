@@ -122,6 +122,8 @@ option(BUNDLE_GENERATOR_RUNTIME
        "Bundle the native helper's non-system runtime dependencies" ON)
 option(XGRIB_USE_BUNDLED_JASPER
        "Build the pinned static Jasper dependency" ON)
+set(XGRIB_EXTERNAL_GENERATOR_DIR "" CACHE PATH
+    "Prebuilt generator root containing bin/ and runtime/ (Windows split-ABI builds)")
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -316,6 +318,24 @@ target_sources(${PACKAGE_NAME} PUBLIC ${SRC})
 if(NOT OCPN_FLATPAK_CONFIG)
 include(CTest)
 
+if(XGRIB_EXTERNAL_GENERATOR_DIR)
+  if(NOT WIN32)
+    message(FATAL_ERROR
+      "XGRIB_EXTERNAL_GENERATOR_DIR is supported only for Windows split-ABI builds")
+  endif()
+  set(XGRIB_EXTERNAL_GENERATOR
+      "${XGRIB_EXTERNAL_GENERATOR_DIR}/bin/environmental-grib${CMAKE_EXECUTABLE_SUFFIX}")
+  if(NOT EXISTS "${XGRIB_EXTERNAL_GENERATOR}")
+    message(FATAL_ERROR
+      "Prebuilt environmental GRIB generator not found: ${XGRIB_EXTERNAL_GENERATOR}")
+  endif()
+  add_executable(environmental-grib IMPORTED GLOBAL)
+  set_target_properties(environmental-grib PROPERTIES
+    IMPORTED_LOCATION "${XGRIB_EXTERNAL_GENERATOR}")
+  message(STATUS
+    "${CMLOC}Using external environmental GRIB generator: ${XGRIB_EXTERNAL_GENERATOR}")
+else()
+
 # Debian 12's ecCodes package expands its multiarch pkg-config prefix to
 # /usr/lib instead of /usr. CMake rejects the resulting /usr/lib/include path
 # before compiling, although the headers are correctly installed in
@@ -363,8 +383,11 @@ if(NOT XGRIB_HAVE_CODES_HANDLE_NEW_FROM_SAMPLES)
     codes_handle_new_from_samples=grib_handle_new_from_samples)
   message(STATUS "${CMLOC}Using legacy ecCodes sample constructor")
 endif()
+endif()
 
-add_dependencies(${PACKAGE_NAME} environmental-grib)
+if(NOT XGRIB_EXTERNAL_GENERATOR_DIR)
+  add_dependencies(${PACKAGE_NAME} environmental-grib)
+endif()
 if(BUILD_TESTING AND TARGET environmental_grib_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_tests)
 endif()
@@ -414,7 +437,14 @@ if(UNIX AND NOT APPLE)
     install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/BundleGeneratorRuntime.cmake")
   endif()
 elseif(WIN32)
-  if(BUNDLE_GENERATOR_RUNTIME AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.21)
+  if(XGRIB_EXTERNAL_GENERATOR_DIR)
+    install(DIRECTORY "${XGRIB_EXTERNAL_GENERATOR_DIR}/bin/"
+      DESTINATION "plugins/${PACKAGE_NAME}/bin")
+    if(IS_DIRECTORY "${XGRIB_EXTERNAL_GENERATOR_DIR}/runtime")
+      install(DIRECTORY "${XGRIB_EXTERNAL_GENERATOR_DIR}/runtime/"
+        DESTINATION "plugins/${PACKAGE_NAME}/runtime")
+    endif()
+  elseif(BUNDLE_GENERATOR_RUNTIME AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.21)
     install(TARGETS environmental-grib
       RUNTIME_DEPENDENCIES
         DIRECTORIES
@@ -507,6 +537,23 @@ if (NOT OCPN_FLATPAK_CONFIG)
         -DPOTFILES_FILE=${CMAKE_CURRENT_SOURCE_DIR}/po/POTFILES.in
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/SelectedFilePathContract.cmake)
 
+    add_test(NAME xgrib_plugin_version_contract
+      COMMAND ${CMAKE_COMMAND}
+        -DPLUGIN_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/grib_pi.h
+        -DGENERATED_VERSION_HEADER=${CMAKE_BINARY_DIR}/CMakeFiles/include/version.h
+        -DEXPECTED_MAJOR=${VERSION_MAJOR}
+        -DEXPECTED_MINOR=${VERSION_MINOR}
+        -DEXPECTED_PATCH=${VERSION_PATCH}
+        -DEXPECTED_TWEAK=${VERSION_TWEAK}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/PluginVersionContract.cmake)
+
+    add_test(NAME xgrib_windows_split_abi_contract
+      COMMAND ${CMAKE_COMMAND}
+        -DCMAKE_SOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+        -DWINDOWS_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/ci/circleci-build-windows.ps1
+        -DDIALOG_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/EnvironmentalGribDialog.cpp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/WindowsSplitAbiContract.cmake)
+
     add_executable(xgrib_reader_integration_tests
       test/XgribReaderIntegrationTests.cpp
       src/GribVectorPolicy.cpp
@@ -532,8 +579,21 @@ if (NOT OCPN_FLATPAK_CONFIG)
     set_tests_properties(xgrib_reader_integration_tests PROPERTIES
       FIXTURES_REQUIRED xgrib_reader_fixture)
 
-    set(XGRIB_COMBINED_TEST_GRIB
-      "${CMAKE_BINARY_DIR}/functional-fixtures/combined-known.grb2")
+    if(XGRIB_EXTERNAL_GENERATOR_DIR)
+      set(XGRIB_COMBINED_TEST_GRIB
+        "${CMAKE_BINARY_DIR}/combined-known.grb2")
+      add_test(NAME environmental_grib_merge_tests
+        COMMAND $<TARGET_FILE:environmental-grib>
+          merge-environment-gribs
+          --weather ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/wind-known.grb2
+          --current ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/current-differing.grb
+          --output ${XGRIB_COMBINED_TEST_GRIB} --overwrite)
+      set_tests_properties(environmental_grib_merge_tests PROPERTIES
+        FIXTURES_SETUP environmental_grib_combined_fixture)
+    else()
+      set(XGRIB_COMBINED_TEST_GRIB
+        "${CMAKE_BINARY_DIR}/functional-fixtures/combined-known.grb2")
+    endif()
     add_test(NAME xgrib_combined_reader_integration_tests
       COMMAND xgrib_reader_integration_tests ${XGRIB_COMBINED_TEST_GRIB}
         --combined)
