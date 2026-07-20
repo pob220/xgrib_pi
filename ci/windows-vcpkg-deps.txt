@@ -2,6 +2,7 @@ bzip2
 blosc
 curl
 eccodes
+glew
 jsoncpp
 libzip
 libsodium
