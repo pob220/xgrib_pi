@@ -78,6 +78,7 @@ for ($attempt = 1; $attempt -le 4; $attempt++) {
     try {
         $ErrorActionPreference = "Continue"
         & (Join-Path $vcpkg "vcpkg.exe") install --triplet $triplet `
+            --allow-unsupported `
             "--overlay-ports=$overlayPorts" `
             "--overlay-triplets=$overlayTriplets" @vcpkgPackages 2>&1 | Tee-Object -FilePath `
             (Join-Path $logDir "vcpkg-attempt-$attempt.log")

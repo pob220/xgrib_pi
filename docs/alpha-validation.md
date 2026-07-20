@@ -30,6 +30,9 @@ catalogue target is `msvc-x86`. A genuine x64 build was attempted and reached
 the final plugin link, where the linker correctly rejected the official x86
 import library. Windows x64 is therefore not a supported OpenCPN plugin target
 for this matrix; the genuine hosted validation builds the supported x86 ABI.
+The pinned vcpkg ecCodes port labels x86 unsupported, so CI explicitly permits
+that otherwise blocked build and treats the actual compile, tests and merge as
+authoritative; it does not suppress any build or test failure.
 
 ## Local Arch build and functional test
 
