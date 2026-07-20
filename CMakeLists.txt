@@ -558,6 +558,7 @@ if (NOT OCPN_FLATPAK_CONFIG)
     add_test(NAME xgrib_windows_split_abi_contract
       COMMAND ${CMAKE_COMMAND}
         -DCMAKE_SOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+        -DPLUGIN_CONFIGURE_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/cmake/PluginConfigure.cmake
         -DGENERATOR_CMAKE_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/generator/CMakeLists.txt
         -DWINDOWS_UTF8_MANIFEST=${CMAKE_CURRENT_SOURCE_DIR}/generator/windows-utf8.manifest
         -DWINDOWS_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/ci/circleci-build-windows.ps1

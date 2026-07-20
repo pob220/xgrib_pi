@@ -1,4 +1,5 @@
 file(READ "${CMAKE_SOURCE_FILE}" cmake_source)
+file(READ "${PLUGIN_CONFIGURE_SOURCE}" plugin_configure_source)
 file(READ "${GENERATOR_CMAKE_SOURCE}" generator_cmake_source)
 file(READ "${WINDOWS_UTF8_MANIFEST}" windows_utf8_manifest)
 file(READ "${WINDOWS_SCRIPT}" windows_script)
@@ -16,6 +17,12 @@ foreach(pattern IN LISTS cmake_patterns)
     message(FATAL_ERROR "Windows split-ABI CMake contract is missing: ${pattern}")
   endif()
 endforeach()
+
+if(NOT plugin_configure_source MATCHES
+   "target_compile_definitions\\(\\$\\{PACKAGE_NAME\\} PRIVATE MAKING_PLUGIN\\)")
+  message(FATAL_ERROR
+    "Windows plugin must import OpenCPN host symbols using MAKING_PLUGIN")
+endif()
 
 set(generator_cmake_patterns
   "environmental_grib_enable_windows_utf8"

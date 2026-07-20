@@ -574,6 +574,10 @@ if (MSVC)
   add_definitions(-D__MSVC__)
   add_definitions(-D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_SECURE_NO_DEPRECATE)
   add_definitions(-D HAVE_SNPRINTF)
+  # The OpenCPN API header uses this to mark host-owned symbols such as
+  # wxEVT_DOWNLOAD_EVENT as dllimport. Without it MSVC looks for a local
+  # definition in xgrib_pi.dll instead of using the OpenCPN import library.
+  target_compile_definitions(${PACKAGE_NAME} PRIVATE MAKING_PLUGIN)
   message(STATUS "${CMLOC}Set SNPRINTF")
 else (MSVC)
   if (NOT APPLE)
