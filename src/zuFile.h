@@ -63,35 +63,42 @@ extern "C" {
 typedef struct {
   int type;
   int ok;
-  char *fname;
+  char* fname;
   long pos;
 
-  void *zfile;  // exact file type depends of compress type
+  void* zfile;  // exact file type depends of compress type
 
-  FILE *faux;  // auxiliary file for bzip
+  FILE* faux;  // auxiliary file for bzip
 } ZUFILE;
 
-ZUFILE *zu_open(const char *fname, const char *mode,
+ZUFILE* zu_open(const char* fname, const char* mode,
                 int type = ZU_COMPRESS_AUTO);
-int zu_close(ZUFILE *f);
+int zu_close(ZUFILE* f);
 
-int zu_can_read_file(const char *fname);
+int zu_can_read_file(const char* fname);
 
-int zu_read(ZUFILE *f, void *buf, long len);
+int zu_read(ZUFILE* f, void* buf, long len);
 
-long zu_tell(ZUFILE *f);
+long zu_tell(ZUFILE* f);
 
-int zu_seek(ZUFILE *f, long offset, int whence);  // TODO: whence=SEEK_END
+int zu_seek(ZUFILE* f, long offset, int whence);  // TODO: whence=SEEK_END
 
-void zu_rewind(ZUFILE *f);
+void zu_rewind(ZUFILE* f);
 
-long zu_filesize(ZUFILE *f);
+long zu_filesize(ZUFILE* f);
 
 // for internal use :
-int zu_bzSeekForward(ZUFILE *f, unsigned long nbytes);
+int zu_bzSeekForward(ZUFILE* f, unsigned long nbytes);
 
 #ifdef __cplusplus
 }
+
+#include <wx/string.h>
+
+// Unicode-safe entry point used by xGRIB. The legacy narrow-path API above is
+// retained for source compatibility with the original zyGrib reader.
+ZUFILE* zu_open_wx(const wxString& fname, const char* mode,
+                   int type = ZU_COMPRESS_AUTO);
 #endif
 
 #endif

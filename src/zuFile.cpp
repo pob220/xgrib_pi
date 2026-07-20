@@ -21,9 +21,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "zuFile.h"
 
+#include <wx/wxcrt.h>
+
 //----------------------------------------------------
-int zu_can_read_file(const char *fname) {
-  ZUFILE *f;
+int zu_can_read_file(const char* fname) {
+  ZUFILE* f;
   f = zu_open(fname, "rb");
   if (f == nullptr) {
     return 0;
@@ -34,23 +36,29 @@ int zu_can_read_file(const char *fname) {
 }
 
 //----------------------------------------------------
-ZUFILE *zu_open(const char *fname, const char *mode, int type) {
-  ZUFILE *f;
+ZUFILE* zu_open(const char* fname, const char* mode, int type) {
+  if (!fname) return nullptr;
+  return zu_open_wx(wxString::FromUTF8(fname), mode, type);
+}
+
+ZUFILE* zu_open_wx(const wxString& fname, const char* mode, int type) {
+  ZUFILE* f;
   char buf[16];
-  if (!fname || strlen(fname) == 0) {
+  const wxScopedCharBuffer utf8Name = fname.utf8_str();
+  if (fname.empty() || !utf8Name.data() || strlen(utf8Name.data()) == 0) {
     return nullptr;
   }
-  f = (ZUFILE *)malloc(sizeof(ZUFILE));
+  f = (ZUFILE*)malloc(sizeof(ZUFILE));
   if (!f) {
     return nullptr;
   }
 
   f->ok = 1;
   f->pos = 0;
-  f->fname = strdup(fname);
+  f->fname = strdup(utf8Name.data());
 
   if (type == ZU_COMPRESS_AUTO) {
-    char *p = strrchr(f->fname, '.');
+    char* p = strrchr(f->fname, '.');
     int i = 0;
     while (p != nullptr && *p != '\0' && i < 4) {
       buf[i] = tolower(*p);
@@ -74,18 +82,22 @@ ZUFILE *zu_open(const char *fname, const char *mode, int type) {
 
   switch (f->type) {
     case ZU_COMPRESS_NONE:
-      f->zfile = (void *)fopen(f->fname, mode);
+      f->zfile = (void*)wxFopen(fname, wxString::FromUTF8(mode));
       break;
     case ZU_COMPRESS_GZIP:
-      f->zfile = (void *)gzopen(f->fname, mode);
+#ifdef __WXMSW__
+      f->zfile = (void*)gzopen_w(fname.wc_str(), mode);
+#else
+      f->zfile = (void*)gzopen(f->fname, mode);
+#endif
       break;
     case ZU_COMPRESS_BZIP:
-      f->faux = fopen(f->fname, mode);
+      f->faux = wxFopen(fname, wxString::FromUTF8(mode));
       if (f->faux) {
         int bzerror = BZ_OK;
-        f->zfile = (void *)BZ2_bzReadOpen(&bzerror, f->faux, 0, 0, nullptr, 0);
+        f->zfile = (void*)BZ2_bzReadOpen(&bzerror, f->faux, 0, 0, nullptr, 0);
         if (bzerror != BZ_OK) {
-          BZ2_bzReadClose(&bzerror, (BZFILE *)(f->zfile));
+          BZ2_bzReadClose(&bzerror, (BZFILE*)(f->zfile));
           fclose(f->faux);
           f->zfile = nullptr;
         }
@@ -106,18 +118,18 @@ ZUFILE *zu_open(const char *fname, const char *mode, int type) {
   return f;
 }
 //----------------------------------------------------
-int zu_read(ZUFILE *f, void *buf, long len) {
+int zu_read(ZUFILE* f, void* buf, long len) {
   int nb = 0;
   int bzerror = BZ_OK;
   switch (f->type) {
     case ZU_COMPRESS_NONE:
-      nb = fread(buf, 1, len, (FILE *)(f->zfile));
+      nb = fread(buf, 1, len, (FILE*)(f->zfile));
       break;
     case ZU_COMPRESS_GZIP:
       nb = gzread((gzFile)(f->zfile), buf, len);
       break;
     case ZU_COMPRESS_BZIP:
-      nb = BZ2_bzRead(&bzerror, (BZFILE *)(f->zfile), buf, len);
+      nb = BZ2_bzRead(&bzerror, (BZFILE*)(f->zfile), buf, len);
       break;
   }
   f->pos += nb;
@@ -125,7 +137,7 @@ int zu_read(ZUFILE *f, void *buf, long len) {
 }
 
 //----------------------------------------------------
-int zu_close(ZUFILE *f) {
+int zu_close(ZUFILE* f) {
   int bzerror = BZ_OK;
   if (f) {
     f->ok = 0;
@@ -134,13 +146,13 @@ int zu_close(ZUFILE *f) {
     if (f->zfile) {
       switch (f->type) {
         case ZU_COMPRESS_NONE:
-          fclose((FILE *)(f->zfile));
+          fclose((FILE*)(f->zfile));
           break;
         case ZU_COMPRESS_GZIP:
           gzclose((gzFile)(f->zfile));
           break;
         case ZU_COMPRESS_BZIP:
-          BZ2_bzReadClose(&bzerror, (BZFILE *)(f->zfile));
+          BZ2_bzReadClose(&bzerror, (BZFILE*)(f->zfile));
           if (f->faux) {
             fclose(f->faux);
           }
@@ -153,12 +165,12 @@ int zu_close(ZUFILE *f) {
 }
 
 //----------------------------------------------------
-long zu_tell(ZUFILE *f) { return f->pos; }
+long zu_tell(ZUFILE* f) { return f->pos; }
 
 //----------------------------------------------------
-long zu_filesize(ZUFILE *f) {
+long zu_filesize(ZUFILE* f) {
   long res = 0;
-  FILE *ftmp = fopen(f->fname, "rb");
+  FILE* ftmp = wxFopen(wxString::FromUTF8(f->fname), "rb");
   if (ftmp) {
     fseek(ftmp, 0, SEEK_END);
     res = ftell(ftmp);
@@ -168,7 +180,7 @@ long zu_filesize(ZUFILE *f) {
 }
 
 //----------------------------------------------------
-int zu_seek(ZUFILE *f, long offset, int whence) {
+int zu_seek(ZUFILE* f, long offset, int whence) {
   int res = 0;
   int bzerror = BZ_OK;
   if (whence == SEEK_END) {
@@ -177,8 +189,8 @@ int zu_seek(ZUFILE *f, long offset, int whence) {
 
   switch (f->type) {  // SEEK_SET, SEEK_CUR
     case ZU_COMPRESS_NONE:
-      res = fseek((FILE *)(f->zfile), offset, whence);
-      f->pos = ftell((FILE *)(f->zfile));
+      res = fseek((FILE*)(f->zfile), offset, whence);
+      f->pos = ftell((FILE*)(f->zfile));
       break;
     case ZU_COMPRESS_GZIP:
       if (whence == SEEK_SET) {
@@ -196,13 +208,13 @@ int zu_seek(ZUFILE *f, long offset, int whence) {
       } else if (whence == SEEK_CUR) {
         res = zu_bzSeekForward(f, offset);
       } else {  // BAD : reopen file
-        BZ2_bzReadClose(&bzerror, (BZFILE *)(f->zfile));
+        BZ2_bzReadClose(&bzerror, (BZFILE*)(f->zfile));
         bzerror = BZ_OK;
         rewind(f->faux);
         f->pos = 0;
-        f->zfile = (void *)BZ2_bzReadOpen(&bzerror, f->faux, 0, 0, nullptr, 0);
+        f->zfile = (void*)BZ2_bzReadOpen(&bzerror, f->faux, 0, 0, nullptr, 0);
         if (bzerror != BZ_OK) {
-          BZ2_bzReadClose(&bzerror, (BZFILE *)(f->zfile));
+          BZ2_bzReadClose(&bzerror, (BZFILE*)(f->zfile));
           fclose(f->faux);
           f->zfile = nullptr;
           f->ok = 0;
@@ -215,7 +227,7 @@ int zu_seek(ZUFILE *f, long offset, int whence) {
 }
 
 //-----------------------------------------------------------------
-int zu_bzSeekForward(ZUFILE *f, unsigned long nbytes_)
+int zu_bzSeekForward(ZUFILE* f, unsigned long nbytes_)
 // for internal use
 {
   unsigned long nbytes = nbytes_;
@@ -224,12 +236,12 @@ int zu_bzSeekForward(ZUFILE *f, unsigned long nbytes_)
   int nb;
   int bzerror = BZ_OK;
   while (bzerror == BZ_OK && nbytes >= ZU_BUFREADSIZE) {
-    nb = BZ2_bzRead(&bzerror, (BZFILE *)(f->zfile), buf, ZU_BUFREADSIZE);
+    nb = BZ2_bzRead(&bzerror, (BZFILE*)(f->zfile), buf, ZU_BUFREADSIZE);
     nbytes -= nb;
     nbread += nb;
   }
   if (bzerror == BZ_OK && nbytes > 0) {
-    nb = BZ2_bzRead(&bzerror, (BZFILE *)(f->zfile), buf, nbytes);
+    nb = BZ2_bzRead(&bzerror, (BZFILE*)(f->zfile), buf, nbytes);
     nbread += nb;
   }
   f->pos += nbread;
@@ -238,4 +250,4 @@ int zu_bzSeekForward(ZUFILE *f, unsigned long nbytes_)
 }
 
 //-----------------------------------------------------------------
-void zu_rewind(ZUFILE *f) { zu_seek(f, 0, SEEK_SET); }
+void zu_rewind(ZUFILE* f) { zu_seek(f, 0, SEEK_SET); }

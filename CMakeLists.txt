@@ -369,6 +369,9 @@ endif()
 if(BUILD_TESTING AND TARGET environmental_grib_xtd_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_xtd_tests)
 endif()
+if(BUILD_TESTING AND TARGET environmental_grib_merge_tests)
+  add_dependencies(${PACKAGE_NAME} environmental_grib_merge_tests)
+endif()
 
 if(UNIX AND NOT APPLE)
   set_target_properties(environmental-grib PROPERTIES
@@ -409,11 +412,29 @@ if(UNIX AND NOT APPLE)
     install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/BundleGeneratorRuntime.cmake")
   endif()
 elseif(WIN32)
-  install(TARGETS environmental-grib RUNTIME DESTINATION
-          "plugins/${PACKAGE_NAME}/bin")
+  if(BUNDLE_GENERATOR_RUNTIME AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.21)
+    install(TARGETS environmental-grib
+      RUNTIME_DEPENDENCIES
+        DIRECTORIES
+          "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin"
+          "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/debug/bin"
+        PRE_EXCLUDE_REGEXES
+          "api-ms-.*" "ext-ms-.*"
+        POST_EXCLUDE_REGEXES
+          ".*[\\/]Windows[\\/]System32[\\/].*"
+      RUNTIME DESTINATION "plugins/${PACKAGE_NAME}/bin")
+  else()
+    install(TARGETS environmental-grib RUNTIME DESTINATION
+            "plugins/${PACKAGE_NAME}/bin")
+  endif()
 elseif(APPLE)
   install(TARGETS environmental-grib RUNTIME DESTINATION
           "OpenCPN.app/Contents/SharedSupport/plugins/${PACKAGE_NAME}/bin")
+  if(BUNDLE_GENERATOR_RUNTIME)
+    configure_file(cmake/BundleMacGeneratorRuntime.cmake.in
+      "${CMAKE_CURRENT_BINARY_DIR}/BundleMacGeneratorRuntime.cmake" @ONLY)
+    install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/BundleMacGeneratorRuntime.cmake")
+  endif()
 endif()
 
 # ==============================================================
@@ -478,6 +499,7 @@ if (NOT OCPN_FLATPAK_CONFIG)
     add_test(NAME xgrib_selected_file_path_contract
       COMMAND ${CMAKE_COMMAND}
         -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/src/GribUIDialog.cpp
+        -DENVIRONMENTAL_DIALOG_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/EnvironmentalGribDialog.cpp
         -DPOTFILES_FILE=${CMAKE_CURRENT_SOURCE_DIR}/po/POTFILES.in
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/SelectedFilePathContract.cmake)
 
@@ -505,6 +527,14 @@ if (NOT OCPN_FLATPAK_CONFIG)
       COMMAND xgrib_reader_integration_tests ${XGRIB_TEST_GRIB})
     set_tests_properties(xgrib_reader_integration_tests PROPERTIES
       FIXTURES_REQUIRED xgrib_reader_fixture)
+
+    set(XGRIB_COMBINED_TEST_GRIB
+      "${CMAKE_BINARY_DIR}/functional-fixtures/combined-known.grb2")
+    add_test(NAME xgrib_combined_reader_integration_tests
+      COMMAND xgrib_reader_integration_tests ${XGRIB_COMBINED_TEST_GRIB}
+        --combined)
+    set_tests_properties(xgrib_combined_reader_integration_tests PROPERTIES
+      FIXTURES_REQUIRED environmental_grib_combined_fixture)
   endif()
 
 endif (NOT OCPN_FLATPAK_CONFIG)

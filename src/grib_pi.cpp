@@ -47,15 +47,15 @@ double g_ContentScaleFactor;
 
 // the class factories, used to create and destroy instances of the PlugIn
 
-extern "C" DECL_EXP opencpn_plugin *create_pi(void *ppimgr) {
+extern "C" DECL_EXP opencpn_plugin* create_pi(void* ppimgr) {
   return new grib_pi(ppimgr);
 }
 
-extern "C" DECL_EXP void destroy_pi(opencpn_plugin *p) { delete p; }
+extern "C" DECL_EXP void destroy_pi(opencpn_plugin* p) { delete p; }
 
 extern int m_DialogStyle;
 
-grib_pi *g_pi;
+grib_pi* g_pi;
 bool g_bpause;
 
 //---------------------------------------------------------------------------------------------------------
@@ -74,7 +74,7 @@ bool g_bpause;
 //
 //---------------------------------------------------------------------------------------------------------
 
-grib_pi::grib_pi(void *ppimgr) : opencpn_plugin_116(ppimgr) {
+grib_pi::grib_pi(void* ppimgr) : opencpn_plugin_116(ppimgr) {
   // Create the PlugIn icons
   initialize_images();
 
@@ -144,10 +144,22 @@ int grib_pi::Init(void) {
   const wxString shareLocn = GetXgribDataDirectory();
   // Initialize catalog file
   wxString local_grib_catalog = "sources.json";
-  wxString data_path = *GetpPrivateApplicationDataLocation() +
-                       wxFileName::GetPathSeparator() + "xgrib_pi";
+  wxString data_path;
+  wxString smokeTestPrivateData;
+  wxString smokeTestEnabled;
+  const bool useSmokeTestPrivateData =
+      wxGetEnv("XGRIB_TEST_OPEN_GENERATOR", &smokeTestEnabled) &&
+      smokeTestEnabled == "1" &&
+      wxGetEnv("XGRIB_TEST_PRIVATE_DATA_DIR", &smokeTestPrivateData) &&
+      !smokeTestPrivateData.empty();
+  if (useSmokeTestPrivateData) {
+    data_path = smokeTestPrivateData;
+  } else {
+    data_path = *GetpPrivateApplicationDataLocation() +
+                wxFileName::GetPathSeparator() + "xgrib_pi";
+  }
   if (!wxDirExists(data_path)) {
-    wxMkdir(data_path);
+    wxFileName::Mkdir(data_path, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
   }
   m_local_sources_catalog =
       data_path + wxFileName::GetPathSeparator() + local_grib_catalog;
@@ -172,17 +184,17 @@ int grib_pi::Init(void) {
 
   wxString smokeTestFile;
   wxString smokeTestGenerator;
-  const bool openSmokeFile =
-      wxGetEnv("XGRIB_TEST_OPEN_FILE", &smokeTestFile) &&
-      wxFileExists(smokeTestFile);
+  const bool openSmokeFile = wxGetEnv("XGRIB_TEST_OPEN_FILE", &smokeTestFile) &&
+                             wxFileExists(smokeTestFile);
   const bool openSmokeGenerator =
       wxGetEnv("XGRIB_TEST_OPEN_GENERATOR", &smokeTestGenerator) &&
       smokeTestGenerator == "1";
   if (openSmokeFile || openSmokeGenerator) {
-    wxTheApp->CallAfter(
-        [this, smokeTestFile, openSmokeFile, openSmokeGenerator]() {
+    wxTheApp->CallAfter([this, smokeTestFile, openSmokeFile,
+                         openSmokeGenerator]() {
       if (m_bBundledGribConflict) {
-        wxLogWarning("xGRIB smoke test skipped because bundled GRIB is enabled");
+        wxLogWarning(
+            "xGRIB smoke test skipped because bundled GRIB is enabled");
         return;
       }
       OnToolbarToolCallback(m_leftclick_tool_id);
@@ -227,7 +239,7 @@ int grib_pi::GetPlugInVersionMajor() { return PLUGIN_VERSION_MAJOR; }
 
 int grib_pi::GetPlugInVersionMinor() { return PLUGIN_VERSION_MINOR; }
 
-wxBitmap *grib_pi::GetPlugInBitmap() { return &m_panelBitmap; }
+wxBitmap* grib_pi::GetPlugInBitmap() { return &m_panelBitmap; }
 
 wxString grib_pi::GetCommonName() { return "xGRIB"; }
 
@@ -258,14 +270,14 @@ void grib_pi::SetDefaults(void) {}
 
 int grib_pi::GetToolBarToolCount(void) { return 1; }
 
-bool grib_pi::MouseEventHook(wxMouseEvent &event) {
+bool grib_pi::MouseEventHook(wxMouseEvent& event) {
   if ((m_pGribCtrlBar && m_pGribCtrlBar->pReq_Dialog))
     return m_pGribCtrlBar->pReq_Dialog->MouseEventHook(event);
   return false;
 }
 
-void grib_pi::ShowPreferencesDialog(wxWindow *parent) {
-  GribPreferencesDialog *Pref = new GribPreferencesDialog(parent);
+void grib_pi::ShowPreferencesDialog(wxWindow* parent) {
+  GribPreferencesDialog* Pref = new GribPreferencesDialog(parent);
 
   DimeWindow(Pref);     // aplly global colours scheme
   SetDialogFont(Pref);  // Apply global font
@@ -280,7 +292,7 @@ void grib_pi::ShowPreferencesDialog(wxWindow *parent) {
   Pref->m_rbStartOptions->SetSelection(m_bStartOptions);
 
   if (Pref->m_textDirectory) {  // not present on Android
-    wxFileConfig *pConf = GetOCPNConfigObject();
+    wxFileConfig* pConf = GetOCPNConfigObject();
     if (pConf) {
       wxString l_grib_dir;
       pConf->SetPath(_T ( "/Directories" ));
@@ -327,7 +339,7 @@ void grib_pi::ShowPreferencesDialog(wxWindow *parent) {
 #endif
 }
 
-void grib_pi::UpdatePrefs(GribPreferencesDialog *Pref) {
+void grib_pi::UpdatePrefs(GribPreferencesDialog* Pref) {
   m_bGRIBUseHiDef = Pref->m_cbUseHiDef->GetValue();
   m_bGRIBUseGradualColors = Pref->m_cbUseGradualColors->GetValue();
   m_bLoadLastOpenFile = Pref->m_rbLoadOptions->GetSelection();
@@ -389,7 +401,7 @@ void grib_pi::UpdatePrefs(GribPreferencesDialog *Pref) {
   }
 
   if (Pref->m_grib_dir_sel.Length()) {
-    wxFileConfig *pConf = GetOCPNConfigObject();
+    wxFileConfig* pConf = GetOCPNConfigObject();
     if (pConf) {
       pConf->SetPath(_T ( "/Directories" ));
       pConf->Write(_T ( "xGRIBDirectory" ), Pref->m_grib_dir_sel);
@@ -433,11 +445,11 @@ bool grib_pi::QualifyCtrlBarPosition(
   return !b_reset_pos;
 }
 
-void grib_pi::MoveDialog(wxDialog *dialog, wxPoint position) {
+void grib_pi::MoveDialog(wxDialog* dialog, wxPoint position) {
   //  Use the application frame to bound the control bar position.
-  wxApp *app = wxTheApp;
+  wxApp* app = wxTheApp;
 
-  wxWindow *frame =
+  wxWindow* frame =
       app->GetTopWindow();  // or GetOCPNCanvasWindow()->GetParent();
   if (!frame) return;
 
@@ -494,8 +506,8 @@ void grib_pi::OnToolbarToolCallback(int id) {
                                        this, scale_factor);
     m_pGribCtrlBar->SetScaledBitmap(scale_factor);
 
-    wxMenu *dummy = new wxMenu("Plugin");
-    wxMenuItem *table =
+    wxMenu* dummy = new wxMenu("Plugin");
+    wxMenuItem* table =
         new wxMenuItem(dummy, wxID_ANY, wxString(_("Weather table")),
                        wxEmptyString, wxITEM_NORMAL);
     /* Menu font do not work properly for MSW (wxWidgets 3.2.1)
@@ -550,7 +562,7 @@ void grib_pi::OnToolbarToolCallback(int id) {
     if (id >= 0) m_pGribCtrlBar->Show();
     if (m_pGribCtrlBar->m_bGRIBActiveFile) {
       if (m_pGribCtrlBar->m_bGRIBActiveFile->IsOK()) {
-        ArrayOfGribRecordSets *rsa =
+        ArrayOfGribRecordSets* rsa =
             m_pGribCtrlBar->m_bGRIBActiveFile->GetRecordSetArrayPtr();
         if (rsa->GetCount() > 1) {
           SetCanvasContextMenuItemViz(m_MenuItem, true);
@@ -600,9 +612,9 @@ void grib_pi::OnGribCtrlBarClose() {
   }
 }
 
-bool grib_pi::RenderOverlay(wxDC &dc, PlugIn_ViewPort *vp) { return false; }
+bool grib_pi::RenderOverlay(wxDC& dc, PlugIn_ViewPort* vp) { return false; }
 
-bool grib_pi::DoRenderOverlay(wxDC &dc, PlugIn_ViewPort *vp, int canvasIndex) {
+bool grib_pi::DoRenderOverlay(wxDC& dc, PlugIn_ViewPort* vp, int canvasIndex) {
   if (!m_pGribCtrlBar || !m_pGribCtrlBar->IsShown() || !m_pGRIBOverlayFactory)
     return false;
 
@@ -623,11 +635,11 @@ bool grib_pi::DoRenderOverlay(wxDC &dc, PlugIn_ViewPort *vp, int canvasIndex) {
   return true;
 }
 
-bool grib_pi::RenderGLOverlay(wxGLContext *pcontext, PlugIn_ViewPort *vp) {
+bool grib_pi::RenderGLOverlay(wxGLContext* pcontext, PlugIn_ViewPort* vp) {
   return false;
 }
 
-bool grib_pi::DoRenderGLOverlay(wxGLContext *pcontext, PlugIn_ViewPort *vp,
+bool grib_pi::DoRenderGLOverlay(wxGLContext* pcontext, PlugIn_ViewPort* vp,
                                 int canvasIndex) {
   if (!m_pGribCtrlBar || !m_pGribCtrlBar->IsShown() || !m_pGRIBOverlayFactory)
     return false;
@@ -655,12 +667,12 @@ bool grib_pi::DoRenderGLOverlay(wxGLContext *pcontext, PlugIn_ViewPort *vp,
   return true;
 }
 
-bool grib_pi::RenderGLOverlayMultiCanvas(wxGLContext *pcontext,
-                                         PlugIn_ViewPort *vp, int canvasIndex) {
+bool grib_pi::RenderGLOverlayMultiCanvas(wxGLContext* pcontext,
+                                         PlugIn_ViewPort* vp, int canvasIndex) {
   return DoRenderGLOverlay(pcontext, vp, canvasIndex);
 }
 
-bool grib_pi::RenderOverlayMultiCanvas(wxDC &dc, PlugIn_ViewPort *vp,
+bool grib_pi::RenderOverlayMultiCanvas(wxDC& dc, PlugIn_ViewPort* vp,
                                        int canvasIndex) {
   return DoRenderOverlay(dc, vp, canvasIndex);
 }
@@ -675,12 +687,12 @@ void grib_pi::OnContextMenuItemCallback(int id) {
   m_pGribCtrlBar->ContextMenuItemCallback(id);
 }
 
-void grib_pi::SetDialogFont(wxWindow *dialog, wxFont *font) {
+void grib_pi::SetDialogFont(wxWindow* dialog, wxFont* font) {
   dialog->SetFont(*font);
   wxWindowList list = dialog->GetChildren();
-  wxWindowListNode *node = list.GetFirst();
+  wxWindowListNode* node = list.GetFirst();
   for (size_t i = 0; i < list.GetCount(); i++) {
-    wxWindow *win = node->GetData();
+    wxWindow* win = node->GetData();
     win->SetFont(*font);
     node = node->GetNext();
   }
@@ -688,7 +700,7 @@ void grib_pi::SetDialogFont(wxWindow *dialog, wxFont *font) {
   dialog->Refresh();
 }
 
-void grib_pi::SetPluginMessage(wxString &message_id, wxString &message_body) {
+void grib_pi::SetPluginMessage(wxString& message_id, wxString& message_body) {
   if (message_id == "GRIB_VALUES_REQUEST") {
     if (!m_pGribCtrlBar) OnToolbarToolCallback(-1);
 
@@ -782,7 +794,7 @@ void grib_pi::SetPluginMessage(wxString &message_id, wxString &message_body) {
 
     if (!m_pGribCtrlBar) OnToolbarToolCallback(-1);
 
-    GribTimelineRecordSet *set =
+    GribTimelineRecordSet* set =
         m_pGribCtrlBar ? m_pGribCtrlBar->GetTimeLineRecordSet(time) : nullptr;
 
     char ptr[64];
@@ -814,7 +826,7 @@ void grib_pi::SetPluginMessage(wxString &message_id, wxString &message_body) {
 }
 
 bool grib_pi::LoadConfig(void) {
-  wxFileConfig *pConf = (wxFileConfig *)m_pconfig;
+  wxFileConfig* pConf = (wxFileConfig*)m_pconfig;
 
   if (!pConf) return false;
 
@@ -824,8 +836,8 @@ bool grib_pi::LoadConfig(void) {
   pConf->Read(_T( "GRIBUseHiDef" ), &m_bGRIBUseHiDef, 0);
   pConf->Read(_T( "GRIBUseGradualColors" ), &m_bGRIBUseGradualColors, 0);
   pConf->Read(_T( "DrawBarbedArrowHead" ), &m_bDrawBarbedArrowHead, 1);
-  pConf->Read(_T("ZoomToCenterAtInitExplicit"),
-              &m_bZoomToCenterAtInitExplicit, false);
+  pConf->Read(_T("ZoomToCenterAtInitExplicit"), &m_bZoomToCenterAtInitExplicit,
+              false);
   if (m_bZoomToCenterAtInitExplicit)
     pConf->Read(_T("ZoomToCenterAtInit"), &m_bZoomToCenterAtInit, false);
   else {
@@ -859,7 +871,7 @@ bool grib_pi::LoadConfig(void) {
 }
 
 bool grib_pi::SaveConfig(void) {
-  wxFileConfig *pConf = (wxFileConfig *)m_pconfig;
+  wxFileConfig* pConf = (wxFileConfig*)m_pconfig;
 
   if (!pConf) return false;
 
@@ -874,8 +886,7 @@ bool grib_pi::SaveConfig(void) {
   pConf->Write(_T ( "CopyMissingWaveRecord" ), m_bCopyMissWaveRec);
   pConf->Write(_T ( "DrawBarbedArrowHead" ), m_bDrawBarbedArrowHead);
   pConf->Write(_T("ZoomToCenterAtInit"), m_bZoomToCenterAtInit);
-  pConf->Write(_T("ZoomToCenterAtInitExplicit"),
-               m_bZoomToCenterAtInitExplicit);
+  pConf->Write(_T("ZoomToCenterAtInitExplicit"), m_bZoomToCenterAtInitExplicit);
 #ifdef __WXMSW__
   pConf->Write("GribIconsScaleFactor", m_GribIconsScaleFactor);
 #endif
@@ -925,7 +936,7 @@ void grib_pi::SendTimelineMessage(wxDateTime time) {
   SendPluginMessage(wxString("GRIB_TIMELINE"), out);
 }
 
-void grib_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix) {
+void grib_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex& pfix) {
   m_boat_cog = pfix.Cog;
   m_boat_sog = pfix.Sog;
   m_boat_lat = pfix.Lat;
@@ -940,7 +951,7 @@ void grib_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix) {
 //----------------------------------------------------------------------------------------------------------
 //          Prefrence dialog Implementation
 //----------------------------------------------------------------------------------------------------------
-void GribPreferencesDialog::OnStartOptionChange(wxCommandEvent &event) {
+void GribPreferencesDialog::OnStartOptionChange(wxCommandEvent& event) {
   if (m_rbStartOptions->GetSelection() == 2) {
     OCPNMessageBox_PlugIn(
         this,
@@ -951,7 +962,7 @@ void GribPreferencesDialog::OnStartOptionChange(wxCommandEvent &event) {
   }
 }
 
-void GribPreferencesDialog::OnOKClick(wxCommandEvent &event) {
+void GribPreferencesDialog::OnOKClick(wxCommandEvent& event) {
   if (g_pi) g_pi->UpdatePrefs(this);
   Close();
 }

@@ -1,0 +1,14 @@
+include(BundleUtilities)
+
+set(_helper
+  "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/OpenCPN.app/Contents/SharedSupport/plugins/@PACKAGE_NAME@/bin/environmental-grib")
+if(NOT EXISTS "${_helper}")
+  message(FATAL_ERROR "Installed Environmental GRIB helper not found: ${_helper}")
+endif()
+
+set(_configured_prefixes "@CMAKE_PREFIX_PATH@")
+set(_search_dirs "/opt/homebrew/lib" "/usr/local/lib")
+foreach(_prefix IN LISTS _configured_prefixes)
+  list(APPEND _search_dirs "${_prefix}/lib")
+endforeach()
+fixup_bundle("${_helper}" "" "${_search_dirs}")

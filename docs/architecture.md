@@ -65,6 +65,9 @@ errors stay visible in the dialog and do not replace a currently open GRIB.
 
 ## Platform scope
 
-The first catalogue target is Linux x86_64/GTK3. Windows and macOS require
-native dependency builds, private-runtime packaging, signing and catalogue CI
-validation before release assets are published.
+The validation matrix covers native Linux x86_64 and ARM64, Flatpak x86_64 and
+aarch64, genuine Windows x86_64, and genuine Apple-Silicon macOS. Platform
+build success is not treated as runtime success: each target manifest records
+packaging, installation, OpenCPN discovery/load, graphical inspection and
+merge/reopen results separately. Intel macOS and physical Raspberry Pi runtime
+checks remain distinct follow-up targets rather than inferred compatibility.

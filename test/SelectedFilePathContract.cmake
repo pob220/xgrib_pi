@@ -13,6 +13,29 @@ if(NOT source MATCHES "title.Append\\(fn.GetFullPath\\(\\)\\);")
     "Loaded GRIB title must retain the selected file's full path")
 endif()
 
+file(READ "${ENVIRONMENTAL_DIALOG_SOURCE}" environmental_dialog_source)
+foreach(path_control IN ITEMS m_existingWeatherPath m_existingCurrentPath)
+  if(NOT environmental_dialog_source MATCHES
+      "${path_control}->ChangeValue\\(")
+    message(FATAL_ERROR
+      "Environmental GRIB selections must immediately display the full path in ${path_control}")
+  endif()
+endforeach()
+
+foreach(picker_control IN ITEMS m_existingWeatherFile m_existingCurrentFile)
+  if(NOT environmental_dialog_source MATCHES
+      "${picker_control}->GetPath\\(\\)")
+    message(FATAL_ERROR
+      "Environmental GRIB path displays must use the accepted ${picker_control} path")
+  endif()
+endforeach()
+
+if(NOT environmental_dialog_source MATCHES
+    "wxEVT_FILEPICKER_CHANGED[^;]*OnExistingGribFileChanged")
+  message(FATAL_ERROR
+    "Environmental GRIB path displays must be updated by file-picker events")
+endif()
+
 file(STRINGS "${POTFILES_FILE}" potfiles_lines)
 list(FIND potfiles_lines "src/XyGribPanel.cpp" xygrib_panel_index)
 if(xygrib_panel_index EQUAL -1)

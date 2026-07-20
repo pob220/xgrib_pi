@@ -85,31 +85,32 @@ Release candidates, in priority order, are:
 
 Only a row which completes its clean container build, all tests, staged-helper
 test and archive test should be enabled for upload. A real Pi test is still
-required before publishing ARM metadata. Add Windows and macOS only after
-their helper runtime bundles pass the same protocol and generation tests.
-CircleCI builds the Bookworm x86_64/arm64, Jammy x86_64, Trixie x86_64 and
-Flatpak x86_64/aarch64 candidates, but `run_workflow_deploy` defaults to false.
-Set it true only for an intentional release after the checks above pass and
-the Cloudsmith repositories have been provisioned.
+required before publishing ARM metadata. Windows x86_64 and native
+Apple-Silicon macOS now have genuine hosted build, test and package jobs; they
+are publishable only when retained manifests support the claimed validation.
+CircleCI builds Bookworm x86_64/arm64, Jammy x86_64, Noble x86_64, Trixie
+x86_64, Flatpak x86_64/aarch64, Windows x86_64 and macOS arm64.
+`run_workflow_deploy` defaults to false and the separate deployment workflow
+still stops at a manual approval gate. See `docs/alpha-validation.md`.
 
-### Verification snapshot (19 July 2026)
+### Verification snapshot (20 July 2026)
 
-The current tree completed clean builds, all seven CTest tests, staged-helper
+The current tree completed clean builds, all ten CTest tests, staged-helper
 execution and extracted-archive execution for these locally tested candidates:
 
 | Candidate | Archive | ABI observation |
 | --- | ---: | --- |
 | Debian 12 x86_64 | 45 MiB | plugin and helper require at most GLIBC 2.35 |
-| Debian 12 arm64 | 45 MiB | emulated ARM64 ELF; at most GLIBC 2.35 |
 | Ubuntu 22.04 x86_64 wx3.2 | 35 MiB | at most GLIBC 2.35; ecCodes 2.24 compatibility path |
+| Ubuntu 24.04 x86_64 | 36 MiB | clean Noble container |
 | Debian 13 x86_64 | 36 MiB | at most GLIBC 2.38 |
 | Flatpak 25.08 x86_64 | 20 MiB | built against the stable OpenCPN Flatpak runtime |
 
-The ARM64 result is a package-level test under binfmt/QEMU, not a substitute
-for loading the plugin in OpenCPN on a physical Raspberry Pi. Flatpak aarch64
-uses the same pinned manifest and has a native ARM CircleCI job, but was not
-built on this x86_64 laptop. Debian armhf remains a later candidate rather than
-an asserted supported target.
+The laptop has no registered ARM binfmt handler, so ARM64 is intentionally
+left to CircleCI's native ARM executor rather than mislabelled emulation.
+Flatpak aarch64 uses the same pinned manifest and has a native ARM CircleCI
+job, but was not built on this x86_64 laptop. Debian armhf remains a later
+candidate rather than an asserted supported target.
 
 ## Raspberry Pi release-candidate test
 

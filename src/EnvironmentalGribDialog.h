@@ -20,6 +20,7 @@ public:
   ~EnvironmentalGribDialog() override;
   void SetCurrentViewPort(const PlugIn_ViewPort& vp);
   void PrepareForParentShutdown();
+  void RunConfiguredSmokeTest();
 
 private:
   void OnCheckDependencies(wxCommandEvent& event);
@@ -28,6 +29,7 @@ private:
   void OnGenerate(wxCommandEvent& event);
   void OnBrowseOutput(wxCommandEvent& event);
   void OnOutputFilenameChanged(wxCommandEvent& event);
+  void OnExistingGribFileChanged(wxFileDirPickerEvent& event);
   void OnOfflineTidalFileChanged(wxFileDirPickerEvent& event);
   void OnPresetChanged(wxCommandEvent& event);
   void OnProviderChanged(wxCommandEvent& event);
@@ -40,8 +42,10 @@ private:
   void AppendLog(const wxString& message);
   void DrainProcessOutput();
   void FlushProcessOutput();
-  void DrainStream(wxInputStream* stream, wxString* buffer, const wxString& prefix);
-  void StartCommand(const wxString& command, const wxString& password, bool generation);
+  void DrainStream(wxInputStream* stream, wxString* buffer,
+                   const wxString& prefix);
+  void StartCommand(const wxString& command, const wxString& password,
+                    bool generation);
   void FinishCommand(long exit_code, bool launched);
   bool ChildProcessStillExists() const;
   bool OutputFileLooksValidGrib(wxString* details = nullptr) const;
@@ -58,6 +62,8 @@ private:
   void UpdateProviderUi();
   void RefreshOutputFilenameDefault();
   void LoadSettings();
+  void ConfigureSmokeTestFromEnvironment();
+  void UpdateSelectedPathDisplays();
   void SaveSettings();
   void TryOpenGeneratedGrib();
   wxString BuildGenerateCommand();
@@ -96,10 +102,14 @@ private:
   wxChoice* m_waveProvider;
   wxStaticText* m_existingWeatherFileLabel;
   wxFilePickerCtrl* m_existingWeatherFile;
+  wxStaticText* m_existingWeatherPathLabel;
+  wxTextCtrl* m_existingWeatherPath;
   wxCheckBox* m_generateCurrents;
   wxChoice* m_currentSource;
   wxStaticText* m_existingCurrentFileLabel;
   wxFilePickerCtrl* m_existingCurrentFile;
+  wxStaticText* m_existingCurrentPathLabel;
+  wxTextCtrl* m_existingCurrentPath;
   wxStaticText* m_offlineTidalFileLabel;
   wxFilePickerCtrl* m_offlineTidalFile;
   wxStaticText* m_offlineTidalStatusLabel;
@@ -158,4 +168,5 @@ private:
   bool m_updatingOutputFilename{false};
   bool m_offlineTidalPackageValid{false};
   bool m_offlineClimatologyAvailable{false};
+  bool m_smokeTestConfigured{false};
 };

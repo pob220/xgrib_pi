@@ -18,6 +18,11 @@ if (OCPN_FLATPAK_CONFIG)
   if (NOT TAR)
     message(FATAL_ERROR "${CMLOC}tar not found, required for OCPN_FLATPAK")
   endif ()
+  find_program(FLATPAK_BUILDER NAMES flatpak-builder)
+  if (NOT FLATPAK_BUILDER)
+    message(FATAL_ERROR
+      "${CMLOC}flatpak-builder not found, required for OCPN_FLATPAK")
+  endif ()
   add_custom_target(
     flatpak-build ALL
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/flatpak
@@ -25,7 +30,7 @@ if (OCPN_FLATPAK_CONFIG)
       cat
       ${CMAKE_CURRENT_BINARY_DIR}/flatpak/org.opencpn.OpenCPN.Plugin.${PACKAGE}.yaml
     COMMAND
-      /usr/bin/flatpak-builder --force-clean -v ${CMAKE_CURRENT_BINARY_DIR}/app
+      ${FLATPAK_BUILDER} --force-clean -v ${CMAKE_CURRENT_BINARY_DIR}/app
       ${CMAKE_CURRENT_BINARY_DIR}/flatpak/org.opencpn.OpenCPN.Plugin.${PACKAGE}.yaml
   )
   add_custom_target("flatpak-pkg")

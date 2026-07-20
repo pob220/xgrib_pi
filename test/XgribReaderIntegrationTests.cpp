@@ -38,6 +38,12 @@ void Expect(bool condition, const char* message) {
   std::exit(1);
 }
 
+double NormalizeLongitude(double value) {
+  double normalized = std::fmod(value + 180.0, 360.0);
+  if (normalized < 0.0) normalized += 360.0;
+  return normalized - 180.0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -54,9 +60,8 @@ int main(int argc, char** argv) {
   InterpolationFixtureRecord fineU(0.1, 2.0), fineV(0.1, 0.0);
   InterpolationFixtureRecord coarseU(1.0, 4.0), coarseV(1.0, 0.0);
   GribRecord* interpolatedV = nullptr;
-  std::unique_ptr<GribRecord> interpolatedU(
-      GribRecord::Interpolated2DRecord(interpolatedV, fineU, fineV, coarseU,
-                                       coarseV, 0.5));
+  std::unique_ptr<GribRecord> interpolatedU(GribRecord::Interpolated2DRecord(
+      interpolatedV, fineU, fineV, coarseU, coarseV, 0.5));
   std::unique_ptr<GribRecord> interpolatedVOwner(interpolatedV);
   Expect(interpolatedU && interpolatedVOwner,
          "mixed-resolution vector interpolation should succeed");
@@ -78,15 +83,61 @@ int main(int argc, char** argv) {
          "misaligned-grid sampling should preserve the temporal blend");
 
   Expect(argc == 2 || argc == 3,
-         "usage: xgrib_reader_integration_tests FILE.grb [--any]");
+         "usage: xgrib_reader_integration_tests FILE.grb "
+         "[--any|--combined]");
 
   GribReader reader(wxString::FromUTF8(argv[1]));
   Expect(reader.isOk(), "xGRIB reader rejected native generator output");
-  if (argc == 3) {
-    Expect(std::string(argv[2]) == "--any", "unknown reader test option");
+  const std::string mode = argc == 3 ? argv[2] : "";
+  if (mode == "--any") {
     Expect(reader.getTotalNumberOfGribRecords() > 0,
            "generated GRIB should contain at least one recognized record");
     std::cout << "xGRIB reader accepted generated output\n";
+    return 0;
+  }
+  Expect(mode.empty() || mode == "--combined", "unknown reader test option");
+
+  if (mode == "--combined") {
+    Expect(reader.getTotalNumberOfGribRecords() == 10,
+           "combined fixture should contain ten recognized records");
+    Expect(reader.getNumberOfDates() == 3,
+           "combined fixture should expose the three-time union");
+    int windU = 0, windV = 0, currentU = 0, currentV = 0;
+    GribRecord* firstWindU = nullptr;
+    GribRecord* firstCurrentU = nullptr;
+    for (const auto& [key, records] : *reader.getGribMap()) {
+      (void)key;
+      if (!records) continue;
+      for (GribRecord* record : *records) {
+        if (record->getDataType() == GRB_WIND_VX) {
+          ++windU;
+          if (!firstWindU) firstWindU = record;
+        } else if (record->getDataType() == GRB_WIND_VY) {
+          ++windV;
+        } else if (record->getDataType() == GRB_UOGRD) {
+          ++currentU;
+          if (!firstCurrentU) firstCurrentU = record;
+        } else if (record->getDataType() == GRB_VOGRD) {
+          ++currentV;
+        }
+      }
+    }
+    Expect(windU == 2 && windV == 2,
+           "combined fixture should retain both wind components");
+    Expect(currentU == 3 && currentV == 3,
+           "combined fixture should retain both current components");
+    Expect(firstWindU && firstCurrentU,
+           "combined fixture fields should be accessible");
+    Expect(firstWindU->getNi() == 3 && firstWindU->getNj() == 2 &&
+               firstCurrentU->getNi() == 3 && firstCurrentU->getNj() == 2,
+           "combined fixture grids should retain their expected shape");
+    Expect(NormalizeLongitude(firstWindU->getLonMin()) >= -6.3001 &&
+               NormalizeLongitude(firstWindU->getLonMax()) <= -6.0999 &&
+               firstWindU->getLatMin() >= 52.9999 &&
+               firstWindU->getLatMax() <= 53.1001,
+           "xGRIB production reader should retain the expected extent");
+    std::cout << "xGRIB reader accepted and classified combined wind/current "
+                 "output\n";
     return 0;
   }
   Expect(reader.getTotalNumberOfGribRecords() == 6,

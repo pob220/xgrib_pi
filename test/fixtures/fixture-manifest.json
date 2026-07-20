@@ -1,0 +1,22 @@
+{
+  "fixtures" : 
+  {
+    "combined" : "combined-known.grb2",
+    "corrupt" : "corrupt.grb",
+    "current_differing" : "current-differing.grb",
+    "current_matching" : "current-matching.grb",
+    "wind" : "wind-known.grb2"
+  },
+  "generated_by" : "environmental_grib_merge_tests",
+  "grid" : 
+  {
+    "east" : -6.0999999999999996,
+    "north" : 53.100000000000001,
+    "nx" : 3,
+    "ny" : 2,
+    "south" : 53.0,
+    "west" : -6.2999999999999998
+  },
+  "reference_time" : "2026-07-12T00:00:00Z",
+  "schema" : "xgrib-deterministic-fixtures-v1"
+}

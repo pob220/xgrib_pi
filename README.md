@@ -107,7 +107,9 @@ Linux catalogue packages include a private helper runtime and ecCodes/PROJ
 data. They do not alter OpenCPN's process-wide library search path.
 
 See [the architecture note](docs/architecture.md) and
-[catalogue release procedure](docs/catalogue-release.md).
+[catalogue release procedure](docs/catalogue-release.md). The repeatable local,
+container, hosted-platform and evidence workflow is documented in
+[Alpha validation](docs/alpha-validation.md).
 
 Generated model data is for planning and experimentation. It is not an
 official navigation product and does not replace notices to mariners,
