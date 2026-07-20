@@ -175,6 +175,7 @@ if (-not (Get-Command msgfmt -ErrorAction SilentlyContinue) -or
 $generatorInstalled = Join-Path $vcpkg "installed\$generatorTriplet"
 $pluginInstalled = Join-Path $vcpkg "installed\$pluginTriplet"
 $env:PATH = "$(Join-Path $generatorInstalled 'bin');$(Join-Path $pluginInstalled 'bin');$env:PATH"
+$env:PROJ_DATA = Join-Path $generatorInstalled "share\proj"
 
 $wxVersion = "3.2.8"
 $wxRoot = Join-Path $repo "cache\wxWidgets-$wxVersion"
@@ -305,7 +306,28 @@ $testChecksums | Set-Content -Encoding ascii `
 Invoke-NativeLogged `
     { cmake --install $build --config Release --prefix $stage } `
     (Join-Path $logDir "install.log") "Staged installation"
+$pluginBinary = Join-Path $stage "plugins\xgrib_pi.dll"
 $packagedHelper = Join-Path $stage "plugins\xgrib_pi\bin\environmental-grib.exe"
+$pluginHeaders = & dumpbin.exe /headers $pluginBinary 2>&1
+Assert-NativeSuccess "Inspecting xGRIB plugin architecture"
+$pluginHeaders | Set-Content -Encoding utf8 `
+    (Join-Path $logDir "plugin-headers.log")
+$helperHeaders = & dumpbin.exe /headers $packagedHelper 2>&1
+Assert-NativeSuccess "Inspecting environmental helper architecture"
+$helperHeaders | Set-Content -Encoding utf8 `
+    (Join-Path $logDir "helper-headers.log")
+if (-not ($pluginHeaders -match "14C machine \(x86\)")) {
+    throw "Packaged xGRIB plugin is not an x86 PE binary"
+}
+if (-not ($helperHeaders -match "8664 machine \(x64\)")) {
+    throw "Packaged environmental helper is not an x64 PE binary"
+}
+& dumpbin.exe /dependents $pluginBinary 2>&1 | Set-Content -Encoding utf8 `
+    (Join-Path $logDir "plugin-dependencies.log")
+Assert-NativeSuccess "Inspecting xGRIB plugin dependencies"
+& dumpbin.exe /dependents $packagedHelper 2>&1 | Set-Content -Encoding utf8 `
+    (Join-Path $logDir "helper-dependencies.log")
+Assert-NativeSuccess "Inspecting environmental helper dependencies"
 & $packagedHelper capabilities | Set-Content -Encoding utf8 `
     (Join-Path $testDir "packaged-helper-capabilities.json")
 Assert-NativeSuccess "Packaged helper execution"
@@ -336,12 +358,22 @@ $packageChecksums = foreach ($file in @($archive, $metadata)) {
 $packageChecksums | Set-Content -Encoding ascii `
     (Join-Path $packageDir "checksums.txt")
 
+Invoke-NativeLogged {
+    powershell.exe -ExecutionPolicy Bypass -File `
+        (Join-Path $repo "ci\test-windows-opencpn-runtime.ps1") `
+        -Repository $repo -PackageArchive $packagedArchive `
+        -ArtifactDirectory $artifact
+} (Join-Path $logDir "opencpn-runtime-test.log") `
+    "OpenCPN Windows runtime test"
+$runtimeResult = Get-Content `
+    (Join-Path $testDir "windows-opencpn-runtime.json") -Raw | ConvertFrom-Json
+
 $result = [ordered]@{
     schema = "xgrib-target-result-v1"
     target = "windows-x86"
     xgrib_repository_commit = (git rev-parse HEAD)
     xgrib_version = "0.1.0.1"
-    opencpn_version = "not installed by build job"
+    opencpn_version = $runtimeResult.opencpn_version
     operating_system = "Windows Server 2022"
     operating_system_version = [Environment]::OSVersion.VersionString
     architecture = "x86"
@@ -356,24 +388,30 @@ $result = [ordered]@{
         proj = (Get-VcpkgVersion "proj" $generatorTriplet)
     }
     build_status = "passed"; test_status = "passed"; package_status = "passed"
-    metadata_validation_status = "passed"; installation_status = "not-run"
-    plugin_discovery_status = "not-run"; plugin_load_status = "not-run"
-    graphical_test_status = "not-run"; file_path_display_status = "contract-tested"
+    metadata_validation_status = "passed"; installation_status = "passed"
+    plugin_discovery_status = "passed"; plugin_load_status = "passed"
+    graphical_test_status = "passed"; file_path_display_status = "passed"
     merge_status = "passed"; output_validation_status = "passed"
-    screenshot_paths = @(); log_paths = @(
+    screenshot_paths = $runtimeResult.screenshots; log_paths = @(
         "logs/chocolatey-build-tools.log", "logs/chocolatey-gettext.log",
         "logs/vcpkg.log", "logs/dependencies.log",
         "logs/configure-generator-x64.log",
         "logs/build-generator-x64.log", "logs/test-generator-x64.log",
         "logs/install-generator-x64.log",
         "logs/configure.log", "logs/build.log", "logs/test.log",
-        "logs/install.log", "logs/package.log", "tests/ctest.xml",
+        "logs/install.log", "logs/plugin-headers.log",
+        "logs/helper-headers.log", "logs/plugin-dependencies.log",
+        "logs/helper-dependencies.log", "logs/package.log",
+        "logs/opencpn-runtime-test.log", "logs/opencpn.log",
+        "tests/ctest.xml", "tests/helper-launch.json",
+        "tests/windows-opencpn-runtime.json",
+        "tests/runtime-combined-inspection.json",
         "tests/generator-x64-ctest.xml",
         "tests/checksums.txt")
     package_filename = $archive.Name; package_checksum_sha256 = $checksum
     elapsed_time_seconds = $null
-    result_classification = "build-and-package-only"
-    blocker_or_failure_details = "Genuine Windows build and functional tests ran; OpenCPN GUI runtime was not installed by this build job"
+    result_classification = "fully-tested"
+    blocker_or_failure_details = ""
 }
 $result | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $artifact "result.json")
 $environment = [ordered]@{

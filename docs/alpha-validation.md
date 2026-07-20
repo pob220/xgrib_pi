@@ -35,6 +35,8 @@ generator is already isolated from OpenCPN behind a process boundary, Windows
 CI builds the in-process plugin and viewer for x86 and the generator plus its
 scientific dependencies for x86_64. The package carries both native ABIs and
 the dialog launches the 64-bit helper with its private ecCodes and PROJ data.
+It also carries the small x86 vcpkg DLL set required by the in-process plugin,
+so plugin loading does not depend on an incidental DLL in the host install.
 No unsupported dependency build or cross-ABI in-process linking is used.
 
 ## Local Arch build and functional test
@@ -99,6 +101,16 @@ one target using its job rerun control. Rerun the complete matrix by triggering
 a pipeline with `run_workflow_deploy=false` (the default). Add a platform by
 extending the parameterized `linux-catalogue` or `flatpak` job, or by adding a
 genuine native executor job with the same artifact/result contract.
+
+The branch `windows-focused-validation` is deliberately excluded from the
+normal matrix and runs only the cached dependency job followed by `windows-x86`.
+Use it for bounded Windows-only diagnosis without rebuilding already validated
+Linux, ARM, Flatpak or macOS targets. The Windows job installs the generated
+archive into an isolated portable OpenCPN 5.14.0 installation, keeps bundled
+GRIB disabled in that disposable profile, opens xGRIB through its normal smoke
+hooks, invokes the GUI Generate button using Windows UI Automation, observes
+the native helper process start, validates and reopens the output, and retains
+the OpenCPN log, process record and screenshots.
 
 This public repository must remain on CircleCI's Free plan. Do not add payment
 details or automatic credit refills. Check **Plan > Plan Usage** before broad

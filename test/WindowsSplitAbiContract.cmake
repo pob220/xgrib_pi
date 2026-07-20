@@ -6,7 +6,9 @@ set(cmake_patterns
   "XGRIB_EXTERNAL_GENERATOR_DIR"
   "add_executable\\(environmental-grib IMPORTED GLOBAL\\)"
   "IMPORTED_LOCATION \"\\$\\{XGRIB_EXTERNAL_GENERATOR\\}\""
-  "install\\(DIRECTORY \"\\$\\{XGRIB_EXTERNAL_GENERATOR_DIR\\}/bin/\"")
+  "install\\(DIRECTORY \"\\$\\{XGRIB_EXTERNAL_GENERATOR_DIR\\}/bin/\""
+  "\\$\\{VCPKG_INSTALLED_DIR\\}/\\$\\{VCPKG_TARGET_TRIPLET\\}/bin/"
+  "FILES_MATCHING PATTERN \"\\*\\.dll\"")
 foreach(pattern IN LISTS cmake_patterns)
   if(NOT cmake_source MATCHES "${pattern}")
     message(FATAL_ERROR "Windows split-ABI CMake contract is missing: ${pattern}")
@@ -25,6 +27,18 @@ foreach(pattern IN LISTS script_patterns)
     message(FATAL_ERROR "Windows split-ABI CI contract is missing: ${pattern}")
   endif()
 endforeach()
+
+string(FIND "${windows_script}"
+  "$env:PROJ_DATA = Join-Path $generatorInstalled \"share\\proj\""
+  proj_data_position)
+string(FIND "${windows_script}"
+  "ctest --test-dir $generatorBuild"
+  generator_ctest_position)
+if(proj_data_position EQUAL -1 OR generator_ctest_position EQUAL -1 OR
+   NOT proj_data_position LESS generator_ctest_position)
+  message(FATAL_ERROR
+    "Windows generator CTest must receive PROJ_DATA before it starts")
+endif()
 
 set(dialog_patterns
   "environmental-grib\\.exe"

@@ -459,6 +459,14 @@ elseif(WIN32)
     install(TARGETS environmental-grib RUNTIME DESTINATION
             "plugins/${PACKAGE_NAME}/bin")
   endif()
+  if(BUNDLE_GENERATOR_RUNTIME AND
+     IS_DIRECTORY
+       "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
+    install(DIRECTORY
+      "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/"
+      DESTINATION "plugins"
+      FILES_MATCHING PATTERN "*.dll")
+  endif()
 elseif(APPLE)
   install(TARGETS environmental-grib RUNTIME DESTINATION
           "OpenCPN.app/Contents/SharedSupport/plugins/${PACKAGE_NAME}/bin")
@@ -553,6 +561,12 @@ if (NOT OCPN_FLATPAK_CONFIG)
         -DWINDOWS_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/ci/circleci-build-windows.ps1
         -DDIALOG_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/EnvironmentalGribDialog.cpp
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/WindowsSplitAbiContract.cmake)
+
+    add_test(NAME xgrib_windows_runtime_contract
+      COMMAND ${CMAKE_COMMAND}
+        -DRUNTIME_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/ci/test-windows-opencpn-runtime.ps1
+        -DCIRCLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/.circleci/config.yml
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/WindowsRuntimeContract.cmake)
 
     add_executable(xgrib_reader_integration_tests
       test/XgribReaderIntegrationTests.cpp

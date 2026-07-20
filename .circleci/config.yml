@@ -172,7 +172,7 @@ workflows:
           build_env: debian
           filters: &std-filters
             branches:
-              ignore: [devel, tmp]
+              ignore: [devel, tmp, windows-focused-validation]
             tags:
               only: /.*/
       - linux-catalogue:
@@ -217,6 +217,20 @@ workflows:
           filters: *std-filters
       - macos-arm64:
           filters: *std-filters
+
+  windows-focused:
+    when:
+      not: << pipeline.parameters.run_workflow_deploy >>
+    jobs:
+      - windows-vcpkg-dependencies:
+          filters: &windows-focused-filters
+            branches:
+              only: windows-focused-validation
+            tags:
+              ignore: /.*/
+      - windows-x86:
+          requires: [windows-vcpkg-dependencies]
+          filters: *windows-focused-filters
 
   deploy_reviewed_alpha:
     when: << pipeline.parameters.run_workflow_deploy >>
