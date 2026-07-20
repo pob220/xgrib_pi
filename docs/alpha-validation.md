@@ -104,7 +104,9 @@ the executor image does not provide vcpkg. A checksum-keyed CircleCI cache
 retains only vcpkg's reusable binary packages, reducing later Windows compute
 without caching mutable source or credentials. Initial installs use bounded
 resume-safe retries for transient upstream archive rate limits, retaining every
-attempt log. The macOS job smoke-tests
+attempt log. The pinned `libaec` vcpkg overlay uses DKRZ's official GitHub
+release archive because its GitLab archive endpoint rate-limits CircleCI's
+Windows executor; the archive is locked by SHA-512. The macOS job smoke-tests
 Homebrew's `msgfmt` against the real Traditional Chinese catalogue and rebuilds
 gettext from its formula source only if the installed Apple-Silicon bottle
 crashes. Flatpak manifests use the canonical public repository and pin the

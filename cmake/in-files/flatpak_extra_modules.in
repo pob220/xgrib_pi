@@ -33,6 +33,7 @@
     config-opts:
       - -DCMAKE_INSTALL_PREFIX=/app/extensions/xgrib_pi
       - -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      - -DCMAKE_C_STANDARD=17
       - -DBUILD_SHARED=ON
       - -DBUILD_STATIC=OFF
       - -DBUILD_TESTS=OFF

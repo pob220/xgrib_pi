@@ -49,11 +49,12 @@ $vcpkgPackages = Get-Content (Join-Path $repo "ci\windows-vcpkg-deps.txt") |
     ForEach-Object { $_.Trim() }
 $env:VCPKG_DEFAULT_BINARY_CACHE = Join-Path $repo "cache\vcpkg-binary"
 New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+$overlayPorts = Join-Path $repo "ci\vcpkg-overlay-ports"
 $vcpkgExit = 1
 $retryDelays = @(30,45,60)
 for ($attempt = 1; $attempt -le 4; $attempt++) {
     & (Join-Path $vcpkg "vcpkg.exe") install --triplet $triplet `
-        @vcpkgPackages 2>&1 | Tee-Object -FilePath `
+        "--overlay-ports=$overlayPorts" @vcpkgPackages 2>&1 | Tee-Object -FilePath `
         (Join-Path $logDir "vcpkg-attempt-$attempt.log")
     $vcpkgExit = $LASTEXITCODE
     if ($vcpkgExit -eq 0) { break }
