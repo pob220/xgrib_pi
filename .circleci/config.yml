@@ -85,13 +85,13 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - windows-vcpkg-2026-06-24-v1-{{ checksum "ci/windows-vcpkg-deps.txt" }}
+            - windows-vcpkg-2026-06-24-release-v2-{{ checksum "ci/windows-vcpkg-deps.txt" }}
       - run:
           name: Native Windows build, tests and package
           command: .\ci\circleci-build-windows.ps1
           no_output_timeout: 45m
       - save_cache:
-          key: windows-vcpkg-2026-06-24-v1-{{ checksum "ci/windows-vcpkg-deps.txt" }}
+          key: windows-vcpkg-2026-06-24-release-v2-{{ checksum "ci/windows-vcpkg-deps.txt" }}
           paths:
             - cache/vcpkg-binary
       - store_test_results:

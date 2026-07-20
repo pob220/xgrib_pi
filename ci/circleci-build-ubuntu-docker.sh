@@ -16,6 +16,7 @@ dockerfile=${DOCKERFILE:-ci/Dockerfile.linux}
 test -f "$dockerfile"
 
 mkdir -p build
+source_commit=$(git rev-parse HEAD)
 docker build --build-arg "BASE_IMAGE=${DOCKER_IMAGE}" \
   -f "$dockerfile" -t xgrib-linux-build ci
 docker run --rm \
@@ -24,6 +25,7 @@ docker run --rm \
   -e "WX_VER=${WX_VER:-32}" \
   -e "BUILD_GTK3=${BUILD_GTK3:-true}" \
   -e "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL:-3}" \
+  -e "XGRIB_SOURCE_COMMIT=${source_commit}" \
   -v "${PWD}:/src:ro" \
   -v "${PWD}/build:/work" \
   xgrib-linux-build \

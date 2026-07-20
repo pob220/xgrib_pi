@@ -102,7 +102,10 @@ to make the workflow green.
 The Windows job bootstraps the pinned official vcpkg `2026.06.24` checkout if
 the executor image does not provide vcpkg. A checksum-keyed CircleCI cache
 retains only vcpkg's reusable binary packages, reducing later Windows compute
-without caching mutable source or credentials. Initial installs use bounded
+without caching mutable source or credentials. The custom Windows triplet
+builds Release dependencies only: the Release-only xGRIB validation never uses
+vcpkg's Debug libraries, and omitting them keeps a clean job within the free
+executor's one-hour limit. Initial installs use bounded
 resume-safe retries for transient upstream archive rate limits, retaining every
 attempt log. The pinned `libaec` vcpkg overlay uses DKRZ's official GitHub
 release archive because its GitLab archive endpoint rate-limits CircleCI's

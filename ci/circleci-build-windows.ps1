@@ -23,7 +23,7 @@ Copy-Item (Join-Path $repo "test\fixtures\*") $fixtureDir
 git submodule update --init --recursive
 Assert-NativeSuccess "git submodule update"
 
-$triplet = "x64-windows"
+$triplet = "x64-windows-release"
 $vcpkg = $env:VCPKG_ROOT
 if (-not $vcpkg) { $vcpkg = "C:\vcpkg" }
 if (-not (Test-Path (Join-Path $vcpkg "vcpkg.exe"))) {
@@ -50,11 +50,13 @@ $vcpkgPackages = Get-Content (Join-Path $repo "ci\windows-vcpkg-deps.txt") |
 $env:VCPKG_DEFAULT_BINARY_CACHE = Join-Path $repo "cache\vcpkg-binary"
 New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
 $overlayPorts = Join-Path $repo "ci\vcpkg-overlay-ports"
+$overlayTriplets = Join-Path $repo "ci\vcpkg-triplets"
 $vcpkgExit = 1
 $retryDelays = @(30,45,60)
 for ($attempt = 1; $attempt -le 4; $attempt++) {
     & (Join-Path $vcpkg "vcpkg.exe") install --triplet $triplet `
-        "--overlay-ports=$overlayPorts" @vcpkgPackages 2>&1 | Tee-Object -FilePath `
+        "--overlay-ports=$overlayPorts" `
+        "--overlay-triplets=$overlayTriplets" @vcpkgPackages 2>&1 | Tee-Object -FilePath `
         (Join-Path $logDir "vcpkg-attempt-$attempt.log")
     $vcpkgExit = $LASTEXITCODE
     if ($vcpkgExit -eq 0) { break }
@@ -112,6 +114,7 @@ $wxLib = Join-Path $wxRoot "lib\vc14x_x64_dll"
 cmake -S $repo -B $build -G "Visual Studio 17 2022" -A x64 `
     "-DCMAKE_TOOLCHAIN_FILE=$toolchain" `
     "-DVCPKG_TARGET_TRIPLET=$triplet" `
+    "-DVCPKG_OVERLAY_TRIPLETS=$overlayTriplets" `
     "-DwxWidgets_ROOT_DIR=$wxRoot" `
     "-DwxWidgets_LIB_DIR=$wxLib" `
     -DCMAKE_BUILD_TYPE=Release `
