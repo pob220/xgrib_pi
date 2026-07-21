@@ -120,6 +120,9 @@ one target using its job rerun control. Rerun the complete matrix by triggering
 a pipeline with `run_workflow_deploy=false` (the default). Add a platform by
 extending the parameterized `linux-catalogue` or `flatpak` job, or by adding a
 genuine native executor job with the same artifact/result contract.
+Release-tag pushes do not rerun the validation matrix. Publication uses the
+separate parameter-gated deployment workflow after the release commit has
+already passed validation.
 
 The branch `windows-focused-validation` is deliberately excluded from the
 normal matrix. It runs `windows-x86` followed by the separate

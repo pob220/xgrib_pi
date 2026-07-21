@@ -249,7 +249,7 @@ workflows:
             branches:
               ignore: [devel, tmp, windows-focused-validation]
             tags:
-              only: /.*/
+              ignore: /.*/
       - linux-catalogue:
           name: debian12-x86_64
           target: bookworm
