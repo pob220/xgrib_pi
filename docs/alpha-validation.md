@@ -103,14 +103,18 @@ extending the parameterized `linux-catalogue` or `flatpak` job, or by adding a
 genuine native executor job with the same artifact/result contract.
 
 The branch `windows-focused-validation` is deliberately excluded from the
-normal matrix and runs only the cached dependency job followed by `windows-x86`.
-Use it for bounded Windows-only diagnosis without rebuilding already validated
-Linux, ARM, Flatpak or macOS targets. The Windows job installs the generated
-archive into an isolated portable OpenCPN 5.14.0 installation, keeps bundled
-GRIB disabled in that disposable profile, opens xGRIB through its normal smoke
-hooks, invokes the GUI Generate button using Windows UI Automation, observes
-the native helper process start, validates and reopens the output, and retains
-the OpenCPN log, process record and screenshots.
+normal matrix. It runs `windows-x86` followed by the separate
+`windows-opencpn-runtime` job, using the checksum-keyed dependency cache. Use
+it for bounded Windows-only diagnosis without rebuilding already validated
+Linux, ARM, Flatpak or macOS targets. The build job retains a
+`build-and-package-only` result and passes the package through a CircleCI
+workspace. The runtime job extracts the checksum-pinned official OpenCPN
+5.14.0 NSIS release into a disposable directory without UAC or registry
+writes, installs xGRIB into that copy, keeps bundled GRIB disabled, opens the
+dialog through its normal smoke hooks, invokes the GUI Generate button using
+Windows UI Automation, observes or logs the native helper PID, validates and
+reopens the output, and retains the OpenCPN log, process record and screenshots.
+Only the runtime job can upgrade the target result to `fully-tested`.
 
 This public repository must remain on CircleCI's Free plan. Do not add payment
 details or automatic credit refills. Check **Plan > Plan Usage** before broad
@@ -143,6 +147,55 @@ Homebrew's `msgfmt` against the real Traditional Chinese catalogue and rebuilds
 gettext from its formula source only if the installed Apple-Silicon bottle
 crashes. Flatpak manifests use the canonical public repository and pin the
 exact CircleCI commit instead of a moving branch.
+
+## Change-safety rules
+
+Keep these invariants when changing or updating source, dependencies or CI:
+
+- The OpenCPN Windows plugin is x86 and the environmental helper is x86_64.
+  Never link ecCodes or another 64-bit library into `xgrib_pi.dll`; communicate
+  with the helper only through the existing job/result/process boundary.
+- MSVC plugin targets must compile with `MAKING_PLUGIN` so OpenCPN API symbols
+  are imported from the host. Keep the architecture and dependency `dumpbin`
+  checks; resolve Visual Studio tools using `vswhere`, not an assumed `PATH`.
+- Treat file paths as Unicode end to end. Keep the UTF-8 Windows manifest on
+  the helper and generator tests, use native/wide file APIs at OS boundaries,
+  and retain fixture coverage for spaces and non-ASCII characters.
+- Close GRIB/NetCDF readers before deleting or replacing their files. POSIX
+  permits deleting an open file but Windows normally does not; deferred
+  cleanup must remain covered by the Windows generator tests.
+- Every standalone executable which constructs wxWidgets configuration or UI
+  objects must initialize wxWidgets explicitly. Test executables also need the
+  matching wx runtime directory on `PATH`; the package itself must obtain its
+  DLLs from its declared runtime layout, not the developer machine.
+- Preserve forward slashes in gettext source lists such as `po/POTFILES.in`.
+  Exercise selected-path updates through the production file-picker handlers,
+  and keep the readonly visible-path contract test.
+- Visual Studio is a multi-configuration generator. Configure once but always
+  build, test and install using `--config Release`; do not infer failure from
+  `CMAKE_BUILD_TYPE` output alone.
+- Jasper checks for GCC/Clang sanitizers, Unix headers, `ssize_t` and optional
+  C features during MSVC configuration. A reported probe failure is benign
+  when the subsequent fallback configuration and build succeed. Compiler or
+  linker errors, CTest failures and missing package/runtime files are not.
+- Parse every nested PowerShell script before expensive work. Pin downloaded
+  archives by checksum, retain attempt logs, use bounded retry only for known
+  transient failures, and do not add unused package-manager dependencies.
+- A Windows-only CI/runtime change uses the focused branch first. A shared C++
+  source, CMake, dependency, packaging or metadata change requires the full
+  Linux, ARM, Flatpak, Windows and macOS validation matrix after the focused
+  defect is resolved. Documentation-only changes do not justify hosted reruns.
+- Automated GUI work must use disposable OpenCPN data and profile directories.
+  Never point CI or smoke hooks at the daily OpenCPN 5.15 profile.
+- On Windows, invoke wx controls through the UI Automation pattern they expose.
+  Do not call `SetFocus()` unless `IsKeyboardFocusable` is true; the xGRIB
+  Generate button supports `InvokePattern` but rejects keyboard focus on the
+  CircleCI desktop.
+
+Before pushing any source change, run `git diff --check`, a clean configure,
+the complete local CTest suite and the deterministic merge/reopen verifier.
+Do not remove a contract because a platform fails; fix the portability or
+runtime assumption and retain the failure evidence.
 
 ## Results and classifications
 

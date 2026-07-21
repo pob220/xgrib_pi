@@ -30,6 +30,15 @@ foreach(pattern IN LISTS runtime_patterns)
   endif()
 endforeach()
 
+# wxButton exposes InvokePattern on the CircleCI Windows desktop but reports
+# that it cannot receive keyboard focus.  Calling SetFocus on the Generate
+# button aborts the runtime test before the supported Invoke action runs.
+string(FIND "${runtime_script}" "$generateButton.SetFocus()" generate_focus_call)
+if(NOT generate_focus_call EQUAL -1)
+  message(FATAL_ERROR
+    "Windows runtime must invoke the Generate button without SetFocus")
+endif()
+
 set(runtime_job_patterns
   "windows-opencpn-runtime\.json"
   "opencpn-runtime-test\.log"

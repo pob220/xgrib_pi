@@ -253,17 +253,19 @@ try {
     if ($null -eq $generateButton -or -not $generateButton.Current.IsEnabled) {
         throw "The xGRIB Generate Complete GRIB button is not enabled"
     }
-    $generateButton.SetFocus()
+    # UI Automation's InvokePattern does not require keyboard focus.  In the
+    # CircleCI interactive session wxButton advertises IsKeyboardFocusable as
+    # false, so SetFocus() raises before Invoke() can run.
     Invoke-Element $generateButton "xGRIB Generate Complete GRIB button"
 
     if (-not (Wait-FileContains $opencpnLog `
             "xGRIB environmental generator launched, pid=" 5)) {
-        # Some wxMSW controls expose InvokePattern but do not dispatch it on
-        # the first synthetic invocation while focus is changing. A focused
-        # Space key is the native keyboard equivalent and is only attempted
-        # when the production launch log proves the first action did nothing.
-        $generateButton.SetFocus()
-        [System.Windows.Forms.SendKeys]::SendWait(" ")
+        # Retry the control's supported default action once.  Keep this
+        # focus-free: keyboard-focus APIs are not valid for this wxMSW button
+        # on the CircleCI desktop.  The production PID log below prevents a
+        # retry after a successful first invocation.
+        Invoke-Element $generateButton `
+            "xGRIB Generate Complete GRIB button retry"
     }
 
     $helperDeadline = [DateTime]::UtcNow.AddSeconds(30)
@@ -371,6 +373,15 @@ try {
         }
         if ($opencpnProcess.WaitForExit(12000)) { $cleanShutdown = $true }
     }
+}
+catch {
+    try {
+        Save-Screenshot (Join-Path $screenshotDirectory "99-runtime-failure.png")
+    }
+    catch {
+        Write-Warning "Could not capture runtime failure screenshot"
+    }
+    throw
 }
 finally {
     if ($null -ne $opencpnProcess -and -not $opencpnProcess.HasExited) {
