@@ -9,7 +9,7 @@ if [[ -z "${CLOUDSMITH_API_KEY:-}" ]]; then
   exit 2
 fi
 
-repo=${CLOUDSMITH_ALPHA_REPO:-opencpn/xgrib-alpha}
+repo=${CLOUDSMITH_ALPHA_REPO:-pob220/xgrib-alpha}
 artifact_root=${XGRIB_DEPLOY_ARTIFACT_ROOT:-artifacts}
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT HUP INT TERM

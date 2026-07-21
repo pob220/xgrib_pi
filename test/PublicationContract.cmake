@@ -18,6 +18,7 @@ endforeach()
 
 foreach(pattern IN ITEMS
     "XGRIB_DEPLOY_ARTIFACT_ROOT"
+    "pob220/xgrib-alpha"
     "plugin_version=.*<version>"
     "target_version=.*<target-version>"
     "package_name=.*plugin_version.*target.*target_version.*tarball"

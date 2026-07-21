@@ -103,10 +103,9 @@ set(ALPHA "alpha") # Standard Repos
 set(CLOUDSMITH_BASE_REPOSITORY "xgrib")
 set(PLUGIN_GIT_REPOSITORY "pob220/xgrib_pi")
 
-# Set the following to use OpenCPN cloudsmith repositories instead of own
-# repositories
-set(CLOUDSMITH_USER "opencpn")
-# set(CLOUDSMITH_USER "jon-gough")
+# Cloudsmith owner for the public xGRIB repositories.  This can later be
+# changed to "opencpn" if the repositories move into the OpenCPN workspace.
+set(CLOUDSMITH_USER "pob220")
 
 set(XML_INFO_URL "https://github.com/pob220/xgrib_pi")
 set(XML_SUMMARY ${SHORT_DESCRIPTION})

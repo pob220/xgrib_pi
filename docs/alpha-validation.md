@@ -268,7 +268,7 @@ deterministic merge, verified reopen, screenshots and clean logs.
 `run_workflow_deploy` defaults to `false`. When explicitly set to `true`, a
 separate workflow first rebuilds every target, then stops at the
 `hold-for-alpha-approval` manual approval job. Only `deploy-alpha` can access
-the restricted `xgrib-deployment` context and upload to `opencpn/xgrib-alpha`.
+the restricted `xgrib-deployment` context and upload to `pob220/xgrib-alpha`.
 Ordinary branch/tag builds cannot deploy.
 
 The later deployment context needs only:
