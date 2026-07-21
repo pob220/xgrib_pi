@@ -1492,8 +1492,9 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
                 "forecast and does not predict eddies, surge, storms, or "
                 "short-term anomalies.")
             : _("Current source: authenticated offline XTD package. "
-                "Astronomical tidal currents are generated locally; no network "
-                "access or TPXO model directory is used.");
+                "Astronomical tidal currents are generated locally from the "
+                "selected multi-source package; no network access or original "
+                "source dataset is required.");
   } else if (currentRtofs) {
     currentNote =
         "Current source: NOAA RTOFS Global ocean-current forecast. Global/no "

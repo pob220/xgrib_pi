@@ -4,9 +4,14 @@
 
 An XTD file is an xGRIB-specific, random-access package containing derived
 eastward and northward astronomical tidal-current velocity harmonics. Version
-1 is designed for the full nominal TPXO10 Atlas v2 1/30-degree C grid. It does
-not embed NetCDF files, source transport fields, bathymetry, tidal height, or
-unrelated model data.
+1 supports high-resolution global harmonic grids without tying the reader
+contract to a particular upstream provider. It does not embed original source
+files, transport fields, bathymetry, tidal height, or unrelated model data.
+
+The released global data is derived from a range of publicly available
+sources. Package publishers are responsible for documenting the source
+collection, processing, attribution and validation in the authenticated
+metadata accompanying a release.
 
 The format specification describes xGRIB's reader contract. It does not grant
 rights to distribute packages derived from third-party source models; package
@@ -69,13 +74,13 @@ contains:
 Version 1 encoding `1` applies a reversible two-dimensional modular delta
 predictor to each signed int16 component plane before compression. The
 predictor changes no coefficient bits; the reader restores the exact quantized
-values after decompression. The global Atlas-parity v1 package uses this
-16-bit encoding. Encoding `2` reserves a packed signed 12-bit delta mode for
+values after decompression. The global reference v1 package uses this 16-bit
+encoding. Encoding `2` reserves a packed signed 12-bit delta mode for
 smaller future packages whose precision requirements permit it. The encoding
 identifier and exact plaintext length must agree or the tile is rejected.
 
-Coefficients are velocities in centimetres per second. The source
-transport-to-velocity conversion has already been performed on the appropriate
+Coefficients are velocities in centimetres per second. Source-data
+normalization to velocity has already been performed on the appropriate
 staggered grid. Tile-local, component-local scaling retains substantially more
 precision than a global scale while supporting compact decoding.
 
@@ -98,11 +103,11 @@ origins. The reader performs bilinear interpolation independently on each
 staggered grid and requires all four interpolation corners to be valid. Missing
 or masked data remains missing; it is never converted to zero current.
 
-The resulting complex harmonics are passed to the same Atlas astronomical
-prediction implementation used by xGRIB's direct TPXO path. This includes UTC
-handling, astronomical arguments, nodal corrections, equilibrium arguments,
-phase convention, and optional supported minor-constituent inference. Output
-is converted to metres per second only when written as GRIB parameter 49/50.
+The resulting complex harmonics are passed to xGRIB's astronomical prediction
+implementation. This includes UTC handling, astronomical arguments, nodal
+corrections, equilibrium arguments, phase convention, and optional supported
+minor-constituent inference. Output is converted to metres per second only
+when written as GRIB parameter 49/50.
 
 ## Evolution
 

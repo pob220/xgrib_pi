@@ -62,7 +62,7 @@ Before publishing:
    provider data, and an unwritable output path all fail cleanly.
 9. Verify xGRIB refuses activation while bundled GRIB is enabled.
 10. Record third-party notices and source offers for bundled libraries.
-11. Where source-model licensing permits distribution, test Offline Tidal
+11. Where source-model licensing permits distribution, test Offline current
     against the separately supplied XTD package, verify its checksum, and
     confirm the package itself is not embedded in the plugin archive.
 
