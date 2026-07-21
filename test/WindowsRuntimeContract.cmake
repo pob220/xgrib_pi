@@ -21,6 +21,7 @@ set(runtime_patterns
   "xGRIB environmental generator launched, pid="
   "observation_source"
   "Get-DescendantNames"
+  "FromHandle"
   "The generated file was opened in xGRIB\\."
   "\\(Loading\\|Initializing\\) PlugIn:.*xgrib_pi"
   "xGRIB: opened generated GRIB:"

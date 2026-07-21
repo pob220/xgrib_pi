@@ -204,6 +204,12 @@ Keep these invariants when changing or updating source, dependencies or CI:
   flushed reopen record after clean OpenCPN shutdown.
 - Match OpenCPN plugin-load evidence semantically and against `xgrib_pi.dll`;
   supported 5.14 builds use both `Loading PlugIn` and `Initializing PlugIn`.
+- Retain OpenCPN's original native frame for automated shutdown. Once xGRIB
+  opens a top-level dialog, `Process.CloseMainWindow()` may target that plugin
+  dialog instead of the host frame and must be only a fallback.
+- Close every helper job/result file before deleting it. POSIX permits unlinking
+  an open file, but Windows reports sharing error 32 and leaves the temporary
+  file behind.
 
 Before pushing any source change, run `git diff --check`, a clean configure,
 the complete local CTest suite and the deterministic merge/reopen verifier.

@@ -244,6 +244,10 @@ try {
     if ($opencpnProcess.MainWindowHandle -eq 0) {
         throw "OpenCPN did not create a main window"
     }
+    # Retain the actual OpenCPN frame.  Process.CloseMainWindow() can resolve a
+    # plugin-owned top-level dialog after xGRIB opens the generator.
+    $openCpnMainWindow = [System.Windows.Automation.AutomationElement]::FromHandle(
+        [IntPtr]$opencpnProcess.MainWindowHandle)
     Save-Screenshot (Join-Path $screenshotDirectory "01-opencpn-running.png")
 
     $agree = Wait-ElementByName "Agree" 5
@@ -378,16 +382,20 @@ try {
     }
 
     Close-WindowElement $generatorWindow
-    [void]$opencpnProcess.CloseMainWindow()
-    if ($opencpnProcess.WaitForExit(3000)) {
+    Start-Sleep -Milliseconds 500
+    Close-WindowElement $openCpnMainWindow
+    if ($opencpnProcess.WaitForExit(20000)) {
         $cleanShutdown = $true
     }
     else {
+        # Fallback only after closing the retained frame by handle.
+        $opencpnProcess.Refresh()
+        [void]$opencpnProcess.CloseMainWindow()
         $confirmExit = Wait-ElementByName "Yes" 2
         if ($null -ne $confirmExit) {
             Invoke-Element $confirmExit "OpenCPN exit confirmation"
         }
-        if ($opencpnProcess.WaitForExit(12000)) { $cleanShutdown = $true }
+        if ($opencpnProcess.WaitForExit(20000)) { $cleanShutdown = $true }
     }
 }
 catch {

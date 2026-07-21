@@ -2016,6 +2016,9 @@ void EnvironmentalGribDialog::FinishCommand(long exit_code, bool launched) {
         }
       }
     }
+    // Windows does not allow removing an open file.  Close the result before
+    // cleaning up; POSIX previously masked this ordering bug.
+    if (resultFile.IsOpened()) resultFile.Close();
     wxRemoveFile(m_resultPath);
     m_resultPath.clear();
   }

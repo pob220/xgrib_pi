@@ -1,5 +1,13 @@
 file(READ "${SOURCE_FILE}" source)
 
+string(FIND "${source}" "resultFile.Close()" result_close)
+string(FIND "${source}" "wxRemoveFile(m_resultPath)" result_remove)
+if(result_close EQUAL -1 OR result_remove EQUAL -1 OR
+   result_close GREATER result_remove)
+  message(FATAL_ERROR
+    "Environmental GRIB result file must close before Windows cleanup")
+endif()
+
 set(required_patterns
   "m_processTimer\\(this\\)"
   "m_processTimer\\.Start\\(100\\)"
