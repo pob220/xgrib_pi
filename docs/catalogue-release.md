@@ -23,9 +23,12 @@ scripts/test-catalogue-archive.sh build
 ```
 
 For a clean consolidated run use `scripts/validate-before-push.sh`. Package
-tools require exactly one archive and its same-basename XML metadata unless an
-archive is supplied explicitly; this prevents a stale build product being
-tested, catalogued or uploaded accidentally.
+tools require exactly one archive and one unambiguous same-version XML metadata
+file unless an archive is supplied explicitly. A same-basename XML is
+preferred, while the distinct target-oriented XML name produced by Frontend2
+for Flatpak is also accepted when it is the only same-version metadata file.
+This prevents a stale build product being tested, catalogued or uploaded
+accidentally.
 
 Run `git diff --check` and verify the generated archive contains the plugin
 library, launcher, native helper, runtime libraries, ecCodes definitions and

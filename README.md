@@ -121,7 +121,7 @@ scripts/validate-before-push.sh
 It checks the recorded submodules and portable gettext paths, configures from a
 clean directory, builds, runs CTest, performs the deterministic merge and
 production-reader reopen, stages the helper, packages xGRIB and validates the
-exact matching archive/metadata pair. On Windows use
+unique archive/metadata pair. On Windows use
 `ci\validate-before-push-windows.ps1`; `-ChecksOnly` performs just the fast
 syntax, repository and preset checks.
 

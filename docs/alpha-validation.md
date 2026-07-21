@@ -208,10 +208,12 @@ Keep these invariants when changing or updating source, dependencies or CI:
 - Parse every nested PowerShell script before expensive work. Pin downloaded
   archives by checksum, retain attempt logs, use bounded retry only for known
   transient failures, and do not add unused package-manager dependencies.
-- Resolve a package archive and its metadata as one basename-matched pair.
-  Clean jobs must produce exactly one archive; a local directory containing
-  stale archives must fail unless the intended archive is passed explicitly.
-  Never use `find ... -print -quit` to choose a release or deployment input.
+- Resolve a package archive and its metadata as one unambiguous pair. Prefer a
+  same-basename XML, but permit Frontend2's distinct Flatpak metadata filename
+  only when it is the sole same-version `xgrib_pi-*.xml` candidate. Clean jobs
+  must produce exactly one archive; a local directory containing stale
+  archives must fail unless the intended archive is passed explicitly. Never
+  use `find ... -print -quit` to choose a release or deployment input.
 - Keep CircleCI JUnit ingestion separate from retained package metadata. Only
   `ctest.xml` and `*-ctest.xml` belong in `test-results`; the complete artifact
   tree still belongs in CircleCI artifact storage.

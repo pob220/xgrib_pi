@@ -50,9 +50,28 @@ case $archive in
 esac
 
 metadata=${archive%.tar.gz}.xml
-test -f "$metadata" || {
-  echo "Matching package metadata does not exist: $metadata" >&2
-  exit 1
-}
+if [ ! -f "$metadata" ]; then
+  # Frontend2 normally uses the archive basename for metadata, but Flatpak
+  # deliberately uses a different target-oriented XML filename.  A clean
+  # package directory still contains exactly one XML for the same release, so
+  # accept that deterministic pairing while rejecting stale/ambiguous XML.
+  archive_name=${archive##*/}
+  version=$(printf '%s\n' "$archive_name" |
+    sed -n 's/^xgrib_pi-\([0-9][0-9.]*\)-.*\.tar\.gz$/\1/p')
+  test -n "$version" || {
+    echo "Cannot determine xGRIB version from package archive: $archive" >&2
+    exit 1
+  }
+  set -- "$build_dir"/xgrib_pi-"$version"-*.xml
+  if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+    echo "No unique package metadata exists for: $archive" >&2
+    echo "Expected a same-basename XML or exactly one same-version XML in $build_dir." >&2
+    find "$build_dir" -maxdepth 1 -type f \
+      -name "xgrib_pi-$version-*.xml" \
+      -print >&2
+    exit 1
+  fi
+  metadata=$1
+fi
 
 printf '%s\n%s\n' "$archive" "$metadata"
