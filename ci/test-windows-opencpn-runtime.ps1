@@ -15,6 +15,16 @@ Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class XgribNativeWindow {
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PostMessage(
+        IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+}
+"@
 
 function Save-Screenshot([string] $path) {
     $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
@@ -246,8 +256,7 @@ try {
     }
     # Retain the actual OpenCPN frame.  Process.CloseMainWindow() can resolve a
     # plugin-owned top-level dialog after xGRIB opens the generator.
-    $openCpnMainWindow = [System.Windows.Automation.AutomationElement]::FromHandle(
-        [IntPtr]$opencpnProcess.MainWindowHandle)
+    $openCpnMainWindowHandle = [IntPtr]$opencpnProcess.MainWindowHandle
     Save-Screenshot (Join-Path $screenshotDirectory "01-opencpn-running.png")
 
     $agree = Wait-ElementByName "Agree" 5
@@ -383,7 +392,10 @@ try {
 
     Close-WindowElement $generatorWindow
     Start-Sleep -Milliseconds 500
-    Close-WindowElement $openCpnMainWindow
+    if (-not [XgribNativeWindow]::PostMessage(
+            $openCpnMainWindowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)) {
+        throw "Could not post WM_CLOSE to the retained OpenCPN frame"
+    }
     if ($opencpnProcess.WaitForExit(20000)) {
         $cleanShutdown = $true
     }
