@@ -600,6 +600,7 @@ if (NOT OCPN_FLATPAK_CONFIG)
         -DPLUGIN_SETUP=${CMAKE_CURRENT_SOURCE_DIR}/cmake/PluginSetup.cmake
         -DFLATPAK_ARCHIVE_TEST=${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-flatpak-archive.sh
         -DDEPLOY_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/ci/deploy-alpha-artifacts.sh
+        -DWINDOWS_BUILD_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/ci/circleci-build-windows.ps1
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/PublicationContract.cmake)
 
     if(UNIX)
