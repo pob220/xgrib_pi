@@ -17,7 +17,16 @@ case $(basename "$archive") in
     ;;
 esac
 grep -q '<name> xGRIB </name>' "$metadata"
-grep -q '<target>flatpak-' "$metadata"
+target=$(sed -n \
+  's:.*<target>[[:space:]]*\([^[:space:]<]*\)[[:space:]]*</target>.*:\1:p' \
+  "$metadata")
+case "$target" in
+  flatpak-x86_64|flatpak-aarch64) ;;
+  *)
+    echo "Invalid OpenCPN Flatpak catalogue target: $target" >&2
+    exit 1
+    ;;
+esac
 grep -q '<target-version>' "$metadata"
 grep -q '<source> https://github.com/pob220/xgrib_pi </source>' "$metadata"
 grep -q '<tarball-url>' "$metadata"

@@ -463,6 +463,11 @@ if (-not (Test-Path $metadataPath -PathType Leaf)) {
     throw "Matching Windows package metadata is missing: $metadataPath"
 }
 $metadata = Get-Item $metadataPath
+$metadataXml = [xml](Get-Content -Raw $metadata.FullName)
+$packageVersion = ([string]$metadataXml.plugin.version).Trim()
+if ($packageVersion -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+    throw "Invalid or missing package version in $($metadata.FullName)"
+}
 if (-not (Select-String -Quiet -Path $metadata.FullName -Pattern "<target>msvc")) {
     throw "Windows metadata target is invalid"
 }
@@ -489,7 +494,7 @@ $result = [ordered]@{
     schema = "xgrib-target-result-v1"
     target = "windows-x86"
     xgrib_repository_commit = (git rev-parse HEAD)
-    xgrib_version = "0.1.0.1"
+    xgrib_version = $packageVersion
     opencpn_version = "not-run"
     operating_system = "Windows Server 2022"
     operating_system_version = [Environment]::OSVersion.VersionString

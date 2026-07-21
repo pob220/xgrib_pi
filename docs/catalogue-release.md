@@ -109,7 +109,7 @@ still stops at a manual approval gate. See `docs/alpha-validation.md`.
 
 ### Verification snapshot (20 July 2026)
 
-The current tree completed clean builds, all twelve CTest tests, staged-helper
+The 0.1 release-candidate tree completed clean builds, all seventeen CTest tests, staged-helper
 execution and extracted-archive execution for these locally tested candidates:
 
 | Candidate | Archive | ABI observation |

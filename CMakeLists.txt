@@ -72,10 +72,10 @@ set(LONG_DESCRIPTION
 )
 
 set(VERSION_MAJOR "0")
-set(VERSION_MINOR "1")
+set(VERSION_MINOR "2")
 set(VERSION_PATCH "0")
-set(VERSION_TWEAK "1")
-set(VERSION_DATE "19/07/2026") # DD/MM/YYYY format
+set(VERSION_TWEAK "0")
+set(VERSION_DATE "21/07/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -594,6 +594,13 @@ if (NOT OCPN_FLATPAK_CONFIG)
         -DDIAGNOSTIC_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/ci/diagnose-windows-generator.ps1
         -DCIRCLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/.circleci/config.yml
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/WindowsRuntimeContract.cmake)
+
+    add_test(NAME xgrib_publication_contract
+      COMMAND ${CMAKE_COMMAND}
+        -DPLUGIN_SETUP=${CMAKE_CURRENT_SOURCE_DIR}/cmake/PluginSetup.cmake
+        -DFLATPAK_ARCHIVE_TEST=${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-flatpak-archive.sh
+        -DDEPLOY_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/ci/deploy-alpha-artifacts.sh
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/PublicationContract.cmake)
 
     if(UNIX)
       add_test(NAME xgrib_package_selection_tests

@@ -139,6 +139,13 @@ cp -f "$archive_source" "$metadata_source" "$package_dir/"
 (cd "$package_dir" && find . -maxdepth 1 -type f ! -name checksums.txt \
     -print0 | sort -z | xargs -0 sha256sum >checksums.txt)
 archive="$package_dir/$(basename "$archive_source")"
+package_version=$(sed -n \
+    's:.*<version>[[:space:]]*\([^[:space:]<]*\)[[:space:]]*</version>.*:\1:p' \
+    "$metadata_source")
+if [[ ! "$package_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Invalid or missing package version in $metadata_source" >&2
+    exit 1
+fi
 (cd "$artifact_dir" && sha256sum \
     fixtures/wind-known.grb2 \
     fixtures/current-matching.grb \
@@ -153,10 +160,11 @@ jq -n \
   --arg commit "$(git -C .. rev-parse HEAD)" \
   --arg target "flatpak${SDK_VER}-${BUILD_ARCH}" \
   --arg arch "$BUILD_ARCH" \
+  --arg version "$package_version" \
   --arg package "$(basename "$archive")" \
   --arg checksum "$(sha256sum "$archive" | awk '{print $1}')" \
   '{schema: "xgrib-target-result-v1", target: $target,
-    xgrib_repository_commit: $commit, xgrib_version: "0.1.0.1",
+    xgrib_repository_commit: $commit, xgrib_version: $version,
     opencpn_version: "Flatpak stable runtime; GUI not run in CI",
     operating_system: "Flatpak 25.08", operating_system_version: "25.08",
     architecture: $arch, compiler: "Freedesktop SDK toolchain",

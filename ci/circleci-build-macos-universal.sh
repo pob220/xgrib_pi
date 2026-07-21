@@ -80,6 +80,13 @@ cp -f "$archive_source" "$metadata_source" "$package_dir/"
   -print0 | xargs -0 shasum -a 256 >checksums.txt)
 archive="$package_dir/$(basename "$archive_source")"
 metadata="$package_dir/$(basename "$metadata_source")"
+package_version=$(sed -n \
+  's:.*<version>[[:space:]]*\([^[:space:]<]*\)[[:space:]]*</version>.*:\1:p' \
+  "$metadata")
+if [[ ! "$package_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Invalid or missing package version in $metadata" >&2
+  exit 1
+fi
 grep -q '<target>darwin-wx32</target>' "$metadata"
 grep -q '<source> https://github.com/pob220/xgrib_pi </source>' "$metadata"
 tar -tzf "$archive" >"$test_dir/archive-contents.txt"
@@ -96,10 +103,11 @@ jq -n \
   --arg netcdf "$(brew list --versions netcdf)" \
   --arg blosc "$(brew list --versions c-blosc)" \
   --arg proj "$(brew list --versions proj)" \
+  --arg version "$package_version" \
   --arg package "$(basename "$archive")" \
   --arg checksum "$(shasum -a 256 "$archive" | awk '{print $1}')" \
   '{schema: "xgrib-target-result-v1", target: "macos-arm64",
-    xgrib_repository_commit: $commit, xgrib_version: "0.1.0.1",
+    xgrib_repository_commit: $commit, xgrib_version: $version,
     opencpn_version: "not installed by build job", operating_system: "macOS",
     operating_system_version: $os, architecture: "arm64", compiler: $compiler,
     cmake_version: $cmake, wxwidgets_version: $wx,

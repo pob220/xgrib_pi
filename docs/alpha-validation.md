@@ -1,6 +1,6 @@
 # Alpha validation
 
-This is the reproducible, no-cost validation route for xGRIB 0.1.0.1. It keeps
+This is the reproducible, no-cost validation route for xGRIB 0.2.0.0. It keeps
 ordinary validation separate from publication. No Cloudsmith credential is
 needed to build or test any target.
 

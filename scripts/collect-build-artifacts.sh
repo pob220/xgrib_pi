@@ -23,6 +23,14 @@ if (( ${#package_pair[@]} != 2 )); then
 fi
 readonly archive_source="${package_pair[0]}"
 readonly metadata_source="${package_pair[1]}"
+package_version=$(sed -n \
+  's:.*<version>[[:space:]]*\([^[:space:]<]*\)[[:space:]]*</version>.*:\1:p' \
+  "$metadata_source")
+if [[ ! "$package_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Invalid or missing package version in $metadata_source" >&2
+  exit 1
+fi
+readonly package_version
 
 mkdir -p "$package_dir"
 find "$package_dir" -maxdepth 1 -type f \
@@ -57,7 +65,7 @@ fi
 jq -n \
   --arg schema "xgrib-target-result-v1" \
   --arg commit "$commit" \
-  --arg version "0.1.0.1" \
+  --arg version "$package_version" \
   --arg opencpn_version "package ABI ov511; runtime not run" \
   --arg os "$os_id" \
   --arg os_version "$os_version" \

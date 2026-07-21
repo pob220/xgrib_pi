@@ -102,11 +102,10 @@ if (OCPN_FLATPAK_CONFIG OR OCPN_FLATPAK_BUILD)
   set(PKG_TARGET "flatpak")
   set(PKG_TARGET_VERSION "${SDK_VER}") # As of flatpak/*yaml
   message(STATUS "${CMLOC}PKG_TARGET_VERSION: ${PKG_TARGET_VERSION}")
-  if (NOT "$ENV{WX_VER}" STREQUAL "")
-    set(PKG_TARGET_WX_VER "-$ENV{WX_VER}")
-  else ()
-    unset(PKG_TARGET_WX_VER)
-  endif ()
+  # OpenCPN's catalogue schema and Flatpak ABI use flatpak-<architecture>.
+  # wxWidgets is part of the pinned Flatpak runtime and must not be encoded as
+  # the legacy numeric suffix (for example flatpak-32-x86_64).
+  unset(PKG_TARGET_WX_VER)
   message(STATUS "${CMLOC}PKG_TARGET_WX_VER: ${PKG_TARGET_WX_VER}")
 elseif (MINGW)
   set(PKG_TARGET "mingw")
