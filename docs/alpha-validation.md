@@ -199,6 +199,9 @@ Keep these invariants when changing or updating source, dependencies or CI:
   Do not call `SetFocus()` unless `IsKeyboardFocusable` is true; the xGRIB
   Generate button supports `InvokePattern` but rejects keyboard focus on the
   CircleCI desktop.
+- Treat modal success UI as a synchronization boundary: inspect and close the
+  dialog before requiring newly emitted lines in `opencpn.log`, then verify the
+  flushed reopen record after clean OpenCPN shutdown.
 
 Before pushing any source change, run `git diff --check`, a clean configure,
 the complete local CTest suite and the deterministic merge/reopen verifier.

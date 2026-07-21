@@ -93,6 +93,23 @@ function Get-VisibleEditValues() {
     return $values
 }
 
+function Get-DescendantNames($element) {
+    if ($null -eq $element) { return @() }
+    $elements = $element.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.Condition]::TrueCondition)
+    $names = @()
+    foreach ($item in $elements) {
+        try {
+            if ($item.Current.Name) { $names += $item.Current.Name }
+        }
+        catch {
+            # Ignore transient UI elements removed while enumerating.
+        }
+    }
+    return $names
+}
+
 function Wait-FileContains(
     [string] $path,
     [string] $text,
@@ -210,6 +227,7 @@ $helperInfo = $null
 $cleanShutdown = $false
 $pathControlsVerified = $false
 $successDialogObserved = $false
+$combinedReopenObserved = $false
 Register-WmiEvent -Class Win32_ProcessStartTrace -SourceIdentifier $sourceIdentifier |
     Out-Null
 try {
@@ -321,13 +339,20 @@ try {
     if (-not (Wait-File $outputPath 90)) {
         throw "The helper did not create the deterministic combined GRIB"
     }
-    if (-not (Wait-FileContains $opencpnLog "xGRIB: opened generated GRIB:" 30)) {
-        throw "xGRIB did not reopen the helper output"
-    }
 
-    $successDialog = Wait-ElementByName "Environmental GRIB generated" 10
+    # The success message is modal, so OpenCPN may not flush its file log until
+    # the dialog closes.  Verify the visible production confirmation first,
+    # then inspect the flushed log after clean shutdown.
+    $successDialog = Wait-ElementByName "Environmental GRIB generated" 30
     if ($null -ne $successDialog) {
         $successDialogObserved = $true
+        $successText = (Get-DescendantNames $successDialog) -join "`n"
+        if (-not $successText.Contains($outputPath) -or
+            -not $successText.Contains(
+                "The generated file was opened in xGRIB.")) {
+            throw "The success dialog did not confirm the generated GRIB reopen"
+        }
+        $combinedReopenObserved = $true
         Save-Screenshot (Join-Path $screenshotDirectory "04-merge-success.png")
         $okCondition = [System.Windows.Automation.PropertyCondition]::new(
             [System.Windows.Automation.AutomationElement]::NameProperty, "OK")
@@ -360,8 +385,7 @@ try {
         "xGRIB smoke test opened environmental generator dialog",
         "xGRIB smoke test accepted weather path:",
         "xGRIB smoke test accepted current path:",
-        "xGRIB environmental generator launched, pid=",
-        "xGRIB: opened generated GRIB:")) {
+        "xGRIB environmental generator launched, pid=")) {
         if (-not $logText.Contains($requiredLogText)) {
             throw "OpenCPN runtime log is missing: $requiredLogText"
         }
@@ -403,6 +427,12 @@ finally {
 if (-not $cleanShutdown) { throw "OpenCPN did not shut down cleanly" }
 if (-not $pathControlsVerified) {
     throw "Windows UI Automation did not expose both selected path values"
+}
+if (-not $combinedReopenObserved) {
+    throw "Windows UI Automation did not confirm the generated GRIB reopen"
+}
+if (-not (Wait-FileContains $runtimeLog "xGRIB: opened generated GRIB:" 2)) {
+    throw "The flushed OpenCPN log did not record the generated GRIB reopen"
 }
 
 $runtimeResult = [ordered]@{

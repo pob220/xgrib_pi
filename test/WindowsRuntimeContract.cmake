@@ -20,6 +20,8 @@ set(runtime_patterns
   "OnInitTimer\\.\\.\\.Finalize Canvases"
   "xGRIB environmental generator launched, pid="
   "observation_source"
+  "Get-DescendantNames"
+  "The generated file was opened in xGRIB\\."
   "xGRIB: opened generated GRIB:"
   "runtime-combined-inspection\\.json"
   "01-opencpn-running\\.png"
