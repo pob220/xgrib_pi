@@ -584,6 +584,12 @@ if (NOT OCPN_FLATPAK_CONFIG)
         -DCIRCLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/.circleci/config.yml
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/WindowsRuntimeContract.cmake)
 
+    if(UNIX)
+      add_test(NAME xgrib_package_selection_tests
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/PackageSelectionTests.sh
+          ${CMAKE_CURRENT_SOURCE_DIR}/scripts/resolve-package-pair.sh)
+    endif()
+
     add_executable(xgrib_reader_integration_tests
       test/XgribReaderIntegrationTests.cpp
       src/GribVectorPolicy.cpp

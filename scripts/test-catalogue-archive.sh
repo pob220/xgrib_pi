@@ -1,14 +1,14 @@
 #!/bin/sh
 set -eu
 
-build_dir=${1:?usage: test-catalogue-archive.sh BUILD_DIRECTORY}
-archive=$(find "$build_dir" -maxdepth 1 -type f -name 'xgrib_pi-*.tar.gz' \
-  -print -quit)
-metadata=$(find "$build_dir" -maxdepth 1 -type f -name 'xgrib_pi-*.xml' \
-  -print -quit)
-
-test -n "$archive"
-test -n "$metadata"
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "usage: test-catalogue-archive.sh BUILD_DIRECTORY [PACKAGE_ARCHIVE]" >&2
+  exit 2
+fi
+build_dir=$1
+pair=$("$(dirname "$0")/resolve-package-pair.sh" "$@")
+archive=$(printf '%s\n' "$pair" | sed -n '1p')
+metadata=$(printf '%s\n' "$pair" | sed -n '2p')
 grep -q '<name> xGRIB </name>' "$metadata"
 grep -q '<api-version> 1.21 </api-version>' "$metadata"
 grep -q '<source> https://github.com/pob220/xgrib_pi </source>' "$metadata"
@@ -18,6 +18,8 @@ tmp=${TMPDIR:-/tmp}/xgrib-archive-test-$$
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 mkdir -p "$tmp"
 tar -xzf "$archive" -C "$tmp"
+top_count=$(find "$tmp" -mindepth 1 -maxdepth 1 -type d | wc -l)
+test "$top_count" -eq 1
 root=$(find "$tmp" -mindepth 1 -maxdepth 1 -type d -print -quit)
 test -n "$root"
 

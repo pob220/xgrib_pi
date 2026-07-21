@@ -22,6 +22,11 @@ cmake --build build --target package
 scripts/test-catalogue-archive.sh build
 ```
 
+For a clean consolidated run use `scripts/validate-before-push.sh`. Package
+tools require exactly one archive and its same-basename XML metadata unless an
+archive is supplied explicitly; this prevents a stale build product being
+tested, catalogued or uploaded accidentally.
+
 Run `git diff --check` and verify the generated archive contains the plugin
 library, launcher, native helper, runtime libraries, ecCodes definitions and
 samples, PROJ data, toolbar assets, and metadata.

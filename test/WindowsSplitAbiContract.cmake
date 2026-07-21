@@ -57,6 +57,8 @@ set(script_patterns
   "& \\$dumpbin /dependents"
   "vcomp140\\.dll"
   "Packaged helper execution with isolated PATH"
+  "archives.Count -ne 1"
+  "metadataPath"
   "\\$env:PATH = \"\\$wxLib;\\$env:PATH\""
   "plugin-test-dependencies.log"
   "--timeout 120"

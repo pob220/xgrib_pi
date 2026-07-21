@@ -17,8 +17,8 @@ trap 'rm -rf "$stage"' EXIT HUP INT TERM
 find artifacts -mindepth 3 -maxdepth 3 -type f -path '*/package/*.tar.gz' \
   -print0 | while IFS= read -r -d '' archive; do
     package_dir=$(dirname "$archive")
-    metadata=$(find "$package_dir" -maxdepth 1 -type f -name '*.xml' -print -quit)
-    test -n "$metadata"
+    pair=$(scripts/resolve-package-pair.sh "$package_dir" "$archive")
+    metadata=$(printf '%s\n' "$pair" | sed -n '2p')
     target=$(sed -n 's:.*<target> *\([^<]*\) *</target>.*:\1:p' "$metadata")
     test -n "$target"
     filename=$(basename "$archive")

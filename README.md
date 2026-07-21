@@ -103,6 +103,28 @@ cmake --build build -j"$(nproc)"
 ctest --test-dir build --output-on-failure
 ```
 
+Named presets make the tested platform intent explicit:
+
+```sh
+cmake --preset linux-release
+cmake --build --preset linux-release-build
+ctest --preset linux-release-test
+```
+
+Before pushing shared source, CMake, dependency, metadata or packaging changes,
+run the clean end-to-end local preflight:
+
+```sh
+scripts/validate-before-push.sh
+```
+
+It checks the recorded submodules and portable gettext paths, configures from a
+clean directory, builds, runs CTest, performs the deterministic merge and
+production-reader reopen, stages the helper, packages xGRIB and validates the
+exact matching archive/metadata pair. On Windows use
+`ci\validate-before-push-windows.ps1`; `-ChecksOnly` performs just the fast
+syntax, repository and preset checks.
+
 Linux catalogue packages include a private helper runtime and ecCodes/PROJ
 data. They do not alter OpenCPN's process-wide library search path.
 

@@ -69,13 +69,17 @@ cmake --install "$build" --prefix "$stage" \
 cmake --build "$build" --target package \
   2>&1 | tee "$log_dir/package.log"
 
-cp -f "$build"/xgrib_pi-*.tar.gz "$build"/xgrib_pi-*.xml "$package_dir/"
+pair=$(scripts/resolve-package-pair.sh "$build")
+archive_source=$(printf '%s\n' "$pair" | sed -n '1p')
+metadata_source=$(printf '%s\n' "$pair" | sed -n '2p')
+find "$package_dir" -maxdepth 1 -type f \
+  \( -name 'xgrib_pi-*.tar.gz' -o -name 'xgrib_pi-*.xml' \
+     -o -name checksums.txt \) -delete
+cp -f "$archive_source" "$metadata_source" "$package_dir/"
 (cd "$package_dir" && find . -maxdepth 1 -type f ! -name checksums.txt \
   -print0 | xargs -0 shasum -a 256 >checksums.txt)
-archive=$(find "$package_dir" -name 'xgrib_pi-*.tar.gz' -print -quit)
-metadata=$(find "$package_dir" -name 'xgrib_pi-*.xml' -print -quit)
-test -n "$archive"
-test -n "$metadata"
+archive="$package_dir/$(basename "$archive_source")"
+metadata="$package_dir/$(basename "$metadata_source")"
 grep -q '<target>darwin-wx32</target>' "$metadata"
 grep -q '<source> https://github.com/pob220/xgrib_pi </source>' "$metadata"
 tar -tzf "$archive" >"$test_dir/archive-contents.txt"

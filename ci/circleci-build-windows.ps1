@@ -94,6 +94,7 @@ $fixtureDir = Join-Path $artifact "fixtures"
 $diagnosticDir = Join-Path $artifact "diagnostics"
 Assert-PowerShellSyntax (Join-Path $repo "ci\test-windows-opencpn-runtime.ps1")
 Assert-PowerShellSyntax (Join-Path $repo "ci\circleci-test-windows-opencpn.ps1")
+Assert-PowerShellSyntax (Join-Path $repo "ci\validate-before-push-windows.ps1")
 $dumpbin = Find-Dumpbin
 New-Item -ItemType Directory -Force `
     $build,$generatorBuild,$generatorStage,$stage,$logDir,$testDir,$packageDir,$fixtureDir,$diagnosticDir | Out-Null
@@ -450,9 +451,18 @@ Invoke-NativeLogged `
     { cpack -G TGZ -C Release --config CPackConfig.cmake } `
     (Join-Path $logDir "package.log") "CPack TGZ package"
 Pop-Location
-$archive = Get-ChildItem $build -Filter "xgrib_pi-*.tar.gz" | Select-Object -First 1
-$metadata = Get-ChildItem $build -Filter "xgrib_pi-*.xml" | Select-Object -First 1
-if (-not $archive -or -not $metadata) { throw "Windows package or metadata missing" }
+$archives = @(Get-ChildItem $build -File -Filter "xgrib_pi-*.tar.gz")
+if ($archives.Count -ne 1) {
+    $names = ($archives | ForEach-Object { $_.Name }) -join ", "
+    throw "Expected exactly one Windows package archive; found $($archives.Count): $names"
+}
+$archive = $archives[0]
+$metadataPath = $archive.FullName.Substring(
+    0, $archive.FullName.Length - ".tar.gz".Length) + ".xml"
+if (-not (Test-Path $metadataPath -PathType Leaf)) {
+    throw "Matching Windows package metadata is missing: $metadataPath"
+}
+$metadata = Get-Item $metadataPath
 if (-not (Select-String -Quiet -Path $metadata.FullName -Pattern "<target>msvc")) {
     throw "Windows metadata target is invalid"
 }
@@ -460,6 +470,10 @@ if (-not (Select-String -Quiet -Path $metadata.FullName `
         -SimpleMatch "<source> https://github.com/pob220/xgrib_pi </source>")) {
     throw "Windows metadata source repository is invalid"
 }
+Get-ChildItem $packageDir -File | Where-Object {
+    $_.Name -like "xgrib_pi-*.tar.gz" -or
+    $_.Name -like "xgrib_pi-*.xml" -or $_.Name -eq "checksums.txt"
+} | Remove-Item -Force
 Copy-Item $archive.FullName,$metadata.FullName $packageDir
 $packagedArchive = Join-Path $packageDir $archive.Name
 $checksum = (Get-FileHash -Algorithm SHA256 $packagedArchive).Hash.ToLowerInvariant()

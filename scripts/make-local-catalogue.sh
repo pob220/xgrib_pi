@@ -1,16 +1,20 @@
 #!/bin/sh
 set -eu
 
-build_dir=${1:?usage: make-local-catalogue.sh BUILD_DIR OUTPUT_DIR [BASE_URL]}
-output_dir=${2:?usage: make-local-catalogue.sh BUILD_DIR OUTPUT_DIR [BASE_URL]}
+build_dir=${1:?usage: make-local-catalogue.sh BUILD_DIR OUTPUT_DIR [BASE_URL] [PACKAGE_ARCHIVE]}
+output_dir=${2:?usage: make-local-catalogue.sh BUILD_DIR OUTPUT_DIR [BASE_URL] [PACKAGE_ARCHIVE]}
 base_url=${3:-http://127.0.0.1:8000}
-
-archive=$(find "$build_dir" -maxdepth 1 -type f -name 'xgrib_pi-*.tar.gz' \
-  -print -quit)
-metadata=$(find "$build_dir" -maxdepth 1 -type f -name 'xgrib_pi-*.xml' \
-  -print -quit)
-test -n "$archive"
-test -n "$metadata"
+if [ "$#" -gt 4 ]; then
+  echo "usage: make-local-catalogue.sh BUILD_DIR OUTPUT_DIR [BASE_URL] [PACKAGE_ARCHIVE]" >&2
+  exit 2
+fi
+if [ "$#" -eq 4 ]; then
+  pair=$("$(dirname "$0")/resolve-package-pair.sh" "$build_dir" "$4")
+else
+  pair=$("$(dirname "$0")/resolve-package-pair.sh" "$build_dir")
+fi
+archive=$(printf '%s\n' "$pair" | sed -n '1p')
+metadata=$(printf '%s\n' "$pair" | sed -n '2p')
 
 mkdir -p "$output_dir"
 archive_name=${archive##*/}

@@ -53,6 +53,23 @@ cmake --build build-alpha-arch --target package
 scripts/test-catalogue-archive.sh build-alpha-arch
 ```
 
+For the normal before-push check, prefer the clean wrapper which performs all
+of these steps and refuses stale package ambiguity:
+
+```sh
+scripts/validate-before-push.sh
+```
+
+Use `--keep-build` to retain its temporary build, or `--build-dir DIR` to use a
+new explicit directory. Existing non-empty directories are rejected on
+purpose. `CMakePresets.json` names the supported native configurations;
+`cmake --list-presets=all` validates and lists those available on the host.
+The generator submodule has the matching `windows-helper-x64-release` preset.
+If the ordinary `build` tree already contains the checksum-verified pinned
+Jasper source, preflight reuses that source cache while keeping the new binary
+tree clean. A different verified source cache can be selected with
+`XGRIB_PREFLIGHT_JASPER_SOURCE`; no compiled objects are reused.
+
 `run-functional-merge-test.sh` generates the full deterministic fixture set,
 runs the production merge API through its CLI, checks structured JSON, reopens
 the result through xGRIB's production reader and records checksums. Canonical
@@ -96,7 +113,9 @@ acceptance, before merge begins.
 ## CircleCI
 
 The default `validate` workflow runs all hosted targets and retains packages,
-XML, checksums, JUnit, structured merge results and logs as artifacts. Rerun
+XML, checksums, JUnit, structured merge results and logs as artifacts. JUnit
+files are copied to a dedicated `test-results` directory before CircleCI
+ingestion so OpenCPN plugin metadata XML is never parsed as a test report. Rerun
 one target using its job rerun control. Rerun the complete matrix by triggering
 a pipeline with `run_workflow_deploy=false` (the default). Add a platform by
 extending the parameterized `linux-catalogue` or `flatpak` job, or by adding a
@@ -189,6 +208,13 @@ Keep these invariants when changing or updating source, dependencies or CI:
 - Parse every nested PowerShell script before expensive work. Pin downloaded
   archives by checksum, retain attempt logs, use bounded retry only for known
   transient failures, and do not add unused package-manager dependencies.
+- Resolve a package archive and its metadata as one basename-matched pair.
+  Clean jobs must produce exactly one archive; a local directory containing
+  stale archives must fail unless the intended archive is passed explicitly.
+  Never use `find ... -print -quit` to choose a release or deployment input.
+- Keep CircleCI JUnit ingestion separate from retained package metadata. Only
+  `ctest.xml` and `*-ctest.xml` belong in `test-results`; the complete artifact
+  tree still belongs in CircleCI artifact storage.
 - A Windows-only CI/runtime change uses the focused branch first. A shared C++
   source, CMake, dependency, packaging or metadata change requires the full
   Linux, ARM, Flatpak, Windows and macOS validation matrix after the focused
@@ -217,8 +243,10 @@ Keep these invariants when changing or updating source, dependencies or CI:
   reopen and log check has passed, force cleanup and classify the target
   `runtime-tested`; never promote it to `fully-tested`.
 
-Before pushing any source change, run `git diff --check`, a clean configure,
-the complete local CTest suite and the deterministic merge/reopen verifier.
+Before pushing any source change, run `scripts/validate-before-push.sh` (or the
+Windows counterpart). It includes `git diff --check`, a clean configure, the
+complete local CTest suite, deterministic merge/reopen, staged-helper and exact
+archive validation.
 Do not remove a contract because a platform fails; fix the portability or
 runtime assumption and retain the failure evidence.
 

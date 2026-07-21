@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if (( $# != 3 )); then
-  echo "usage: $0 BUILD_DIRECTORY TARGET ARTIFACT_DIRECTORY" >&2
+if (( $# < 3 || $# > 4 )); then
+  echo "usage: $0 BUILD_DIRECTORY TARGET ARTIFACT_DIRECTORY [PACKAGE_ARCHIVE]" >&2
   exit 2
 fi
 
@@ -10,19 +10,29 @@ readonly build_dir="$(cd "$1" && pwd)"
 readonly target="$2"
 readonly artifact_dir="$3"
 readonly package_dir="${artifact_dir}/package"
+readonly resolver="$(dirname "$0")/resolve-package-pair.sh"
+
+resolve_args=("$build_dir")
+if (( $# == 4 )); then
+  resolve_args+=("$4")
+fi
+mapfile -t package_pair < <("$resolver" "${resolve_args[@]}")
+if (( ${#package_pair[@]} != 2 )); then
+  echo "Package resolver returned an invalid archive/metadata pair" >&2
+  exit 1
+fi
+readonly archive_source="${package_pair[0]}"
+readonly metadata_source="${package_pair[1]}"
 
 mkdir -p "$package_dir"
-find "$build_dir" -maxdepth 1 -type f \
+find "$package_dir" -maxdepth 1 -type f \
   \( -name 'xgrib_pi-*.tar.gz' -o -name 'xgrib_pi-*.xml' \
-     -o -name 'xgrib_pi-*.deb' \) \
+     -o -name 'xgrib_pi-*.deb' -o -name checksums.txt \) -delete
+cp -f "$archive_source" "$metadata_source" "$package_dir/"
+find "$build_dir" -maxdepth 1 -type f -name 'xgrib_pi-*.deb' \
   -exec cp -f '{}' "$package_dir/" \;
 
-archive=$(find "$package_dir" -maxdepth 1 -type f \
-  -name 'xgrib_pi-*.tar.gz' -print -quit)
-metadata=$(find "$package_dir" -maxdepth 1 -type f \
-  -name 'xgrib_pi-*.xml' -print -quit)
-test -n "$archive"
-test -n "$metadata"
+readonly archive="$package_dir/$(basename "$archive_source")"
 
 (cd "$package_dir" && find . -maxdepth 1 -type f ! -name checksums.txt \
   -print0 | sort -z | xargs -0 sha256sum >checksums.txt)

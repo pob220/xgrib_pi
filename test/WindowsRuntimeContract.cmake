@@ -74,6 +74,14 @@ foreach(pattern IN LISTS circle_patterns)
   endif()
 endforeach()
 
+if(circle_config MATCHES "store_test_results:[ \t\r\n]+path: artifacts")
+  message(FATAL_ERROR
+    "CircleCI must not ingest package metadata XML as JUnit test results")
+endif()
+if(NOT circle_config MATCHES "path: test-results")
+  message(FATAL_ERROR "CircleCI JUnit staging directory is missing")
+endif()
+
 set(diagnostic_patterns
   "OptionId.WindowsDesktopDebuggers"
   "Get-AuthenticodeSignature"

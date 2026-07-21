@@ -14,8 +14,13 @@ commands:
           command: |
             mkdir -p artifacts
             if test -d build/artifacts; then cp -a build/artifacts/. artifacts/; fi
+            rm -rf test-results
+            mkdir -p test-results
+            find artifacts -type f \
+              \( -name 'ctest.xml' -o -name '*-ctest.xml' \) \
+              -exec cp -f '{}' test-results/ \;
       - store_test_results:
-          path: artifacts
+          path: test-results
       - store_artifacts:
           path: artifacts
       - persist_to_workspace:
@@ -115,8 +120,18 @@ jobs:
           name: Native Windows build, tests and package
           command: .\ci\circleci-build-windows.ps1
           no_output_timeout: 45m
+      - run:
+          name: Prepare JUnit results
+          when: always
+          command: |
+            if (Test-Path test-results) { Remove-Item test-results -Recurse -Force }
+            New-Item -ItemType Directory test-results | Out-Null
+            if (Test-Path artifacts) {
+              Get-ChildItem artifacts -Recurse -File -Filter "*ctest.xml" |
+                ForEach-Object { Copy-Item $_.FullName -Destination test-results }
+            }
       - store_test_results:
-          path: artifacts
+          path: test-results
       - store_artifacts:
           path: artifacts
       - persist_to_workspace:
@@ -136,8 +151,18 @@ jobs:
           name: Isolated OpenCPN package and GUI validation
           command: .\ci\circleci-test-windows-opencpn.ps1
           no_output_timeout: 10m
+      - run:
+          name: Prepare JUnit results
+          when: always
+          command: |
+            if (Test-Path test-results) { Remove-Item test-results -Recurse -Force }
+            New-Item -ItemType Directory test-results | Out-Null
+            if (Test-Path artifacts) {
+              Get-ChildItem artifacts -Recurse -File -Filter "*ctest.xml" |
+                ForEach-Object { Copy-Item $_.FullName -Destination test-results }
+            }
       - store_test_results:
-          path: artifacts
+          path: test-results
       - store_artifacts:
           path: artifacts
 
@@ -178,8 +203,17 @@ jobs:
           name: Native Apple-Silicon build, tests and package
           command: ci/circleci-build-macos-universal.sh
           no_output_timeout: 45m
+      - run:
+          name: Prepare JUnit results
+          when: always
+          command: |
+            rm -rf test-results
+            mkdir -p test-results
+            find artifacts -type f \
+              \( -name 'ctest.xml' -o -name '*-ctest.xml' \) \
+              -exec cp -f '{}' test-results/ \;
       - store_test_results:
-          path: artifacts
+          path: test-results
       - store_artifacts:
           path: artifacts
       - persist_to_workspace:

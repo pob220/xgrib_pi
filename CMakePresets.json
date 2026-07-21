@@ -1,0 +1,109 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "release-common",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/presets/${presetName}",
+      "cacheVariables": {
+        "BUILD_TESTING": "ON",
+        "BUNDLE_GENERATOR_RUNTIME": "ON",
+        "CMAKE_BUILD_TYPE": "Release",
+        "XGRIB_USE_BUNDLED_JASPER": "ON"
+      }
+    },
+    {
+      "name": "linux-release",
+      "displayName": "Linux Release validation",
+      "description": "Native Linux Release build with tests and bundled helper runtime",
+      "inherits": "release-common",
+      "generator": "Unix Makefiles",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "macos-arm64-release",
+      "displayName": "macOS Apple-Silicon Release validation",
+      "description": "Native arm64 macOS Release build matching the hosted job",
+      "inherits": "release-common",
+      "generator": "Unix Makefiles",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"
+      }
+    },
+    {
+      "name": "windows-plugin-x86-release",
+      "displayName": "Windows x86 OpenCPN plugin Release validation",
+      "description": "Supported OpenCPN x86 plugin using a pre-staged x64 generator",
+      "inherits": "release-common",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "Win32",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/ci/vcpkg-triplets",
+        "VCPKG_TARGET_TRIPLET": "x86-windows-release",
+        "XGRIB_EXTERNAL_GENERATOR_DIR": "$env{XGRIB_GENERATOR_STAGE}",
+        "wxWidgets_LIB_DIR": "$env{XGRIB_WX_LIB}",
+        "wxWidgets_ROOT_DIR": "$env{XGRIB_WX_ROOT}"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-release-build",
+      "configurePreset": "linux-release"
+    },
+    {
+      "name": "macos-arm64-release-build",
+      "configurePreset": "macos-arm64-release"
+    },
+    {
+      "name": "windows-plugin-x86-release-build",
+      "configurePreset": "windows-plugin-x86-release",
+      "configuration": "Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "linux-release-test",
+      "configurePreset": "linux-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "macos-arm64-release-test",
+      "configurePreset": "macos-arm64-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-plugin-x86-release-test",
+      "configurePreset": "windows-plugin-x86-release",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

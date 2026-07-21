@@ -1,13 +1,21 @@
 #!/bin/sh
 set -eu
 
-build_dir=${1:?usage: test-flatpak-archive.sh BUILD_DIRECTORY}
-archive=$(find "$build_dir" -maxdepth 1 -type f \
-  -name 'xgrib_pi-*flatpak*.tar.gz' -print -quit)
-metadata=$(find "$build_dir" -maxdepth 1 -type f \
-  -name 'xgrib_pi-*flatpak*.xml' -print -quit)
-test -n "$archive"
-test -n "$metadata"
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "usage: test-flatpak-archive.sh BUILD_DIRECTORY [PACKAGE_ARCHIVE]" >&2
+  exit 2
+fi
+build_dir=$1
+pair=$("$(dirname "$0")/resolve-package-pair.sh" "$@")
+archive=$(printf '%s\n' "$pair" | sed -n '1p')
+metadata=$(printf '%s\n' "$pair" | sed -n '2p')
+case $(basename "$archive") in
+  *flatpak*.tar.gz) ;;
+  *)
+    echo "Not an xGRIB Flatpak archive: $archive" >&2
+    exit 1
+    ;;
+esac
 grep -q '<name> xGRIB </name>' "$metadata"
 grep -q '<target>flatpak-' "$metadata"
 grep -q '<target-version>' "$metadata"

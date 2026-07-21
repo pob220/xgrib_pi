@@ -129,10 +129,16 @@ jq -e '.success == true and .output_message_count == 10 and
        .output_inspection.current_component_counts.v_50 == 3' \
     "$test_dir/merge-result.json" >/dev/null
 
-cp -f xgrib_pi-*.tar.gz xgrib_pi-*.xml "$package_dir/"
+pair=$(../scripts/resolve-package-pair.sh .)
+archive_source=$(printf '%s\n' "$pair" | sed -n '1p')
+metadata_source=$(printf '%s\n' "$pair" | sed -n '2p')
+find "$package_dir" -maxdepth 1 -type f \
+    \( -name 'xgrib_pi-*.tar.gz' -o -name 'xgrib_pi-*.xml' \
+       -o -name checksums.txt \) -delete
+cp -f "$archive_source" "$metadata_source" "$package_dir/"
 (cd "$package_dir" && find . -maxdepth 1 -type f ! -name checksums.txt \
     -print0 | sort -z | xargs -0 sha256sum >checksums.txt)
-archive=$(find "$package_dir" -name 'xgrib_pi-*.tar.gz' -print -quit)
+archive="$package_dir/$(basename "$archive_source")"
 (cd "$artifact_dir" && sha256sum \
     fixtures/wind-known.grb2 \
     fixtures/current-matching.grb \

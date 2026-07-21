@@ -8,9 +8,17 @@ $logDir = Join-Path $artifact "logs"
 $testDir = Join-Path $artifact "tests"
 $resultPath = Join-Path $artifact "result.json"
 $runtimeScript = Join-Path $repo "ci\test-windows-opencpn-runtime.ps1"
-$archive = Get-ChildItem $packageDir -Filter "xgrib_pi-*.tar.gz" |
-    Select-Object -First 1
-if (-not $archive) { throw "The Windows build workspace has no xGRIB package" }
+$archives = @(Get-ChildItem $packageDir -File -Filter "xgrib_pi-*.tar.gz")
+if ($archives.Count -ne 1) {
+    $names = ($archives | ForEach-Object { $_.Name }) -join ", "
+    throw "Expected exactly one Windows workspace package; found $($archives.Count): $names"
+}
+$archive = $archives[0]
+$metadataPath = $archive.FullName.Substring(
+    0, $archive.FullName.Length - ".tar.gz".Length) + ".xml"
+if (-not (Test-Path $metadataPath -PathType Leaf)) {
+    throw "The Windows workspace package has no matching metadata: $metadataPath"
+}
 if (-not (Test-Path $resultPath)) {
     throw "The Windows build workspace has no result manifest"
 }
