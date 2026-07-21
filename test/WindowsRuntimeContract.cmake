@@ -49,7 +49,9 @@ endif()
 set(runtime_job_patterns
   "windows-opencpn-runtime\.json"
   "opencpn-runtime-test\.log"
-  "result_classification = \"fully-tested\""
+  "\"fully-tested\""
+  "\"runtime-tested\""
+  "runtimeResult\.clean_shutdown"
   "plugin_load_status = \"passed\"")
 foreach(pattern IN LISTS runtime_job_patterns)
   if(NOT runtime_job_script MATCHES "${pattern}")

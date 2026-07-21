@@ -212,6 +212,10 @@ Keep these invariants when changing or updating source, dependencies or CI:
 - Close every helper job/result file before deleting it. POSIX permits unlinking
   an open file, but Windows reports sharing error 32 and leaves the temporary
   file behind.
+- Keep Windows host shutdown separate from functional status. If the CircleCI
+  desktop cannot gracefully close OpenCPN after every retained UI, merge,
+  reopen and log check has passed, force cleanup and classify the target
+  `runtime-tested`; never promote it to `fully-tested`.
 
 Before pushing any source change, run `git diff --check`, a clean configure,
 the complete local CTest suite and the deterministic merge/reopen verifier.

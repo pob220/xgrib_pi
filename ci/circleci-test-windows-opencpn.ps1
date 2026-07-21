@@ -63,8 +63,16 @@ $result.log_paths = @($result.log_paths) + @(
     "tests/helper-launch.json",
     "tests/windows-opencpn-runtime.json",
     "tests/runtime-combined-inspection.json")
-$result.result_classification = "fully-tested"
-$result.blocker_or_failure_details = ""
+$result.result_classification = $(if ($runtimeResult.clean_shutdown) {
+    "fully-tested"
+} else {
+    "runtime-tested"
+})
+$result.blocker_or_failure_details = $(if ($runtimeResult.clean_shutdown) {
+    ""
+} else {
+    "All Windows functional/UI checks passed; the CircleCI desktop could not gracefully close the OpenCPN host frame and cleanup required forced process termination."
+})
 $result | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 $resultPath
 
-Write-Host "OpenCPN Windows runtime validation passed"
+Write-Host "OpenCPN Windows runtime validation completed: $($result.result_classification)"
