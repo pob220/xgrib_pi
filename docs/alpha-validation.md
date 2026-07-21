@@ -202,6 +202,8 @@ Keep these invariants when changing or updating source, dependencies or CI:
 - Treat modal success UI as a synchronization boundary: inspect and close the
   dialog before requiring newly emitted lines in `opencpn.log`, then verify the
   flushed reopen record after clean OpenCPN shutdown.
+- Match OpenCPN plugin-load evidence semantically and against `xgrib_pi.dll`;
+  supported 5.14 builds use both `Loading PlugIn` and `Initializing PlugIn`.
 
 Before pushing any source change, run `git diff --check`, a clean configure,
 the complete local CTest suite and the deterministic merge/reopen verifier.

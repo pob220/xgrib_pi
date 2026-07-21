@@ -377,20 +377,6 @@ try {
         throw "The GUI-generated GRIB does not contain the expected wind/current fields"
     }
 
-    $logText = Get-Content $opencpnLog -Raw
-    foreach ($requiredLogText in @(
-        "Checking plugin candidate:",
-        "xgrib_pi.dll",
-        "PluginLoader: Initializing PlugIn:",
-        "xGRIB smoke test opened environmental generator dialog",
-        "xGRIB smoke test accepted weather path:",
-        "xGRIB smoke test accepted current path:",
-        "xGRIB environmental generator launched, pid=")) {
-        if (-not $logText.Contains($requiredLogText)) {
-            throw "OpenCPN runtime log is missing: $requiredLogText"
-        }
-    }
-
     Close-WindowElement $generatorWindow
     [void]$opencpnProcess.CloseMainWindow()
     if ($opencpnProcess.WaitForExit(3000)) {
@@ -433,6 +419,23 @@ if (-not $combinedReopenObserved) {
 }
 if (-not (Wait-FileContains $runtimeLog "xGRIB: opened generated GRIB:" 2)) {
     throw "The flushed OpenCPN log did not record the generated GRIB reopen"
+}
+$logText = Get-Content $runtimeLog -Raw
+if ($logText -notmatch "Checking plugin candidate:.*xgrib_pi\.dll") {
+    throw "The flushed OpenCPN log did not record the xGRIB plugin candidate"
+}
+# OpenCPN 5.14 builds use either "Loading" or "Initializing" for this event.
+if ($logText -notmatch "PluginLoader: (Loading|Initializing) PlugIn:.*xgrib_pi\.dll") {
+    throw "The flushed OpenCPN log did not record the xGRIB plugin load"
+}
+foreach ($requiredLogText in @(
+    "xGRIB smoke test opened environmental generator dialog",
+    "xGRIB smoke test accepted weather path:",
+    "xGRIB smoke test accepted current path:",
+    "xGRIB environmental generator launched, pid=")) {
+    if (-not $logText.Contains($requiredLogText)) {
+        throw "The flushed OpenCPN log is missing: $requiredLogText"
+    }
 }
 
 $runtimeResult = [ordered]@{

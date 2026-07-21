@@ -22,6 +22,7 @@ set(runtime_patterns
   "observation_source"
   "Get-DescendantNames"
   "The generated file was opened in xGRIB\\."
+  "\\(Loading\\|Initializing\\) PlugIn:.*xgrib_pi"
   "xGRIB: opened generated GRIB:"
   "runtime-combined-inspection\\.json"
   "01-opencpn-running\\.png"
