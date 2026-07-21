@@ -4,6 +4,7 @@
 
 #include <wx/fileconf.h>
 #include <wx/init.h>
+#include <wx/sstream.h>
 
 #include "XgribPluginPolicy.h"
 #include "GribVectorPolicy.h"
@@ -22,7 +23,8 @@ int main() {
   wxInitializer initializer;
   Expect(initializer.IsOk(), "wxWidgets must initialize for config tests");
 
-  wxFileConfig config;
+  wxStringInputStream emptyConfig("");
+  wxFileConfig config(emptyConfig);
   config.SetPath("/Unrelated");
   const wxString originalPath = config.GetPath();
 
@@ -45,7 +47,8 @@ int main() {
   Expect(config.GetPath() == originalPath,
          "positive policy check must restore the config path");
 
-  wxFileConfig windowsConfig;
+  wxStringInputStream emptyWindowsConfig("");
+  wxFileConfig windowsConfig(emptyWindowsConfig);
   windowsConfig.SetPath("/PlugIns/grib_pi.dll");
   windowsConfig.Write("bEnabled", true);
   windowsConfig.SetPath("/");
@@ -64,6 +67,10 @@ int main() {
          "an infinite current must not reach the renderer");
   Expect(xgrib::IsRenderableDirectionVector(8.0, 180.0, true),
          "the current guard must not reject finite wave heights");
+  Expect(!xgrib::IsRenderableDirectionVector(100.001, 180.0, true),
+         "implausible wave heights must be rejected before symbol scaling");
+  Expect(!xgrib::IsRenderableDirectionVector(8.0, 361.0, true),
+         "out-of-range wave directions must not reach the renderer");
   std::cout << "xGRIB plugin policy tests passed\n";
   return 0;
 }

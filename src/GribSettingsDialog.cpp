@@ -22,6 +22,9 @@
  */
 #include "pi_gl.h"
 
+#include <algorithm>
+
+#include "GribDisplayGeometry.h"
 #include "grib_pi.h"
 #include "folder.xpm"
 
@@ -223,10 +226,35 @@ void GribOverlaySettings::Read() {
                 &Settings[i].m_iDirectionArrowForm, defform[i]);
     pConf->Read(Name + _T ( "DirectionArrowSize" ),
                 &Settings[i].m_iDirectionArrowSize, 0);
+    const int legacySizePixels = xgrib::LegacyDirectionArrowSizePixels(
+        Settings[i].m_iDirectionArrowSize);
+    pConf->Read(Name + _T ( "DirectionArrowSizePixels" ),
+                &Settings[i].m_iDirectionArrowSizePixels, legacySizePixels);
+    Settings[i].m_iDirectionArrowSizePixels = std::clamp(
+        Settings[i].m_iDirectionArrowSizePixels, i == WAVE ? 8 : 6, 40);
+    pConf->Read(Name + _T ( "DirectionArrowGrowthPerKnot" ),
+                &Settings[i].m_dDirectionArrowGrowthPerKnot, 6.0);
+    Settings[i].m_dDirectionArrowGrowthPerKnot =
+        std::clamp(Settings[i].m_dDirectionArrowGrowthPerKnot, 0.0, 12.0);
+    wxColour defaultDirectionColour;
+    GetGlobalColor(_T ( "DILG3" ), &defaultDirectionColour);
+    if (!defaultDirectionColour.IsOk()) defaultDirectionColour = *wxBLACK;
+    const wxString directionColourName =
+        pConf->Read(Name + _T ( "DirectionArrowColour" ),
+                    defaultDirectionColour.GetAsString(wxC2S_HTML_SYNTAX));
+    Settings[i].m_DirectionArrowColour = wxColour(directionColourName);
+    if (!Settings[i].m_DirectionArrowColour.IsOk())
+      Settings[i].m_DirectionArrowColour = defaultDirectionColour;
     pConf->Read(Name + _T ( "DirectionArrowFixedSpacing" ),
                 &Settings[i].m_bDirArrFixSpac, 0);
     pConf->Read(Name + _T ( "DirectionArrowSpacing" ),
                 &Settings[i].m_iDirArrSpacing, 50);
+    Settings[i].m_iDirArrSpacing =
+        std::clamp(Settings[i].m_iDirArrSpacing, 24, 120);
+    Settings[i].m_iDirectionArrowForm =
+        std::clamp(Settings[i].m_iDirectionArrowForm, 0,
+                   i == WAVE ? static_cast<int>(WAVE_HEIGHT_CIRCLES)
+                             : static_cast<int>(PROPORTIONAL_ARROW));
 
     pConf->Read(Name + _T ( "OverlayMap" ), &Settings[i].m_bOverlayMap,
                 i != WIND && i != PRESSURE);
@@ -333,6 +361,13 @@ void GribOverlaySettings::SaveSettingGroups(wxFileConfig *pConf, int settings,
                    Settings[settings].m_iDirectionArrowForm);
       pConf->Write(Name + _T ( "DirectionArrowSize" ),
                    Settings[settings].m_iDirectionArrowSize);
+      pConf->Write(Name + _T ( "DirectionArrowSizePixels" ),
+                   Settings[settings].m_iDirectionArrowSizePixels);
+      pConf->Write(Name + _T ( "DirectionArrowGrowthPerKnot" ),
+                   Settings[settings].m_dDirectionArrowGrowthPerKnot);
+      pConf->Write(Name + _T ( "DirectionArrowColour" ),
+                   Settings[settings].m_DirectionArrowColour.GetAsString(
+                       wxC2S_HTML_SYNTAX));
       pConf->Write(Name + _T ( "DirectionArrowFixedSpacing" ),
                    Settings[settings].m_bDirArrFixSpac);
       pConf->Write(Name + _T ( "DirectionArrowSpacing" ),
@@ -652,6 +687,8 @@ GribSettingsDialog::GribSettingsDialog(GRIBUICtrlBar &parent,
       m_extSettings(Settings),
       m_lastdatatype(lastdatatype) {
   m_Settings = m_extSettings;
+  m_cDirectionArrowForm->Bind(
+      wxEVT_CHOICE, &GribSettingsDialog::OnDirectionStyleChange, this);
   // populate interval choice
   m_sSlicesPerUpdate->Clear();
   for (int i = 0; i < fileIntervalIndex + 1; i++) {
@@ -876,7 +913,10 @@ void GribSettingsDialog::SetDataTypeSettings(int settings) {
   odc.m_iIsoBarSpacing = m_sIsoBarSpacing->GetValue();
   odc.m_bDirectionArrows = m_cbDirectionArrows->GetValue();
   odc.m_iDirectionArrowForm = m_cDirectionArrowForm->GetSelection();
-  odc.m_iDirectionArrowSize = m_cDirectionArrowSize->GetSelection();
+  odc.m_iDirectionArrowSizePixels = m_sDirectionArrowSize->GetValue();
+  odc.m_iDirectionArrowSize = odc.m_iDirectionArrowSizePixels <= 16 ? 1 : 0;
+  odc.m_dDirectionArrowGrowthPerKnot = m_sDirectionArrowGrowth->GetValue();
+  odc.m_DirectionArrowColour = m_cpDirectionArrowColour->GetColour();
   odc.m_bDirArrFixSpac = m_cDirArrFixSpac->GetValue();
   odc.m_iDirArrSpacing = m_sDirArrSpacing->GetValue();
   odc.m_bOverlayMap = m_cbOverlayMap->GetValue();
@@ -903,8 +943,13 @@ void GribSettingsDialog::ReadDataTypeSettings(int settings) {
   m_sIsoBarVisibility->SetValue(odc.m_iIsoBarVisibility);
   m_sIsoBarSpacing->SetValue(odc.m_iIsoBarSpacing);
   m_cbDirectionArrows->SetValue(odc.m_bDirectionArrows);
+  PopulateDirectionStyles(settings);
   m_cDirectionArrowForm->SetSelection(odc.m_iDirectionArrowForm);
-  m_cDirectionArrowSize->SetSelection(odc.m_iDirectionArrowSize);
+  m_sDirectionArrowSize->SetRange(settings == GribOverlaySettings::WAVE ? 8 : 6,
+                                  40);
+  m_sDirectionArrowSize->SetValue(odc.m_iDirectionArrowSizePixels);
+  m_sDirectionArrowGrowth->SetValue(odc.m_dDirectionArrowGrowthPerKnot);
+  m_cpDirectionArrowColour->SetColour(odc.m_DirectionArrowColour);
   m_cDirArrFixSpac->SetValue(odc.m_bDirArrFixSpac);
   m_cDirArrMinSpac->SetValue(!odc.m_bDirArrFixSpac);
   m_sDirArrSpacing->SetValue(odc.m_iDirArrSpacing);
@@ -918,6 +963,35 @@ void GribSettingsDialog::ReadDataTypeSettings(int settings) {
   m_sParticleDensity->SetValue(log(odc.m_dParticleDensity / 4.0) + 7);
 
   ShowFittingSettings(settings);
+}
+
+void GribSettingsDialog::PopulateDirectionStyles(int settings) {
+  m_cDirectionArrowForm->Clear();
+  m_cDirectionArrowForm->Append(settings == GribOverlaySettings::WAVE
+                                    ? _("Travel-direction arrow")
+                                    : _("Single Arrow"));
+  m_cDirectionArrowForm->Append(_("Double Arrow"));
+  m_cDirectionArrowForm->Append(_("Proportional Arrow"));
+  if (settings == GribOverlaySettings::WAVE) {
+    m_cDirectionArrowForm->Append(_("Wave crests with travel marker"));
+    m_cDirectionArrowForm->Append(_("Height circles with direction tick"));
+  }
+}
+
+void GribSettingsDialog::UpdateDirectionControlState() {
+  const bool wave = m_lastdatatype == GribOverlaySettings::WAVE;
+  const bool current = m_lastdatatype == GribOverlaySettings::CURRENT;
+  m_cbDirectionArrows->SetLabel(wave ? _("Display wave symbols")
+                                     : _("Direction Arrows"));
+  m_tDirectionArrowSize->SetLabel(wave ? _("Wave symbol size (pixels)")
+                                       : _("Arrow baseline size (pixels)"));
+  m_tDirectionArrowGrowth->Show(current);
+  m_sDirectionArrowGrowth->Show(current);
+  const bool proportional =
+      current && m_cDirectionArrowForm->GetSelection() ==
+                     GribOverlaySettings::PROPORTIONAL_ARROW;
+  m_sDirectionArrowGrowth->Enable(proportional);
+  m_tDirectionArrowGrowth->Enable(proportional);
 }
 
 void GribSettingsDialog::ShowFittingSettings(int settings) {
@@ -965,6 +1039,7 @@ void GribSettingsDialog::ShowFittingSettings(int settings) {
       ShowSettings(PARTICLES);  // should we allow particles for waves?
     case GribOverlaySettings::WAVE:
       ShowSettings(D_ARROWS);
+      UpdateDirectionControlState();
       ShowSettings(OVERLAY);
       ShowSettings(NUMBERS);
       break;
@@ -1084,6 +1159,13 @@ void GribSettingsDialog::OnUnitChange(wxCommandEvent &event) {
           .Append(m_Settings.GetUnitSymbol(m_lastdatatype))
           .Append(")"));
   SetSettingsDialogSize();
+}
+
+void GribSettingsDialog::OnDirectionStyleChange(wxCommandEvent& event) {
+  UpdateDirectionControlState();
+  Layout();
+  SetSettingsDialogSize();
+  event.Skip();
 }
 
 void GribSettingsDialog::OnTransparencyChange(wxScrollEvent &event) {
@@ -1257,6 +1339,13 @@ bool GribOverlaySettings::UpdateJSONval(wxJSONValue &v, int settings,
           Settings[settings].m_iDirectionArrowForm;
       v[Name + _T ( "DirectionArrowSize" )] =
           Settings[settings].m_iDirectionArrowSize;
+      v[Name + _T ( "DirectionArrowSizePixels" )] =
+          Settings[settings].m_iDirectionArrowSizePixels;
+      v[Name + _T ( "DirectionArrowGrowthPerKnot" )] =
+          Settings[settings].m_dDirectionArrowGrowthPerKnot;
+      v[Name + _T ( "DirectionArrowColour" )] =
+          Settings[settings].m_DirectionArrowColour.GetAsString(
+              wxC2S_HTML_SYNTAX);
       v[Name + _T ( "DirectionArrowFixedSpacing" )] =
           Settings[settings].m_bDirArrFixSpac;
       v[Name + _T ( "DirectionArrowSpacing" )] =
@@ -1367,30 +1456,81 @@ bool GribOverlaySettings::JSONToSettings(wxString json) {
       Settings[i].m_bDirectionArrows =
           root[Name + _T ( "DirectionArrows" )].AsBool();
 
-    if (root[Name + _T ( "DirectionArrowForm" )].IsString()) {
-      wxString s = root[Name + _T ( "DirectionArrowForm" )].AsString();
-      long val = -1;
-      s.ToLong(&val);
-      Settings[i].m_iDirectionArrowForm = val;
+    if (root[Name + _T ( "DirectionArrowForm" )].IsInt())
+      Settings[i].m_iDirectionArrowForm =
+          root[Name + _T ( "DirectionArrowForm" )].AsInt();
+    else if (root[Name + _T ( "DirectionArrowForm" )].IsString()) {
+      long val = Settings[i].m_iDirectionArrowForm;
+      root[Name + _T ( "DirectionArrowForm" )].AsString().ToLong(&val);
+      Settings[i].m_iDirectionArrowForm = static_cast<int>(val);
+    }
+    Settings[i].m_iDirectionArrowForm =
+        std::clamp(Settings[i].m_iDirectionArrowForm, 0,
+                   i == WAVE ? static_cast<int>(WAVE_HEIGHT_CIRCLES)
+                             : static_cast<int>(PROPORTIONAL_ARROW));
+
+    const bool hasLegacyDirectionSize =
+        root[Name + _T ( "DirectionArrowSize" )].IsInt() ||
+        root[Name + _T ( "DirectionArrowSize" )].IsString();
+    if (root[Name + _T ( "DirectionArrowSize" )].IsInt())
+      Settings[i].m_iDirectionArrowSize =
+          root[Name + _T ( "DirectionArrowSize" )].AsInt();
+    else if (root[Name + _T ( "DirectionArrowSize" )].IsString()) {
+      long val = Settings[i].m_iDirectionArrowSize;
+      root[Name + _T ( "DirectionArrowSize" )].AsString().ToLong(&val);
+      Settings[i].m_iDirectionArrowSize = static_cast<int>(val);
     }
 
-    if (root[Name + _T ( "DirectionArrowSize" )].IsString()) {
-      wxString s = root[Name + _T ( "DirectionArrowSize" )].AsString();
-      long val = -1;
-      s.ToLong(&val);
-      Settings[i].m_iDirectionArrowSize = val;
+    const bool hasDirectionSizePixels =
+        root[Name + _T ( "DirectionArrowSizePixels" )].IsInt() ||
+        root[Name + _T ( "DirectionArrowSizePixels" )].IsString();
+    if (root[Name + _T ( "DirectionArrowSizePixels" )].IsInt()) {
+      Settings[i].m_iDirectionArrowSizePixels =
+          std::clamp(root[Name + _T ( "DirectionArrowSizePixels" )].AsInt(),
+                     i == WAVE ? 8 : 6, 40);
+    } else if (root[Name + _T ( "DirectionArrowSizePixels" )].IsString()) {
+      long val = Settings[i].m_iDirectionArrowSizePixels;
+      root[Name + _T ( "DirectionArrowSizePixels" )].AsString().ToLong(&val);
+      Settings[i].m_iDirectionArrowSizePixels =
+          std::clamp(static_cast<int>(val), i == WAVE ? 8 : 6, 40);
+    } else if (hasLegacyDirectionSize && !hasDirectionSizePixels) {
+      Settings[i].m_iDirectionArrowSizePixels =
+          xgrib::LegacyDirectionArrowSizePixels(
+              Settings[i].m_iDirectionArrowSize);
+    }
+
+    if (root[Name + _T ( "DirectionArrowGrowthPerKnot" )].IsDouble() ||
+        root[Name + _T ( "DirectionArrowGrowthPerKnot" )].IsInt()) {
+      Settings[i].m_dDirectionArrowGrowthPerKnot = std::clamp(
+          root[Name + _T ( "DirectionArrowGrowthPerKnot" )].AsDouble(), 0.0,
+          12.0);
+    } else if (root[Name + _T ( "DirectionArrowGrowthPerKnot" )].IsString()) {
+      double val = Settings[i].m_dDirectionArrowGrowthPerKnot;
+      root[Name + _T ( "DirectionArrowGrowthPerKnot" )].AsString().ToDouble(
+          &val);
+      Settings[i].m_dDirectionArrowGrowthPerKnot = std::clamp(val, 0.0, 12.0);
+    }
+
+    if (root[Name + _T ( "DirectionArrowColour" )].IsString()) {
+      const wxColour colour(
+          root[Name + _T ( "DirectionArrowColour" )].AsString());
+      if (colour.IsOk()) Settings[i].m_DirectionArrowColour = colour;
     }
 
     if (root[Name + _T ( "DirectionArrowFixedSpacing" )].IsBool())
       Settings[i].m_bDirArrFixSpac =
           root[Name + _T ( "DirectionArrowFixedSpacing" )].AsBool();
 
-    if (root[Name + _T ( "DirectionArrowSpacing" )].IsString()) {
-      wxString s = root[Name + _T ( "DirectionArrowSpacing" )].AsString();
-      long val = -1;
-      s.ToLong(&val);
-      Settings[i].m_iDirArrSpacing = val;
+    if (root[Name + _T ( "DirectionArrowSpacing" )].IsInt())
+      Settings[i].m_iDirArrSpacing =
+          root[Name + _T ( "DirectionArrowSpacing" )].AsInt();
+    else if (root[Name + _T ( "DirectionArrowSpacing" )].IsString()) {
+      long val = Settings[i].m_iDirArrSpacing;
+      root[Name + _T ( "DirectionArrowSpacing" )].AsString().ToLong(&val);
+      Settings[i].m_iDirArrSpacing = static_cast<int>(val);
     }
+    Settings[i].m_iDirArrSpacing =
+        std::clamp(Settings[i].m_iDirArrSpacing, 24, 120);
 
     if (root[Name + _T ( "OverlayMap" )].IsBool())
       Settings[i].m_bOverlayMap = root[Name + _T ( "OverlayMap" )].AsBool();

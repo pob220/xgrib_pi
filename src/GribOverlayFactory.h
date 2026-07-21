@@ -319,6 +319,16 @@ private:
                        int arrowWidth, int arrowSizeIdx, double scale);
   void drawSingleArrow(int x, int y, double ang, wxColour arrowColor,
                        int arrowWidth, int arrowSizeIdx, double scale);
+  void drawWaveSymbol(int x, int y, double fromDirectionDegrees,
+                      double heightMetres, int style, double sizePixels,
+                      const wxColour& colour, double viewportRotation);
+  void drawProportionalCurrentArrow(int x, int y,
+                                    double interpolatedFromDirectionDegrees,
+                                    double speedMetresPerSecond,
+                                    double baseSizePixels,
+                                    double growthPixelsPerKnot,
+                                    const wxColour& colour,
+                                    double viewportRotation);
   void drawWindArrowWithBarbs(int settings, int x, int y, double vkn,
                               double ang, bool south, wxColour arrowColor,
                               double rotate_angle);

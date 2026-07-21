@@ -42,6 +42,7 @@
 #endif
 
 #include "GribUIDialog.h"
+#include "GribDisplayGeometry.h"
 #include "GribOverlayFactory.h"
 #include "GribVectorPolicy.h"
 
@@ -1550,6 +1551,75 @@ void GRIBOverlayFactory::FillGrid(GribRecord *pGR) {
   pGR->setFilled(true);
 }
 
+void GRIBOverlayFactory::drawWaveSymbol(
+    int x, int y, double fromDirectionDegrees, double heightMetres, int style,
+    double sizePixels, const wxColour& colour, double viewportRotation) {
+  if (!m_oDC) return;
+  const double size = std::clamp(sizePixels, 8.0, 40.0);
+  const xgrib::DisplayAxes axes = xgrib::BearingDisplayAxes(
+      xgrib::WaveTravelBearing(fromDirectionDegrees), viewportRotation);
+  const wxPoint origin(x, y);
+  auto point = [&](double along, double across) {
+    return wxPoint(
+        origin.x + static_cast<int>(std::lround(axes.along_x * along +
+                                                axes.across_x * across)),
+        origin.y + static_cast<int>(std::lround(axes.along_y * along +
+                                                axes.across_y * across)));
+  };
+  auto line = [&](const wxPoint& first, const wxPoint& second) {
+    m_oDC->StrokeLine(first, second);
+  };
+
+  m_oDC->SetPen(wxPen(colour, 2, wxPENSTYLE_SOLID));
+  m_oDC->SetBrush(*wxTRANSPARENT_BRUSH);
+  if (style == GribOverlaySettings::WAVE_HEIGHT_CIRCLES) {
+    const double radius = xgrib::WaveHeightCircleRadius(size, heightMetres);
+    m_oDC->DrawCircle(origin, static_cast<int>(std::lround(radius)));
+    line(origin, point(radius + size * 0.22, 0.0));
+    return;
+  }
+
+  line(point(-size * 0.17, -size * 0.45), point(-size * 0.17, size * 0.45));
+  line(point(size * 0.10, -size * 0.30), point(size * 0.10, size * 0.30));
+  const wxPoint markerBase = point(size * 0.10, 0.0);
+  const wxPoint markerTip = point(size * 0.48, 0.0);
+  line(markerBase, markerTip);
+  line(markerTip, point(size * 0.28, size * 0.13));
+  line(markerTip, point(size * 0.28, -size * 0.13));
+}
+
+void GRIBOverlayFactory::drawProportionalCurrentArrow(
+    int x, int y, double interpolatedFromDirectionDegrees,
+    double speedMetresPerSecond, double baseSizePixels,
+    double growthPixelsPerKnot, const wxColour& colour,
+    double viewportRotation) {
+  if (!m_oDC || speedMetresPerSecond < 0.01) return;
+  const double length = xgrib::ProportionalCurrentLength(
+      baseSizePixels, growthPixelsPerKnot, speedMetresPerSecond);
+  const xgrib::DisplayAxes axes = xgrib::BearingDisplayAxes(
+      xgrib::CurrentTowardBearing(interpolatedFromDirectionDegrees),
+      viewportRotation);
+  auto point = [&](double along, double across) {
+    return wxPoint(x + static_cast<int>(std::lround(axes.along_x * along +
+                                                    axes.across_x * across)),
+                   y + static_cast<int>(std::lround(axes.along_y * along +
+                                                    axes.across_y * across)));
+  };
+  const double headLength = std::clamp(length * 0.34, 4.0, 13.0);
+  const double headHalfWidth = std::clamp(length * 0.20, 3.0, 8.0);
+  const wxPoint tail = point(-length * 0.42, 0.0);
+  const wxPoint tip = point(length * 0.58, 0.0);
+  const wxPoint neck = point(length * 0.58 - headLength, 0.0);
+  wxPoint head[3] = {tip, point(length * 0.58 - headLength, headHalfWidth),
+                     point(length * 0.58 - headLength, -headHalfWidth)};
+  const int width =
+      std::clamp(static_cast<int>(std::lround(length / 12.0)), 1, 4);
+  m_oDC->SetPen(wxPen(colour, width, wxPENSTYLE_SOLID));
+  m_oDC->SetBrush(wxBrush(colour));
+  m_oDC->StrokeLine(tail, neck);
+  m_oDC->DrawPolygon(3, head);
+}
+
 void GRIBOverlayFactory::RenderGribDirectionArrows(int settings,
                                                    GribRecord **pGR,
                                                    PlugIn_ViewPort *vp) {
@@ -1567,21 +1637,16 @@ void GRIBOverlayFactory::RenderGribDirectionArrows(int settings,
   if (!pGRX->isFilled()) FillGrid(pGRX);
   if (!pGRY->isFilled()) FillGrid(pGRY);
 
-  // Set arrows Size
+  const auto& directionSettings = m_Settings.Settings[settings];
   int arrowWidth = 2;
-  int arrowSize,
-      arrowSizeIdx = m_Settings.Settings[settings].m_iDirectionArrowSize;
-  if (arrowSizeIdx == 0) {
-    if (m_pixelMM > 0.2)
-      arrowSize = 26;
-    else
-      arrowSize = 5. / m_pixelMM;
-  } else
-    arrowSize = 16;
+  const int symbolSize =
+      std::clamp(directionSettings.m_iDirectionArrowSizePixels,
+                 settings == GribOverlaySettings::WAVE ? 8 : 6, 40);
+  constexpr int arrowSizeIdx = 1;
+  const double arrowScale = symbolSize / 16.0;
 
-  // set default colour
-  wxColour colour;
-  GetGlobalColor(_T ( "DILG3" ), &colour);
+  wxColour colour = directionSettings.m_DirectionArrowColour;
+  if (!colour.IsOk()) GetGlobalColor(_T ( "DILG3" ), &colour);
 
 #ifdef ocpnUSE_GL
   if (!m_pdc) {
@@ -1592,7 +1657,8 @@ void GRIBOverlayFactory::RenderGribDirectionArrows(int settings,
       glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
       glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
     } else {
-      if (m_Settings.Settings[settings].m_iDirectionArrowForm == 0)  // Single?
+      if (directionSettings.m_iDirectionArrowForm ==
+          GribOverlaySettings::SINGLE_ARROW)
         arrowWidth = 4;
       else
         arrowWidth = 3;
@@ -1602,12 +1668,43 @@ void GRIBOverlayFactory::RenderGribDirectionArrows(int settings,
   }
 #endif
 
-  if (m_Settings.Settings[settings].m_bDirArrFixSpac) {  // fixed spacing
+  auto drawDirectionSymbol = [&](const wxPoint& point, double magnitude,
+                                 double directionDegrees) {
+    const int form = directionSettings.m_iDirectionArrowForm;
+    if (settings == GribOverlaySettings::WAVE &&
+        (form == GribOverlaySettings::WAVE_CRESTS ||
+         form == GribOverlaySettings::WAVE_HEIGHT_CIRCLES)) {
+      drawWaveSymbol(point.x, point.y, directionDegrees, magnitude, form,
+                     symbolSize, colour, vp->rotation);
+      return;
+    }
+    if (settings == GribOverlaySettings::CURRENT &&
+        form == GribOverlaySettings::PROPORTIONAL_ARROW) {
+      drawProportionalCurrentArrow(
+          point.x, point.y, directionDegrees, magnitude, symbolSize,
+          directionSettings.m_dDirectionArrowGrowthPerKnot, colour,
+          vp->rotation);
+      return;
+    }
+
+    const double angle = (directionDegrees - 90.0) * M_PI / 180.0;
+    if (form == GribOverlaySettings::DOUBLE_ARROW) {
+      drawDoubleArrow(point.x, point.y, angle + vp->rotation, colour,
+                      arrowWidth, arrowSizeIdx, arrowScale);
+      return;
+    }
+    int width = arrowWidth;
+    if (settings == GribOverlaySettings::WAVE &&
+        form == GribOverlaySettings::PROPORTIONAL_ARROW)
+      width = std::clamp(static_cast<int>(std::lround(magnitude + 0.5)), 1, 8);
+    drawSingleArrow(point.x, point.y, angle + vp->rotation, colour, width,
+                    arrowSizeIdx, arrowScale);
+  };
+
+  if (directionSettings.m_bDirArrFixSpac) {  // fixed spacing
     // Get spacing in pixels from settings
-    int space_pixels =
-        adjustSpacing(m_Settings.Settings[settings].m_iBarbArrSpacing);
-    int arrowSize = 16;
-    int total_spacing = space_pixels + arrowSize;  // Physical pixels.
+    const int space_pixels = adjustSpacing(directionSettings.m_iDirArrSpacing);
+    const int total_spacing = space_pixels + symbolSize;  // Physical pixels.
 
     // Convert pixel spacing to geographic spacing
     // We need to create a reference point and move it by the spacing to find
@@ -1642,8 +1739,6 @@ void GRIBOverlayFactory::RenderGribDirectionArrows(int settings,
         GetCanvasPixLL(vp, &p, lat, lon);
 
         double sh, dir;
-        double scale = 1.0;
-
         if (polar) {  // wave arrows
           sh = pGRX->getInterpolatedValue(lon, lat, true);
           dir = pGRY->getInterpolatedValue(lon, lat, true, true);
@@ -1652,34 +1747,20 @@ void GRIBOverlayFactory::RenderGribDirectionArrows(int settings,
         } else {  // current arrows
           if (!GribRecord::getInterpolatedValues(sh, dir, pGRX, pGRY, lon, lat))
             continue;
-          scale = wxMax(1.0, sh);  // Size depends on magnitude.
         }
 
         // Keep malformed GRIB vectors from generating unbounded geometry.
         if (!xgrib::IsRenderableDirectionVector(sh, dir, polar))
           continue;
-        dir = (dir - 90) * M_PI / 180.;
-
-        // draw arrows
-        if (m_Settings.Settings[settings].m_iDirectionArrowForm == 0)
-          drawSingleArrow(p.x, p.y, dir + vp->rotation, colour, arrowWidth,
-                          arrowSizeIdx, scale);
-        else if (m_Settings.Settings[settings].m_iDirectionArrowForm == 1)
-          drawDoubleArrow(p.x, p.y, dir + vp->rotation, colour, arrowWidth,
-                          arrowSizeIdx, scale);
-        else
-          drawSingleArrow(p.x, p.y, dir + vp->rotation, colour,
-                          wxMax(1, wxMin(8, (int)(sh + 0.5))), arrowSizeIdx,
-                          scale);
+        drawDirectionSymbol(p, sh, dir);
       }
     }
 
   } else {  // end fixed spacing -> minimum spacing
 
     // set minimum spacing between arrows
-    double minspace =
-        wxMax(m_Settings.Settings[settings].m_iDirArrSpacing,
-              m_Settings.Settings[settings].m_iDirectionArrowSize * 1.2);
+    const double minspace =
+        wxMax(directionSettings.m_iDirArrSpacing, symbolSize * 1.2);
     double minspace2 = square(minspace);
 
     //    Get the the grid
@@ -1720,40 +1801,24 @@ void GRIBOverlayFactory::RenderGribDirectionArrows(int settings,
           if (lon > 180) lon -= 360;
 
           if (PointInLLBox(vp, lon, lat)) {
-            double sh, dir, wdh;
-            double scale = 1.0;
+            double sh, dir;
             if (polar) {  // wave arrows
               dir = pGRY->getValue(i, j);
               sh = pGRX->getValue(i, j);
 
               if (dir == GRIB_NOTDEF || sh == GRIB_NOTDEF) continue;
 
-              wdh = sh + 0.5;
             } else {
               if (!GribRecord::getInterpolatedValues(sh, dir, pGRX, pGRY, lon,
                                                      lat, false))
                 continue;
 
-              wdh = (8 / 2.5 * sh) + 0.5;
-              scale = wxMax(1.0, sh);  // Size depends on magnitude.
             }
 
             // Keep malformed GRIB vectors from generating unbounded geometry.
             if (!xgrib::IsRenderableDirectionVector(sh, dir, polar))
               continue;
-            dir = (dir - 90) * M_PI / 180.;
-
-            // draw arrows
-            if (m_Settings.Settings[settings].m_iDirectionArrowForm == 0)
-              drawSingleArrow(p.x, p.y, dir + vp->rotation, colour, arrowWidth,
-                              arrowSizeIdx, scale);
-            else if (m_Settings.Settings[settings].m_iDirectionArrowForm == 1)
-              drawDoubleArrow(p.x, p.y, dir + vp->rotation, colour, arrowWidth,
-                              arrowSizeIdx, scale);
-            else
-              drawSingleArrow(p.x, p.y, dir + vp->rotation, colour,
-                              wxMax(1, wxMin(8, (int)wdh)), arrowSizeIdx,
-                              scale);
+            drawDirectionSymbol(p, sh, dir);
           }
         }
       }

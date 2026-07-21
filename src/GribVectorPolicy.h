@@ -17,7 +17,10 @@ inline bool IsRenderableDirectionVector(double magnitude,
   if (!std::isfinite(magnitude) || !std::isfinite(directionDegrees) ||
       magnitude < 0.0)
     return false;
-  return isWaveVector || magnitude <= kMaxRenderableCurrentMetresPerSecond;
+  if (isWaveVector)
+    return magnitude <= 100.0 && directionDegrees >= 0.0 &&
+           directionDegrees <= 360.0;
+  return magnitude <= kMaxRenderableCurrentMetresPerSecond;
 }
 
 bool IsRenderableCurrentRecordPair(const GribRecord* eastward,

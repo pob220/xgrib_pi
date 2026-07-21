@@ -19,3 +19,25 @@ foreach(component IN ITEMS MAJOR MINOR PATCH TWEAK)
       "Generated plugin ${component} version does not match the package version")
   endif()
 endforeach()
+
+file(READ "${PROTOCOL_HEADER}" protocol_header)
+if(NOT protocol_header MATCHES
+    "kGribProtocolVersionMajor[ \t]*=[ \t]*5[ \t]*;")
+  message(FATAL_ERROR "xGRIB must advertise GRIB timeline protocol major 5")
+endif()
+if(NOT protocol_header MATCHES
+    "kGribProtocolVersionMinor[ \t]*=[ \t]*0[ \t]*;")
+  message(FATAL_ERROR "xGRIB must advertise GRIB timeline protocol minor 0")
+endif()
+
+file(READ "${PLUGIN_SOURCE}" plugin_source)
+if(NOT plugin_source MATCHES
+    "GribVersionMajor[^\n]*kGribProtocolVersionMajor")
+  message(FATAL_ERROR
+    "Timeline records must use the GRIB protocol major, not package version")
+endif()
+if(NOT plugin_source MATCHES
+    "GribVersionMinor[^\n]*kGribProtocolVersionMinor")
+  message(FATAL_ERROR
+    "Timeline records must use the GRIB protocol minor, not package version")
+endif()

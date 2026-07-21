@@ -218,6 +218,8 @@ set(SRCS
 set(HDRS
     src/grib_pi.h
     src/GribOverlayFactory.h
+    src/GribDisplayGeometry.h
+    src/GribProtocolVersion.h
     src/GribVectorPolicy.h
     src/GribUIDialogBase.h
     src/GrabberWin.h
@@ -535,6 +537,13 @@ if (NOT OCPN_FLATPAK_CONFIG)
       ${wxWidgets_LIBRARIES})
     add_test(NAME xgrib_plugin_policy_tests COMMAND xgrib_plugin_policy_tests)
 
+    add_executable(xgrib_display_geometry_tests
+      test/GribDisplayGeometryTests.cpp)
+    target_include_directories(xgrib_display_geometry_tests PRIVATE
+      ${PROJECT_SOURCE_DIR}/src)
+    add_test(NAME xgrib_display_geometry_tests
+             COMMAND xgrib_display_geometry_tests)
+
     add_executable(xgrib_process_command_tests
       test/ProcessCommandTests.cpp src/ProcessCommand.cpp)
     target_include_directories(xgrib_process_command_tests PRIVATE
@@ -559,6 +568,8 @@ if (NOT OCPN_FLATPAK_CONFIG)
     add_test(NAME xgrib_plugin_version_contract
       COMMAND ${CMAKE_COMMAND}
         -DPLUGIN_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/grib_pi.h
+        -DPLUGIN_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/grib_pi.cpp
+        -DPROTOCOL_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/GribProtocolVersion.h
         -DGENERATED_VERSION_HEADER=${CMAKE_BINARY_DIR}/CMakeFiles/include/version.h
         -DEXPECTED_MAJOR=${VERSION_MAJOR}
         -DEXPECTED_MINOR=${VERSION_MINOR}

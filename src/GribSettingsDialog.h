@@ -111,6 +111,13 @@ struct GribOverlaySettings {
   enum Units5 { PERCENTAGE };
   enum Units6 { JPKG };
   enum Units7 { DBZ };
+  enum DirectionArrowForm {
+    SINGLE_ARROW,
+    DOUBLE_ARROW,
+    PROPORTIONAL_ARROW,
+    WAVE_CRESTS,
+    WAVE_HEIGHT_CIRCLES
+  };
 
   struct OverlayDataSettings {
     int m_Units;
@@ -127,6 +134,9 @@ struct GribOverlaySettings {
     int m_iDirectionArrowForm;
     bool m_bDirArrFixSpac;
     int m_iDirectionArrowSize;
+    int m_iDirectionArrowSizePixels;
+    double m_dDirectionArrowGrowthPerKnot;
+    wxColour m_DirectionArrowColour;
     int m_iDirArrSpacing;
     bool m_bOverlayMap;
     int m_iOverlayMapColors;
@@ -155,10 +165,13 @@ private:
   void SetDataTypeSettings(int settings);
   void ReadDataTypeSettings(int settings);
   void PopulateUnits(int settings);
+  void PopulateDirectionStyles(int settings);
+  void UpdateDirectionControlState();
   void ShowFittingSettings(int settings);
   void ShowSettings(int params, bool show = true);
   void OnDataTypeChoice(wxCommandEvent& event);
   void OnUnitChange(wxCommandEvent& event);
+  void OnDirectionStyleChange(wxCommandEvent& event);
   void OnTransparencyChange(wxScrollEvent& event);
   void OnApply(wxCommandEvent& event);
   void OnIntepolateChange(wxCommandEvent& event);

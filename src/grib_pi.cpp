@@ -37,6 +37,7 @@
 
 #include <limits>
 
+#include "GribProtocolVersion.h"
 #include "grib_pi.h"
 
 #ifdef __WXQT__
@@ -800,8 +801,8 @@ void grib_pi::SetPluginMessage(wxString& message_id, wxString& message_body) {
     char ptr[64];
     snprintf(ptr, sizeof ptr, "%p", set);
 
-    v["GribVersionMajor"] = PLUGIN_VERSION_MAJOR;
-    v["GribVersionMinor"] = PLUGIN_VERSION_MINOR;
+    v["GribVersionMajor"] = xgrib::kGribProtocolVersionMajor;
+    v["GribVersionMinor"] = xgrib::kGribProtocolVersionMinor;
     v["TimelineSetPtr"] = wxString::From8BitData(ptr);
 
     wxJSONWriter w;

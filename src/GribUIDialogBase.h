@@ -42,6 +42,7 @@
 #include <wx/gdicmn.h>
 #include <wx/font.h>
 #include <wx/colour.h>
+#include <wx/clrpicker.h>
 #include <wx/settings.h>
 #include <wx/string.h>
 #include <wx/button.h>
@@ -352,7 +353,12 @@ protected:
   wxCheckBox* m_cDirArrFixSpac;
   wxCheckBox* m_cDirArrMinSpac;
   wxFlexGridSizer* m_fgDirArrData2;
-  wxChoice* m_cDirectionArrowSize;
+  wxStaticText* m_tDirectionArrowSize;
+  wxSpinCtrl* m_sDirectionArrowSize;
+  wxStaticText* m_tDirectionArrowGrowth;
+  wxSpinCtrlDouble* m_sDirectionArrowGrowth;
+  wxStaticText* m_tDirectionArrowColour;
+  wxColourPickerCtrl* m_cpDirectionArrowColour;
   wxSpinCtrl* m_sDirArrSpacing;
   wxCheckBox* m_cbOverlayMap;
   wxStaticText* m_tOverlayColors;

@@ -1322,9 +1322,8 @@ GribSettingsDialogBase::GribSettingsDialogBase(wxWindow* parent, wxWindowID id,
   fgSizer43->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
 
   wxStaticText* m_staticText42;
-  m_staticText42 =
-      new wxStaticText(m_scSetDataPanel, wxID_ANY, _("Spacing (pixels)"),
-                       wxDefaultPosition, wxDefaultSize, 0);
+  m_staticText42 = new wxStaticText(m_scSetDataPanel, wxID_ANY, _("Placement"),
+                                    wxDefaultPosition, wxDefaultSize, 0);
   m_staticText42->Wrap(-1);
   fgSizer43->Add(m_staticText42, 0, wxALL, 5);
 
@@ -1343,24 +1342,51 @@ GribSettingsDialogBase::GribSettingsDialogBase(wxWindow* parent, wxWindowID id,
 
   fgSizer15->Add(m_fgDirArrData1, 1, wxEXPAND, 5);
 
-  m_fgDirArrData2 = new wxFlexGridSizer(0, 1, 0, 0);
+  m_fgDirArrData2 = new wxFlexGridSizer(0, 2, 0, 0);
   m_fgDirArrData2->SetFlexibleDirection(wxBOTH);
   m_fgDirArrData2->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
+  m_fgDirArrData2->AddGrowableCol(1, 1);
 
-  wxString m_cDirectionArrowSizeChoices[] = {_("Default Size"),
-                                             _("Small Size")};
-  int m_cDirectionArrowSizeNChoices =
-      sizeof(m_cDirectionArrowSizeChoices) / sizeof(wxString);
-  m_cDirectionArrowSize = new wxChoice(
-      m_scSetDataPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-      m_cDirectionArrowSizeNChoices, m_cDirectionArrowSizeChoices, 0);
-  m_cDirectionArrowSize->SetSelection(0);
-  m_fgDirArrData2->Add(m_cDirectionArrowSize, 0, wxALL | wxEXPAND, 5);
+  m_tDirectionArrowSize =
+      new wxStaticText(m_scSetDataPanel, wxID_ANY, _("Symbol size (pixels)"),
+                       wxDefaultPosition, wxDefaultSize, 0);
+  m_fgDirArrData2->Add(m_tDirectionArrowSize, 0,
+                       wxALIGN_CENTER_VERTICAL | wxALL, 5);
+  m_sDirectionArrowSize = new wxSpinCtrl(
+      m_scSetDataPanel, wxID_ANY, wxEmptyString, wxDefaultPosition,
+      wxDefaultSize, wxSP_ARROW_KEYS, 6, 40, 18);
+  m_fgDirArrData2->Add(m_sDirectionArrowSize, 0, wxALL | wxEXPAND, 5);
+
+  m_tDirectionArrowGrowth = new wxStaticText(
+      m_scSetDataPanel, wxID_ANY, _("Growth (pixels per knot)"),
+      wxDefaultPosition, wxDefaultSize, 0);
+  m_fgDirArrData2->Add(m_tDirectionArrowGrowth, 0,
+                       wxALIGN_CENTER_VERTICAL | wxALL, 5);
+  m_sDirectionArrowGrowth = new wxSpinCtrlDouble(
+      m_scSetDataPanel, wxID_ANY, wxEmptyString, wxDefaultPosition,
+      wxDefaultSize, wxSP_ARROW_KEYS, 0.0, 12.0, 6.0, 0.5);
+  m_sDirectionArrowGrowth->SetDigits(1);
+  m_fgDirArrData2->Add(m_sDirectionArrowGrowth, 0, wxALL | wxEXPAND, 5);
+
+  m_tDirectionArrowColour =
+      new wxStaticText(m_scSetDataPanel, wxID_ANY, _("Display colour"),
+                       wxDefaultPosition, wxDefaultSize, 0);
+  m_fgDirArrData2->Add(m_tDirectionArrowColour, 0,
+                       wxALIGN_CENTER_VERTICAL | wxALL, 5);
+  m_cpDirectionArrowColour = new wxColourPickerCtrl(
+      m_scSetDataPanel, wxID_ANY, *wxBLACK, wxDefaultPosition, wxDefaultSize,
+      wxCLRP_DEFAULT_STYLE);
+  m_fgDirArrData2->Add(m_cpDirectionArrowColour, 0, wxALL | wxEXPAND, 5);
+
+  m_fgDirArrData2->Add(
+      new wxStaticText(m_scSetDataPanel, wxID_ANY, _("Spacing (pixels)"),
+                       wxDefaultPosition, wxDefaultSize, 0),
+      0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 
   m_sDirArrSpacing = new wxSpinCtrl(m_scSetDataPanel, wxID_ANY, wxEmptyString,
                                     wxDefaultPosition, wxDefaultSize,
-                                    wxSP_ARROW_KEYS, 30, 100, 30);
-  m_fgDirArrData2->Add(m_sDirArrSpacing, 0, wxALL, 5);
+                                    wxSP_ARROW_KEYS, 24, 120, 44);
+  m_fgDirArrData2->Add(m_sDirArrSpacing, 0, wxALL | wxEXPAND, 5);
 
   fgSizer15->Add(m_fgDirArrData2, 1, wxEXPAND, 0);
 
