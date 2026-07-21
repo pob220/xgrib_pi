@@ -464,7 +464,11 @@ if (-not (Test-Path $metadataPath -PathType Leaf)) {
 }
 $metadata = Get-Item $metadataPath
 $metadataXml = [xml](Get-Content -Raw $metadata.FullName)
-$packageVersion = ([string]$metadataXml.plugin.version).Trim()
+$packageVersionNode = $metadataXml.SelectSingleNode('/plugin/version')
+if ($null -eq $packageVersionNode) {
+    throw "Package metadata has no /plugin/version element: $($metadata.FullName)"
+}
+$packageVersion = $packageVersionNode.InnerText.Trim()
 if ($packageVersion -notmatch '^\d+\.\d+\.\d+\.\d+$') {
     throw "Invalid or missing package version in $($metadata.FullName)"
 }

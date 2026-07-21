@@ -1,6 +1,7 @@
 file(READ "${PLUGIN_SETUP}" plugin_setup)
 file(READ "${FLATPAK_ARCHIVE_TEST}" flatpak_archive_test)
 file(READ "${DEPLOY_SCRIPT}" deploy_script)
+file(READ "${WINDOWS_BUILD_SCRIPT}" windows_build_script)
 
 if(plugin_setup MATCHES
     "OCPN_FLATPAK_CONFIG OR OCPN_FLATPAK_BUILD[^\n]*\n([^\n]*\n){0,12}[^\n]*set\\(PKG_TARGET_WX_VER")
@@ -29,4 +30,15 @@ endforeach()
 if(deploy_script MATCHES "xgrib_pi-[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+")
   message(FATAL_ERROR
     "Alpha deployment must derive the release version from package metadata")
+endif()
+
+if(NOT windows_build_script MATCHES
+    "SelectSingleNode\\('/plugin/version'\\)")
+  message(FATAL_ERROR
+    "Windows packaging must select the child plugin version element explicitly")
+endif()
+if(windows_build_script MATCHES
+    "metadataXml\\.plugin\\.version")
+  message(FATAL_ERROR
+    "PowerShell XML property access confuses the plugin version attribute and element")
 endif()
