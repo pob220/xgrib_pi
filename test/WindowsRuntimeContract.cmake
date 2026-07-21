@@ -16,6 +16,7 @@ set(runtime_patterns
   "Register-WmiEvent -Class Win32_ProcessStartTrace"
   "environmental-grib\\.exe"
   "Generate Complete GRIB"
+  "Windows loader rejected the packaged environmental-grib\\.exe"
   "OnInitTimer\\.\\.\\.Finalize Canvases"
   "xGRIB environmental generator launched, pid="
   "observation_source"

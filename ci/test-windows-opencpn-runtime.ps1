@@ -260,6 +260,9 @@ try {
 
     if (-not (Wait-FileContains $opencpnLog `
             "xGRIB environmental generator launched, pid=" 5)) {
+        if ($null -ne (Find-ElementByName "Launch failed")) {
+            throw "Windows loader rejected the packaged environmental-grib.exe"
+        }
         # Retry the control's supported default action once.  Keep this
         # focus-free: keyboard-focus APIs are not valid for this wxMSW button
         # on the CircleCI desktop.  The production PID log below prevents a
@@ -270,6 +273,9 @@ try {
 
     $helperDeadline = [DateTime]::UtcNow.AddSeconds(30)
     do {
+        if ($null -ne (Find-ElementByName "Launch failed")) {
+            throw "Windows loader rejected the packaged environmental-grib.exe"
+        }
         $events = @(Get-Event -SourceIdentifier $sourceIdentifier `
             -ErrorAction SilentlyContinue)
         foreach ($event in $events) {

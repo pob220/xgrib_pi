@@ -155,6 +155,11 @@ Keep these invariants when changing or updating source, dependencies or CI:
 - The OpenCPN Windows plugin is x86 and the environmental helper is x86_64.
   Never link ecCodes or another 64-bit library into `xgrib_pi.dll`; communicate
   with the helper only through the existing job/result/process boundary.
+- Keep the x64 MSVC and OpenMP redistributable DLLs app-local beside the helper.
+  The vcpkg Windows ecCodes port enables OpenMP and therefore imports
+  `VCOMP140.DLL`. Exercise the staged helper with a PATH containing only its
+  own directory and Windows system directories so Visual Studio cannot mask a
+  missing package dependency.
 - MSVC plugin targets must compile with `MAKING_PLUGIN` so OpenCPN API symbols
   are imported from the host. Keep the architecture and dependency `dumpbin`
   checks; resolve Visual Studio tools using `vswhere`, not an assumed `PATH`.

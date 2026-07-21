@@ -425,9 +425,25 @@ Assert-NativeSuccess "Inspecting xGRIB plugin dependencies"
 & $dumpbin /dependents $packagedHelper 2>&1 | Set-Content -Encoding utf8 `
     (Join-Path $logDir "helper-dependencies.log")
 Assert-NativeSuccess "Inspecting environmental helper dependencies"
-& $packagedHelper capabilities | Set-Content -Encoding utf8 `
-    (Join-Path $testDir "packaged-helper-capabilities.json")
-Assert-NativeSuccess "Packaged helper execution"
+$packagedHelperDirectory = Split-Path $packagedHelper -Parent
+$packagedOpenMpRuntime = Join-Path $packagedHelperDirectory "vcomp140.dll"
+if (-not (Test-Path $packagedOpenMpRuntime)) {
+    throw "Packaged x64 helper is missing the MSVC OpenMP runtime vcomp140.dll"
+}
+
+# Do not let Visual Studio, vcpkg or the CI image mask an incomplete package.
+# App-local DLLs and Windows system DLLs are the only dependencies a user's
+# OpenCPN process can safely be assumed to provide.
+$savedPackagedHelperPath = $env:PATH
+try {
+    $env:PATH = "$packagedHelperDirectory;$env:SystemRoot\System32;$env:SystemRoot"
+    & $packagedHelper capabilities | Set-Content -Encoding utf8 `
+        (Join-Path $testDir "packaged-helper-capabilities.json")
+    Assert-NativeSuccess "Packaged helper execution with isolated PATH"
+}
+finally {
+    $env:PATH = $savedPackagedHelperPath
+}
 
 Push-Location $build
 Invoke-NativeLogged `
