@@ -141,3 +141,8 @@ observations, forecasts, or prudent seamanship.
 
 xGRIB is GPL-3.0-or-later. The native helper is MIT licensed. Bundled
 third-party components retain their respective licenses.
+
+## Package hosting
+
+Open-source package repository hosting is graciously provided by
+[Cloudsmith](https://cloudsmith.com/).
