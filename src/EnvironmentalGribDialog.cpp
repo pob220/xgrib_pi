@@ -2114,6 +2114,7 @@ void EnvironmentalGribDialog::TryOpenGeneratedGrib() {
   if (m_onGribReady) {
     m_onGribReady(path);
     AppendLog("Opened generated GRIB in xGRIB: " + path);
+    wxLogMessage("xGRIB: opened generated GRIB: %s", path);
     return;
   }
 

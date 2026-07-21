@@ -11,6 +11,7 @@ set(required_patterns
   "env\\.env\\[\"ECCODES_DEFINITION_PATH\"\\]"
   "env\\.env\\[\"ECCODES_SAMPLES_PATH\"\\]"
   "env\\.env\\[\"PROJ_DATA\"\\]"
+  "xGRIB: opened generated GRIB: %s"
   "packaged\\.SetFullName\\(\"environmental-grib\\.exe\"\\)")
 
 foreach(pattern IN LISTS required_patterns)
