@@ -166,6 +166,9 @@ Keep these invariants when changing or updating source, dependencies or CI:
 - Treat file paths as Unicode end to end. Keep the UTF-8 Windows manifest on
   the helper and generator tests, use native/wide file APIs at OS boundaries,
   and retain fixture coverage for spaces and non-ASCII characters.
+- Quote child-process arguments with `xgrib::QuoteProcessArgument`; POSIX
+  single quotes are not valid Windows `CreateProcess` quoting. Keep the test
+  which copies and launches itself from a path containing spaces and Unicode.
 - Close GRIB/NetCDF readers before deleting or replacing their files. POSIX
   permits deleting an open file but Windows normally does not; deferred
   cleanup must remain covered by the Windows generator tests.

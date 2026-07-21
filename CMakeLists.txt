@@ -192,6 +192,7 @@ set(SRCS
     src/GribUIDialog.cpp
     src/EnvironmentalGribDialog.cpp
     src/GeneratorJobJson.cpp
+    src/ProcessCommand.cpp
     src/XgribPaths.cpp
     src/XgribPluginPolicy.cpp
     src/CursorData.cpp
@@ -223,6 +224,7 @@ set(HDRS
     src/GribUIDialog.h
     src/EnvironmentalGribDialog.h
     src/GeneratorJobJson.h
+    src/ProcessCommand.h
     src/XgribPaths.h
     src/XgribPluginPolicy.h
     src/CursorData.h
@@ -532,6 +534,15 @@ if (NOT OCPN_FLATPAK_CONFIG)
     target_link_libraries(xgrib_plugin_policy_tests PRIVATE
       ${wxWidgets_LIBRARIES})
     add_test(NAME xgrib_plugin_policy_tests COMMAND xgrib_plugin_policy_tests)
+
+    add_executable(xgrib_process_command_tests
+      test/ProcessCommandTests.cpp src/ProcessCommand.cpp)
+    target_include_directories(xgrib_process_command_tests PRIVATE
+      ${PROJECT_SOURCE_DIR}/src)
+    target_link_libraries(xgrib_process_command_tests PRIVATE
+      ${wxWidgets_LIBRARIES})
+    add_test(NAME xgrib_process_command_tests
+             COMMAND xgrib_process_command_tests)
 
     add_test(NAME xgrib_environmental_process_output_contract
       COMMAND ${CMAKE_COMMAND}

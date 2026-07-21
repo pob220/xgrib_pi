@@ -1,6 +1,7 @@
 #include "EnvironmentalGribDialog.h"
 
 #include "GeneratorJobJson.h"
+#include "ProcessCommand.h"
 #include "XgribPaths.h"
 
 #include <wx/config.h>
@@ -31,12 +32,6 @@
 #endif
 
 namespace {
-
-wxString ShellQuote(const wxString& value) {
-  wxString escaped(value);
-  escaped.Replace("'", "'\\''");
-  return "'" + escaped + "'";
-}
 
 wxString DefaultOutputDirectory() {
   wxFileName path(wxStandardPaths::Get().GetUserDataDir(), "");
@@ -796,7 +791,8 @@ void EnvironmentalGribDialog::SetCurrentViewPort(const PlugIn_ViewPort& vp) {
 }
 
 void EnvironmentalGribDialog::OnCheckDependencies(wxCommandEvent&) {
-  wxString command = ShellQuote(m_generatorPath->GetValue()) + " capabilities";
+  wxString command =
+      xgrib::QuoteProcessArgument(m_generatorPath->GetValue()) + " capabilities";
   AppendLog("Checking native generator capabilities...");
   StartCommand(command, "", false);
 }
@@ -834,13 +830,18 @@ void EnvironmentalGribDialog::OnPrepareTpxoCache(wxCommandEvent&) {
     cachePath.Mkdir(wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
   }
   wxString command =
-      ShellQuote(m_generatorPath->GetValue()) + " prepare-tpxo-cache --bbox " +
-      ShellQuote(m_west->GetValue()) + " " + ShellQuote(m_south->GetValue()) +
-      " " + ShellQuote(m_east->GetValue()) + " " +
-      ShellQuote(m_north->GetValue()) + " --grid-spacing-deg " +
-      ShellQuote(m_tpxoGridSpacing->GetValue()) + " --model-dir " +
-      ShellQuote(m_tpxoModelDir->GetPath()) + " --output " +
-      ShellQuote(cachePath.GetFullPath()) + " --overwrite --verbose";
+      xgrib::QuoteProcessArgument(m_generatorPath->GetValue()) +
+      " prepare-tpxo-cache --bbox " +
+      xgrib::QuoteProcessArgument(m_west->GetValue()) + " " +
+      xgrib::QuoteProcessArgument(m_south->GetValue()) + " " +
+      xgrib::QuoteProcessArgument(m_east->GetValue()) + " " +
+      xgrib::QuoteProcessArgument(m_north->GetValue()) +
+      " --grid-spacing-deg " +
+      xgrib::QuoteProcessArgument(m_tpxoGridSpacing->GetValue()) +
+      " --model-dir " +
+      xgrib::QuoteProcessArgument(m_tpxoModelDir->GetPath()) + " --output " +
+      xgrib::QuoteProcessArgument(cachePath.GetFullPath()) +
+      " --overwrite --verbose";
   AppendLog("Preparing TPXO cache...");
   AppendLog("Source: TPXO10 astronomical tide model");
   AppendLog(
@@ -1196,8 +1197,9 @@ bool EnvironmentalGribDialog::ValidateOfflineTidalPackage() {
 
   wxArrayString standardOutput;
   wxArrayString standardError;
-  const wxString command = ShellQuote(m_generatorPath->GetValue()) +
-                           " inspect-xtd " + ShellQuote(path);
+  const wxString command =
+      xgrib::QuoteProcessArgument(m_generatorPath->GetValue()) +
+      " inspect-xtd " + xgrib::QuoteProcessArgument(path);
   const long exitCode =
       wxExecute(command, standardOutput, standardError, wxEXEC_SYNC);
   const wxString output = JoinLines(standardOutput);
@@ -2281,8 +2283,9 @@ wxString EnvironmentalGribDialog::BuildGenerateCommand() {
     m_resultPath.clear();
     return {};
   }
-  return ShellQuote(m_generatorPath->GetValue()) + " run-job --job " +
-         ShellQuote(m_jobPath) + " --result " + ShellQuote(m_resultPath);
+  return xgrib::QuoteProcessArgument(m_generatorPath->GetValue()) +
+         " run-job --job " + xgrib::QuoteProcessArgument(m_jobPath) +
+         " --result " + xgrib::QuoteProcessArgument(m_resultPath);
 }
 
 wxString EnvironmentalGribDialog::OutputPath() const {
