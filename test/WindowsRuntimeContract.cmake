@@ -1,4 +1,5 @@
 file(READ "${RUNTIME_SCRIPT}" runtime_script)
+file(READ "${RUNTIME_JOB_SCRIPT}" runtime_job_script)
 file(READ "${DIAGNOSTIC_SCRIPT}" diagnostic_script)
 file(READ "${CIRCLE_CONFIG}" circle_config)
 
@@ -15,13 +16,28 @@ set(runtime_patterns
   "Register-WmiEvent -Class Win32_ProcessStartTrace"
   "environmental-grib\\.exe"
   "Generate Complete GRIB"
+  "OnInitTimer\\.\\.\\.Finalize Canvases"
+  "xGRIB environmental generator launched, pid="
+  "observation_source"
   "xGRIB: opened generated GRIB:"
   "runtime-combined-inspection\\.json"
   "01-opencpn-running\\.png"
-  "04-merge-success\\.png")
+  "04-merge-success\\.png"
+  "99-runtime-failure\\.png")
 foreach(pattern IN LISTS runtime_patterns)
   if(NOT runtime_script MATCHES "${pattern}")
     message(FATAL_ERROR "Windows OpenCPN runtime contract is missing: ${pattern}")
+  endif()
+endforeach()
+
+set(runtime_job_patterns
+  "windows-opencpn-runtime\.json"
+  "opencpn-runtime-test\.log"
+  "result_classification = \"fully-tested\""
+  "plugin_load_status = \"passed\"")
+foreach(pattern IN LISTS runtime_job_patterns)
+  if(NOT runtime_job_script MATCHES "${pattern}")
+    message(FATAL_ERROR "Windows runtime job contract is missing: ${pattern}")
   endif()
 endforeach()
 
@@ -29,6 +45,9 @@ set(circle_patterns
   "windows-focused-validation"
   "windows-focused:"
   "only: windows-focused-validation"
+  "windows-opencpn-runtime:"
+  "circleci-test-windows-opencpn\.ps1"
+  "requires: .*windows-x86"
   "windows-generator-diagnostics:"
   "XGRIB_WINDOWS_DIAGNOSTICS_ONLY")
 foreach(pattern IN LISTS circle_patterns)

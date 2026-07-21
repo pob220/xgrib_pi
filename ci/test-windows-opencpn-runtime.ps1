@@ -245,8 +245,26 @@ try {
     Start-Sleep -Milliseconds 500
     Save-Screenshot (Join-Path $screenshotDirectory "02-selected-paths-visible.png")
 
+    if (-not (Wait-FileContains $opencpnLog "OnInitTimer...Finalize Canvases" 20)) {
+        throw "OpenCPN did not finish its deferred UI initialization"
+    }
+
     $generateButton = Wait-ElementByName "Generate Complete GRIB" 10
+    if ($null -eq $generateButton -or -not $generateButton.Current.IsEnabled) {
+        throw "The xGRIB Generate Complete GRIB button is not enabled"
+    }
+    $generateButton.SetFocus()
     Invoke-Element $generateButton "xGRIB Generate Complete GRIB button"
+
+    if (-not (Wait-FileContains $opencpnLog `
+            "xGRIB environmental generator launched, pid=" 5)) {
+        # Some wxMSW controls expose InvokePattern but do not dispatch it on
+        # the first synthetic invocation while focus is changing. A focused
+        # Space key is the native keyboard equivalent and is only attempted
+        # when the production launch log proves the first action did nothing.
+        $generateButton.SetFocus()
+        [System.Windows.Forms.SendKeys]::SendWait(" ")
+    }
 
     $helperDeadline = [DateTime]::UtcNow.AddSeconds(30)
     do {
@@ -260,14 +278,32 @@ try {
                     process_id = [int]$event.SourceEventArgs.NewEvent.ProcessID
                     parent_process_id = [int]$event.SourceEventArgs.NewEvent.ParentProcessID
                     observed_after_gui_generate = $true
+                    observation_source = "wmi_process_start"
                 }
                 break
             }
         }
         if ($null -ne $helperInfo) { break }
+
+        if (Test-Path $opencpnLog) {
+            $launchLog = Get-Content $opencpnLog -Raw -ErrorAction SilentlyContinue
+            $launchMatch = [regex]::Match(
+                $launchLog, "xGRIB environmental generator launched, pid=(\d+)")
+            if ($launchMatch.Success) {
+                $helperInfo = [ordered]@{
+                    process_name = "environmental-grib.exe"
+                    process_id = [int]$launchMatch.Groups[1].Value
+                    parent_process_id = [int]$opencpnProcess.Id
+                    observed_after_gui_generate = $true
+                    observation_source = "opencpn_plugin_log"
+                }
+                break
+            }
+        }
         Start-Sleep -Milliseconds 100
     } while ([DateTime]::UtcNow -lt $helperDeadline)
     if ($null -eq $helperInfo) {
+        Save-Screenshot (Join-Path $screenshotDirectory "99-runtime-failure.png")
         throw "The xGRIB GUI did not launch environmental-grib.exe"
     }
     $helperInfo | ConvertTo-Json | Set-Content -Encoding utf8 `
@@ -316,6 +352,7 @@ try {
         "xGRIB smoke test opened environmental generator dialog",
         "xGRIB smoke test accepted weather path:",
         "xGRIB smoke test accepted current path:",
+        "xGRIB environmental generator launched, pid=",
         "xGRIB: opened generated GRIB:")) {
         if (-not $logText.Contains($requiredLogText)) {
             throw "OpenCPN runtime log is missing: $requiredLogText"

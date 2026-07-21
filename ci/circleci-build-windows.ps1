@@ -93,6 +93,7 @@ $packageDir = Join-Path $artifact "package"
 $fixtureDir = Join-Path $artifact "fixtures"
 $diagnosticDir = Join-Path $artifact "diagnostics"
 Assert-PowerShellSyntax (Join-Path $repo "ci\test-windows-opencpn-runtime.ps1")
+Assert-PowerShellSyntax (Join-Path $repo "ci\circleci-test-windows-opencpn.ps1")
 $dumpbin = Find-Dumpbin
 New-Item -ItemType Directory -Force `
     $build,$generatorBuild,$generatorStage,$stage,$logDir,$testDir,$packageDir,$fixtureDir,$diagnosticDir | Out-Null
@@ -454,22 +455,12 @@ $packageChecksums = foreach ($file in @($archive, $metadata)) {
 $packageChecksums | Set-Content -Encoding ascii `
     (Join-Path $packageDir "checksums.txt")
 
-Invoke-NativeLogged {
-    powershell.exe -ExecutionPolicy Bypass -File `
-        (Join-Path $repo "ci\test-windows-opencpn-runtime.ps1") `
-        -Repository $repo -PackageArchive $packagedArchive `
-        -ArtifactDirectory $artifact
-} (Join-Path $logDir "opencpn-runtime-test.log") `
-    "OpenCPN Windows runtime test"
-$runtimeResult = Get-Content `
-    (Join-Path $testDir "windows-opencpn-runtime.json") -Raw | ConvertFrom-Json
-
 $result = [ordered]@{
     schema = "xgrib-target-result-v1"
     target = "windows-x86"
     xgrib_repository_commit = (git rev-parse HEAD)
     xgrib_version = "0.1.0.1"
-    opencpn_version = $runtimeResult.opencpn_version
+    opencpn_version = "not-run"
     operating_system = "Windows Server 2022"
     operating_system_version = [Environment]::OSVersion.VersionString
     architecture = "x86"
@@ -484,11 +475,11 @@ $result = [ordered]@{
         proj = (Get-VcpkgVersion "proj" $generatorTriplet)
     }
     build_status = "passed"; test_status = "passed"; package_status = "passed"
-    metadata_validation_status = "passed"; installation_status = "passed"
-    plugin_discovery_status = "passed"; plugin_load_status = "passed"
-    graphical_test_status = "passed"; file_path_display_status = "passed"
+    metadata_validation_status = "passed"; installation_status = "not-run"
+    plugin_discovery_status = "not-run"; plugin_load_status = "not-run"
+    graphical_test_status = "not-run"; file_path_display_status = "not-run"
     merge_status = "passed"; output_validation_status = "passed"
-    screenshot_paths = $runtimeResult.screenshots; log_paths = @(
+    screenshot_paths = @(); log_paths = @(
         "logs/chocolatey-build-tools.log", "logs/chocolatey-gettext.log",
         "logs/vcpkg.log", "logs/dependencies.log",
         "logs/configure-generator-x64.log",
@@ -498,15 +489,12 @@ $result = [ordered]@{
         "logs/install.log", "logs/plugin-headers.log",
         "logs/helper-headers.log", "logs/plugin-dependencies.log",
         "logs/helper-dependencies.log", "logs/package.log",
-        "logs/opencpn-runtime-test.log", "logs/opencpn.log",
-        "tests/ctest.xml", "tests/helper-launch.json",
-        "tests/windows-opencpn-runtime.json",
-        "tests/runtime-combined-inspection.json",
+        "tests/ctest.xml",
         "tests/generator-x64-ctest.xml",
         "tests/checksums.txt")
     package_filename = $archive.Name; package_checksum_sha256 = $checksum
     elapsed_time_seconds = $null
-    result_classification = "fully-tested"
+    result_classification = "build-and-package-only"
     blocker_or_failure_details = ""
 }
 $result | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $artifact "result.json")

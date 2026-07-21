@@ -56,6 +56,7 @@ set(script_patterns
   "\\$env:PATH = \"\\$wxLib;\\$env:PATH\""
   "plugin-test-dependencies.log"
   "--timeout 120"
+  "result_classification = \"build-and-package-only\""
   "helper_architecture = \"x86_64\"")
 foreach(pattern IN LISTS script_patterns)
   if(NOT windows_script MATCHES "${pattern}")

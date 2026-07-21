@@ -1943,6 +1943,7 @@ void EnvironmentalGribDialog::StartCommand(const wxString& command,
                        &env);
   if (pid == 0) {
     AppendLog("Process failed to launch");
+    wxLogError("xGRIB environmental generator failed to launch");
     delete process;
     FinishCommand(-1, false);
     return;
@@ -1952,6 +1953,7 @@ void EnvironmentalGribDialog::StartCommand(const wxString& command,
   m_processRunning = true;
   m_processPid = pid;
   AppendLog(wxString::Format("Process launched, pid=%ld", pid));
+  wxLogMessage("xGRIB environmental generator launched, pid=%ld", pid);
   if (!m_processTimer.Start(100)) {
     AppendLog(
         "Failed to start the process-output monitor; terminating the helper to "

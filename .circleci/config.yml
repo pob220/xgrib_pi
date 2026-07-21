@@ -123,6 +123,24 @@ jobs:
           root: .
           paths: [artifacts]
 
+  windows-opencpn-runtime:
+    machine:
+      image: windows-server-2022-gui:current
+      shell: powershell.exe -ExecutionPolicy Bypass
+    resource_class: windows.medium
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: Isolated OpenCPN package and GUI validation
+          command: .\ci\circleci-test-windows-opencpn.ps1
+          no_output_timeout: 10m
+      - store_test_results:
+          path: artifacts
+      - store_artifacts:
+          path: artifacts
+
   windows-generator-diagnostics:
     machine:
       image: windows-server-2022-gui:current
@@ -238,6 +256,9 @@ workflows:
       - windows-x86:
           requires: [windows-vcpkg-dependencies]
           filters: *std-filters
+      - windows-opencpn-runtime:
+          requires: [windows-x86]
+          filters: *std-filters
       - macos-arm64:
           filters: *std-filters
 
@@ -251,6 +272,9 @@ workflows:
               only: windows-focused-validation
             tags:
               ignore: /.*/
+      - windows-opencpn-runtime:
+          requires: [windows-x86]
+          filters: *windows-focused-filters
 
   deploy_reviewed_alpha:
     when: << pipeline.parameters.run_workflow_deploy >>
@@ -294,6 +318,9 @@ workflows:
       - windows-x86:
           name: release-windows-x86
           requires: [release-windows-vcpkg-dependencies]
+      - windows-opencpn-runtime:
+          name: release-windows-opencpn-runtime
+          requires: [release-windows-x86]
       - macos-arm64:
           name: release-macos-arm64
       - hold-for-alpha-approval:
@@ -306,7 +333,7 @@ workflows:
             - release-debian12-arm64
             - release-flatpak25.08-x86_64
             - release-flatpak25.08-arm64
-            - release-windows-x86
+            - release-windows-opencpn-runtime
             - release-macos-arm64
       - deploy-alpha:
           context: xgrib-deployment
