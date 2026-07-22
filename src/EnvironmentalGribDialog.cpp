@@ -2254,11 +2254,13 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
   request["overwrite"] = true;
   request["keepIntermediate"] = false;
   request["dryRun"] = false;
-  if (NeedsCopernicusCredentials()) {
+  if (NeedsCopernicusCredentials() || currentSource == "noaa_rtofs_global") {
     wxFileName downloadDir;
     downloadDir.AssignDir(m_outputDir->GetPath());
     downloadDir.AppendDir("currentgrib_downloads");
     request["downloadDirectory"] = downloadDir.GetPath();
+  }
+  if (NeedsCopernicusCredentials()) {
     request["copernicusUsername"] = m_username->GetValue();
   }
   wxJSONWriter writer;

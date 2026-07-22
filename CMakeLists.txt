@@ -400,6 +400,9 @@ endif()
 if(BUILD_TESTING AND TARGET environmental_grib_merge_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_merge_tests)
 endif()
+if(BUILD_TESTING AND TARGET environmental_grib_concurrency_tests)
+  add_dependencies(${PACKAGE_NAME} environmental_grib_concurrency_tests)
+endif()
 
 if(UNIX AND NOT APPLE)
   set_target_properties(environmental-grib PROPERTIES
