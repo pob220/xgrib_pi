@@ -315,3 +315,69 @@ Create it in **Organization Settings > Contexts** as the restricted context
 `xgrib-deployment`. Do not put its value in source, commands, logs or issue
 comments. Catalogue PR creation, releases and deployment remain separate,
 explicitly authorised operations.
+
+### Proven publication sequence and 0.2.3 observations
+
+The 0.2.3.0 publication on 27 July 2026 established this safe sequence:
+
+1. Finish the ordinary `main` validation workflow with
+   `run_workflow_deploy=false` and confirm every matrix context is green.
+2. Create annotated generator and plugin tags on those exact validated
+   commits. Push and independently verify both remote tag refs before
+   continuing.
+3. Create an isolated worktree/branch from the validated plugin commit and
+   change only the `run_workflow_deploy` default from `false` to `true`.
+   Confirm the branch diff contains that one change. Never merge this
+   publication-only branch back into `main`, and never move the release tag
+   onto it.
+4. Push the publication branch and let the gated workflow rebuild the complete
+   matrix. Do not approve the hold merely because the earlier ordinary
+   workflow passed: publication deliberately validates fresh artifacts.
+5. Approve `hold-for-alpha-approval` in the CircleCI web UI only after every
+   prerequisite job is green. The approval API returns HTTP 403 without a
+   CircleCI token. A GitHub token is not a CircleCI token and must never be
+   reused or exposed in an attempted workaround.
+6. Wait for `deploy-alpha` to succeed, then query the public Cloudsmith
+   repository. Expect one metadata object and one tarball object for every
+   supported platform. Check that each object is `Completed`, each XML reports
+   the intended plugin version/target/target-version, and every
+   `tarball-url` is publicly retrievable with HTTP 200 or 206.
+7. Confirm `main` still has `run_workflow_deploy=false`. Retain the temporary
+   publication branch long enough for audit/diagnosis, then remove it when it
+   is no longer needed; it is not release source.
+
+If an SSH `git push` produces no output for an unexpectedly long time, stop
+only that bounded push; do not assume it completed. Resolve the intended
+commit/tag locally, check the remote ref using `gh api`, and retry with a
+bounded authenticated HTTPS push, for example:
+
+```sh
+timeout 30s git push https://github.com/pob220/xgrib_pi.git <refspec>
+gh api repos/pob220/xgrib_pi/git/ref/tags/<tag> --jq .object.sha
+```
+
+Use the corresponding generator repository when checking its tag. Never
+force-push a release tag to recover from a transport stall.
+
+Current hosted-run timing is uneven. A Flatpak x86_64 job taking about
+29–32 minutes while still reporting `running` is normal, not evidence of a
+stall; the 0.2.3.0 run took 32 minutes 10 seconds. Flatpak aarch64 took about
+15 minutes. The sequential Windows dependency, package and runtime jobs took
+about 16 minutes in total. The final Cloudsmith deployment took under two
+minutes after approval. Use live job status and retained logs rather than an
+arbitrary wall-clock cutoff.
+
+The 0.2.3.0 evidence snapshot is:
+
+| Evidence | Result |
+| --- | --- |
+| Plugin tag | `v0.2.3.0` at `a3a9aabb581a7a27ea4f32817a5d076eab9dd211` |
+| Generator tag | `v0.1.4` at `d8b14bfe8b3eae104a16c6449dfffac84860251e` |
+| Ordinary validation | Pipeline 50, workflow `88fd7aef-2232-4b54-bb00-f326a527cef7`; all 11 contexts green |
+| Gated publication rebuild | Pipeline 52, workflow `8d29c01d-1b9b-4008-8c82-845dc83adb48`; all target jobs green |
+| Approval/deployment | Hold job 354 approved manually; deploy job 355 succeeded |
+| Public package version | `0.2.3.0+355.d158d5e` |
+| Cloudsmith result | 18 `Completed` raw objects: nine metadata files and nine tarballs |
+
+The object count is twice the number of published platform candidates, not a
+permanent constant. Recalculate it if the supported matrix changes.
