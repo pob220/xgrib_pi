@@ -230,6 +230,15 @@ Keep these invariants when changing or updating source, dependencies or CI:
 - Visual Studio is a multi-configuration generator. Configure once but always
   build, test and install using `--config Release`; do not infer failure from
   `CMAKE_BUILD_TYPE` output alone.
+- Use explicitly joined `std::thread` workers for the shared generator. The
+  macOS 11 deployment target's libc++ does not make `std::jthread` available,
+  even when the compiler accepts C++20; join already-created workers if later
+  thread construction throws.
+- Apply the complete WMO GRIB2 identity (discipline, parameter category and
+  parameter number) after template, level, step and packing keys. Older
+  ecCodes releases can otherwise reset one part of the identity; assert the
+  numeric identity in cross-version tests because valid short names differ
+  between releases (for example `r` versus `2r`).
 - Jasper checks for GCC/Clang sanitizers, Unix headers, `ssize_t` and optional
   C features during MSVC configuration. A reported probe failure is benign
   when the subsequent fallback configuration and build succeed. Compiler or
