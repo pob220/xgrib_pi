@@ -73,9 +73,9 @@ set(LONG_DESCRIPTION
 
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "2")
-set(VERSION_PATCH "0")
+set(VERSION_PATCH "2")
 set(VERSION_TWEAK "0")
-set(VERSION_DATE "21/07/2026") # DD/MM/YYYY format
+set(VERSION_DATE "27/07/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -656,6 +656,14 @@ if (NOT OCPN_FLATPAK_CONFIG)
         --combined)
     set_tests_properties(xgrib_combined_reader_integration_tests PROPERTIES
       FIXTURES_REQUIRED environmental_grib_combined_fixture)
+    if(NOT XGRIB_EXTERNAL_GENERATOR_DIR)
+      add_test(NAME xgrib_combined_all_data_reader_tests
+        COMMAND xgrib_reader_integration_tests
+          "${CMAKE_BINARY_DIR}/functional-fixtures/combined-all-known.grb2"
+          --combined-all)
+      set_tests_properties(xgrib_combined_all_data_reader_tests PROPERTIES
+        FIXTURES_REQUIRED environmental_grib_combined_fixture)
+    endif()
   endif()
 
 endif (NOT OCPN_FLATPAK_CONFIG)

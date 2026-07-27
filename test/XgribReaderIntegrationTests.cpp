@@ -53,6 +53,18 @@ int main(int argc, char** argv) {
          "GRIB2 primary wave direction should be recognized");
   Expect(GribV2DataTypeForParameter(10, 0, 11) == GRB_WVPER,
          "GRIB2 primary wave period should be recognized");
+  Expect(GribV2DataTypeForParameter(0, 2, 22) == GRB_WIND_GUST,
+         "GRIB2 wind gust should be recognized");
+  Expect(GribV2DataTypeForParameter(0, 1, 8) == GRB_PRECIP_TOT,
+         "GRIB2 total precipitation should be recognized");
+  Expect(GribV2DataTypeForParameter(0, 6, 1) == GRB_CLOUD_TOT,
+         "GRIB2 total cloud cover should be recognized");
+  Expect(GribV2DataTypeForParameter(0, 7, 6) == GRB_CAPE,
+         "GRIB2 CAPE should be recognized");
+  Expect(GribV2DataTypeForParameter(0, 16, 196) == GRB_COMP_REFL,
+         "GRIB2 composite reflectivity should be recognized");
+  Expect(GribV2DataTypeForParameter(0, 1, 1) == GRB_HUMID_REL,
+         "GRIB2 relative humidity should be recognized");
 
   // Weather Routing requests arbitrary timeline times from xGRIB. Verify the
   // interpolation used for a regional-to-global model handover can bridge
@@ -84,7 +96,7 @@ int main(int argc, char** argv) {
 
   Expect(argc == 2 || argc == 3,
          "usage: xgrib_reader_integration_tests FILE.grb "
-         "[--any|--combined]");
+         "[--any|--combined|--combined-all]");
 
   GribReader reader(wxString::FromUTF8(argv[1]));
   Expect(reader.isOk(), "xGRIB reader rejected native generator output");
@@ -95,7 +107,74 @@ int main(int argc, char** argv) {
     std::cout << "xGRIB reader accepted generated output\n";
     return 0;
   }
-  Expect(mode.empty() || mode == "--combined", "unknown reader test option");
+  Expect(mode.empty() || mode == "--combined" || mode == "--combined-all",
+         "unknown reader test option");
+
+  if (mode == "--combined-all") {
+    int windU = 0, windV = 0, currentU = 0, currentV = 0;
+    int gust = 0, precipitation = 0, cloud = 0, cape = 0, reflectivity = 0;
+    int humidity = 0, pressure = 0, temperature = 0, geopotential = 0;
+    for (const auto& [key, records] : *reader.getGribMap()) {
+      (void)key;
+      if (!records) continue;
+      for (const GribRecord* record : *records) {
+        switch (record->getDataType()) {
+          case GRB_WIND_VX:
+            ++windU;
+            break;
+          case GRB_WIND_VY:
+            ++windV;
+            break;
+          case GRB_UOGRD:
+            ++currentU;
+            break;
+          case GRB_VOGRD:
+            ++currentV;
+            break;
+          case GRB_WIND_GUST:
+            ++gust;
+            break;
+          case GRB_PRECIP_TOT:
+            ++precipitation;
+            break;
+          case GRB_CLOUD_TOT:
+            ++cloud;
+            break;
+          case GRB_CAPE:
+            ++cape;
+            break;
+          case GRB_COMP_REFL:
+            ++reflectivity;
+            break;
+          case GRB_HUMID_REL:
+            ++humidity;
+            break;
+          case GRB_PRESSURE:
+            ++pressure;
+            break;
+          case GRB_TEMP:
+            ++temperature;
+            break;
+          case GRB_GEOPOT_HGT:
+            ++geopotential;
+            break;
+        }
+      }
+    }
+    Expect(windU == 3 && windV == 3,
+           "all-data fixture should retain surface and pressure-level winds");
+    Expect(currentU == 3 && currentV == 3,
+           "all-data fixture should retain both current components");
+    Expect(gust >= 1 && precipitation >= 1 && cloud >= 1 && cape >= 1 &&
+               reflectivity >= 1,
+           "all-data fixture should retain marine and convective fields");
+    Expect(humidity >= 2 && pressure >= 1 && temperature >= 2 &&
+               geopotential >= 1,
+           "all-data fixture should retain surface and upper-air fields");
+    std::cout << "xGRIB reader accepted every display-data class in combined "
+                 "weather/current output\n";
+    return 0;
+  }
 
   if (mode == "--combined") {
     Expect(reader.getTotalNumberOfGribRecords() == 10,

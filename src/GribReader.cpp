@@ -203,6 +203,11 @@ void GribReader::readAllGribRecords() {
               rec->getLevelValue() == 500 || rec->getLevelValue() == 300))
       storeRecordInMap(rec);
 
+    else if (rec->getDataType() == GRB_HUMID_REL &&
+             rec->getLevelType() == LV_ABOV_GND &&
+             rec->getLevelValue() == 2)
+      storeRecordInMap(rec);
+
     else if (rec->getDataType() == GRB_PRECIP_TOT  // total rainfall
              && rec->getLevelType() == LV_GND_SURF && rec->getLevelValue() == 0)
       storeRecordInMap(rec);

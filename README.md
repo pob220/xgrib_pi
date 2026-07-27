@@ -30,8 +30,10 @@ creating duplicate overlays or ambiguous `GRIB_*` plugin messages.
 
 ## Supported generator sources
 
-- Weather: NOAA GFS and HRRR, Met Office UKV, DWD ICON-EU, ECMWF IFS/AIFS
-  Open Data, or an existing GRIB.
+- Weather: NOAA GFS and HRRR, Met Office UKV, MET Norway Nordic, DWD ICON-EU,
+  ECMWF IFS/AIFS Open Data, or an existing GRIB. The provider-aware **All
+  available display data** preset includes supported surface, convective and
+  pressure-level fields.
 - Waves: NOAA GFS Wave and Copernicus Marine Global Waves.
 - Currents: Offline current from a separately supplied xGRIB `.xtd` package,
   Marine.ie Irish Sea, NOAA RTOFS, Copernicus NWS/Global, an existing GRIB,
@@ -136,7 +138,9 @@ data. They do not alter OpenCPN's process-wide library search path.
 See [the architecture note](docs/architecture.md) and
 [catalogue release procedure](docs/catalogue-release.md). The repeatable local,
 container, hosted-platform and evidence workflow is documented in
-[Alpha validation](docs/alpha-validation.md).
+[Alpha validation](docs/alpha-validation.md). Provider formats, field coverage
+and conversion details are listed in [Weather providers and display-data
+presets](docs/weather-providers.md).
 
 Generated model data is for planning and experimentation. It is not an
 official navigation product and does not replace notices to mariners,

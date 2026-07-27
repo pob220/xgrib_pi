@@ -351,7 +351,8 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
                         "Bay of Biscay",
                         "Gulf Stream / Florida Straits",
                         "US East Coast / Gulf Stream",
-                        "Caribbean"};
+                        "Caribbean",
+                        "Nordic coastal waters"};
   m_presetChoice = new wxChoice(scrolled, wxID_ANY, wxDefaultPosition,
                                 wxDefaultSize, WXSIZEOF(presets), presets);
   m_presetChoice->SetSelection(0);
@@ -390,7 +391,8 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   wxString weatherProviders[] = {"NOAA GFS forecast",
                                  "NOAA HRRR 3 km forecast",
                                  "Met Office UKV 2 km forecast",
-                                 "DWD ICON-EU 13 km forecast",
+                                 "MET Norway Nordic 1 km forecast",
+                                 "DWD ICON-EU 7 km forecast",
                                  "ECMWF IFS Open Data forecast",
                                  "ECMWF AIFS Open Data forecast (experimental)",
                                  "Existing weather GRIB file",
@@ -399,7 +401,8 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
       new wxChoice(scrolled, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                    WXSIZEOF(weatherProviders), weatherProviders);
   m_weatherProvider->SetSelection(0);
-  wxString weatherPresets[] = {"Minimal wind", "Routing", "Marine comfort"};
+  wxString weatherPresets[] = {"Minimal wind", "Routing", "Marine comfort",
+                               "All available display data"};
   m_weatherPreset =
       new wxChoice(scrolled, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                    WXSIZEOF(weatherPresets), weatherPresets);
@@ -407,7 +410,8 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   m_weatherPreset->SetToolTip(
       "Minimal: wind only. Routing: wind, pressure, and air temperature. "
       "Marine: routing fields plus gusts, precipitation, cloud cover, and "
-      "optional waves.");
+      "optional waves. All available: every xGRIB-displayable field supplied "
+      "by the selected provider; waves and currents remain separate choices.");
   m_includeWaves = new wxCheckBox(scrolled, wxID_ANY, "Include wave fields");
   m_includeWaves->SetToolTip(
       "Adds significant wave height, primary wave period, and primary wave "
@@ -942,6 +946,11 @@ void EnvironmentalGribDialog::OnGenerate(wxCommandEvent&) {
     AppendLog("Generation cancelled before launch.");
     return;
   }
+  if (m_generateWeather->GetValue() &&
+      weatherProvider.Contains("MET Norway") && !ValidateMetNoRequest()) {
+    AppendLog("Generation cancelled before launch.");
+    return;
+  }
   if (m_generateWeather->GetValue() && weatherProvider.Contains("ECMWF") &&
       !ValidateEcmwfRequest()) {
     AppendLog("Generation cancelled before launch.");
@@ -1120,7 +1129,7 @@ void EnvironmentalGribDialog::ApplyPreset(int selection) {
       {-8.5, 50.5, -2.5, 56.5, 5},   {-7.0, 48.0, -1.0, 51.5, 5},
       {-5.0, 51.0, 9.0, 60.0, 5},    {-10.5, 43.0, -1.0, 48.5, 6},
       {-81.0, 24.0, -77.0, 28.0, 7}, {-81.0, 24.0, -70.0, 36.0, 7},
-      {-85.0, 10.0, -60.0, 25.0, 7},
+      {-85.0, 10.0, -60.0, 25.0, 7}, {3.0, 57.0, 12.0, 66.0, -1},
   };
   int areaIndex = selection - 2;
   if (areaIndex >= 0 && areaIndex < static_cast<int>(WXSIZEOF(presets))) {
@@ -1129,11 +1138,23 @@ void EnvironmentalGribDialog::ApplyPreset(int selection) {
     m_south->SetValue(wxString::Format("%.1f", area.south));
     m_east->SetValue(wxString::Format("%.1f", area.east));
     m_north->SetValue(wxString::Format("%.1f", area.north));
-    m_generateCurrents->SetValue(true);
     if (area.currentSourceSelection >= 0 &&
         area.currentSourceSelection <
             static_cast<int>(m_currentSource->GetCount())) {
+      m_generateCurrents->SetValue(true);
       m_currentSource->SetSelection(area.currentSourceSelection);
+    } else {
+      m_generateCurrents->SetValue(false);
+    }
+    if (areaIndex == 7) {
+      const int metNo =
+          m_weatherProvider->FindString("MET Norway Nordic 1 km forecast");
+      if (metNo != wxNOT_FOUND) {
+        m_generateWeather->SetValue(true);
+        m_weatherProvider->SetSelection(metNo);
+        m_durationHours->SetValue(std::min(m_durationHours->GetValue(), 48));
+        m_stepHours->SetValue(1);
+      }
     }
     RefreshOutputFilenameDefault();
     UpdateProviderUi();
@@ -1403,6 +1424,9 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
   bool weatherUkv =
       weatherEnabled &&
       m_weatherProvider->GetStringSelection().Contains("Met Office UKV");
+  bool weatherMetNo =
+      weatherEnabled &&
+      m_weatherProvider->GetStringSelection().Contains("MET Norway");
   bool weatherIconEu =
       weatherEnabled &&
       m_weatherProvider->GetStringSelection().Contains("ICON-EU");
@@ -1532,6 +1556,20 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
               "direction.";
     if (!currentNote.empty()) note += "\n" + currentNote;
     m_providerNote->SetLabel(note);
+  } else if (weatherMetNo) {
+    wxString note =
+        "Source: MET Norway Nordic 1 km postprocessed forecast, derived from "
+        "the operational Nordic model. No account is required. The helper "
+        "reads only the requested NetCDF subset and converts its Lambert grid "
+        "to OpenCPN GRIB2. Forecast data is hourly for about 56 hours; select "
+        "forecast extension with GFS for longer requests.";
+    if (waveCopernicus) {
+      note +=
+          "\nWave source: Copernicus Marine Global Waves forecast. Account "
+          "required; global 3-hourly wave fields.";
+    }
+    if (!currentNote.empty()) note += "\n" + currentNote;
+    m_providerNote->SetLabel(note);
   } else if (weatherUkv) {
     wxString note =
         "Source: Met Office UKV 2 km forecast. Met Office UKV 2 km is a "
@@ -1542,11 +1580,6 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
         "may remain hourly. "
         "Requests outside the UK/Ireland domain or beyond available hours will "
         "fail clearly.";
-    if (m_weatherPreset->GetStringSelection().Contains("Marine")) {
-      note +=
-          "\nUKV marine extras are not implemented yet; routing fields will be "
-          "generated.";
-    }
     if (waveCopernicus) {
       note +=
           "\nWave source: Copernicus Marine Global Waves forecast. Account "
@@ -1573,9 +1606,6 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
         "for Europe. "
         "No account. Currently uses full-domain DWD field files; files may be "
         "large because bbox cropping is not yet implemented.";
-    if (m_weatherPreset->GetStringSelection().Contains("Marine")) {
-      note += "\nICON-EU marine extras currently generate routing fields only.";
-    }
     if (waveCopernicus) {
       note +=
           "\nWave source: Copernicus Marine Global Waves forecast. Account "
@@ -1587,7 +1617,7 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
     wxString note =
         "Source: ECMWF AIFS Open Data forecast. Global AI forecast, no "
         "account. "
-        "Experimental in this build; live retrieval still needs validation. "
+        "Experimental provider using the operational AIFS Single v2 feed. "
         "Files may be large if not cropped. "
         "Forecast steps are 6-hourly or coarser.";
     if (waveCopernicus) {
@@ -1716,10 +1746,45 @@ bool EnvironmentalGribDialog::ValidateUkvRequest() {
       return false;
     }
   }
-  if (m_weatherPreset->GetStringSelection().Contains("Marine")) {
-    AppendLog(
-        "UKV marine extras are not implemented yet; routing fields will be "
-        "generated.");
+  return true;
+}
+
+bool EnvironmentalGribDialog::ValidateMetNoRequest() {
+  const int step = m_stepHours->GetValue();
+  if (step != 1 && step != 3 && step != 6 && step != 12) {
+    const wxString message =
+        "MET Norway weather is available at 1, 3, 6, or 12-hour steps. "
+        "Choose one of those Step hours values.";
+    AppendLog(message);
+    wxMessageBox(message, "MET Norway forecast step unavailable",
+                 wxOK | wxICON_WARNING, this);
+    return false;
+  }
+  if (m_durationHours->GetValue() > 56 && !m_extendForecast->GetValue()) {
+    const wxString message =
+        "MET Norway's compact Nordic forecast covers about 56 hours. Enable "
+        "Forecast extension with NOAA GFS, or shorten the duration.";
+    AppendLog(message);
+    wxMessageBox(message, "MET Norway duration unavailable",
+                 wxOK | wxICON_WARNING, this);
+    return false;
+  }
+  double west = 0.0;
+  double south = 0.0;
+  double east = 0.0;
+  double north = 0.0;
+  if (m_west->GetValue().ToDouble(&west) &&
+      m_south->GetValue().ToDouble(&south) &&
+      m_east->GetValue().ToDouble(&east) &&
+      m_north->GetValue().ToDouble(&north) &&
+      (west < -20.0 || east > 80.0 || south < 51.0 || north > 88.0)) {
+    const wxString message =
+        "The requested bbox is outside the MET Norway Nordic forecast domain. "
+        "Choose a Nordic/European area or use a global provider.";
+    AppendLog(message);
+    wxMessageBox(message, "MET Norway area unavailable",
+                 wxOK | wxICON_WARNING, this);
+    return false;
   }
   return true;
 }
@@ -2154,6 +2219,8 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
       weatherProvider = "noaa_hrrr";
     else if (selected.Contains("Met Office UKV"))
       weatherProvider = "ukmo_ukv";
+    else if (selected.Contains("MET Norway"))
+      weatherProvider = "metno_nordic";
     else if (selected.Contains("ICON-EU"))
       weatherProvider = "dwd_icon_eu";
     else if (selected.Contains("AIFS"))
@@ -2168,6 +2235,8 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
     weatherPreset = "minimal";
   } else if (m_weatherPreset->GetStringSelection().Contains("Marine")) {
     weatherPreset = "marine";
+  } else if (m_weatherPreset->GetStringSelection().Contains("All available")) {
+    weatherPreset = "all";
   }
 
   wxString currentSource = "none";
@@ -2380,6 +2449,8 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
         prefix += "_gfs";
       else if (weatherProvider.Contains("UKV"))
         prefix += "_ukmo_ukv";
+      else if (weatherProvider.Contains("MET Norway"))
+        prefix += "_metno";
       else if (weatherProvider.Contains("ICON-EU"))
         prefix += "_icon_eu";
       else if (weatherProvider.Contains("AIFS"))
@@ -2431,6 +2502,8 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
         prefix += "_gfs";
       else if (weatherProvider.Contains("UKV"))
         prefix += "_ukmo_ukv";
+      else if (weatherProvider.Contains("MET Norway"))
+        prefix += "_metno";
       else if (weatherProvider.Contains("ICON-EU"))
         prefix += "_icon_eu";
       else if (weatherProvider.Contains("AIFS"))
@@ -2443,6 +2516,9 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
     if (ukvMixedCadence) prefix += "_mixed";
     if (weatherOn && m_weatherPreset->GetStringSelection().Contains("Marine"))
       prefix += "_marine";
+    if (weatherOn &&
+        m_weatherPreset->GetStringSelection().Contains("All available"))
+      prefix += "_all";
     if (wavesOn) {
       prefix += m_waveProvider->GetStringSelection().Contains("Copernicus")
                     ? "_copernicus_waves"

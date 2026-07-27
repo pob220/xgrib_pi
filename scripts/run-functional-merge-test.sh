@@ -58,22 +58,47 @@ jq -e '
   "${test_dir}/combined-cli.grb2" --combined \
   >"${test_dir}/xgrib-reader-reopen.log" 2>&1
 
+"$helper" merge-environment-gribs \
+  --weather "${fixture_dir}/all-weather-known.grb2" \
+  --current "${fixture_dir}/current-differing.grb" \
+  --output "${test_dir}/combined-all-cli.grb2" --overwrite \
+  >"${test_dir}/merge-all-result.json"
+
+jq -e '
+  .success == true and
+  .output_message_count == 23 and
+  .output_inspection.grib2_parameter_counts["0:6:1"] == 1 and
+  .output_inspection.grib2_parameter_counts["0:1:8"] == 1 and
+  .output_inspection.grib2_parameter_counts["0:7:6"] == 1 and
+  .output_inspection.grib2_parameter_counts["0:16:196"] == 1 and
+  .output_inspection.current_component_counts.u_49 == 3 and
+  .output_inspection.current_component_counts.v_50 == 3 and
+  (.errors | length) == 0
+' "${test_dir}/merge-all-result.json" >/dev/null
+
+"$reader" \
+  "${test_dir}/combined-all-cli.grb2" --combined-all \
+  >"${test_dir}/xgrib-all-data-reader-reopen.log" 2>&1
+
 "$helper" inspect-grib \
   "${test_dir}/combined-cli.grb2" \
   >"${test_dir}/combined-inspection.json"
 
 (cd "$artifact_dir" && sha256_files \
   fixtures/wind-known.grb2 \
+  fixtures/all-weather-known.grb2 \
   fixtures/current-matching.grb \
   fixtures/current-differing.grb \
   fixtures/current-incompatible-area.grb \
   fixtures/current-incompatible-time.grb \
   fixtures/corrupt.grb \
   fixtures/combined-known.grb2 \
+  fixtures/combined-all-known.grb2 \
   fixtures/combined-matching.grb2 \
   fixtures/wind-only-combined.grb2 \
   fixtures/current-only-combined.grb \
   fixtures/fixture-manifest.json \
-  tests/combined-cli.grb2 >tests/checksums.txt)
+  tests/combined-cli.grb2 \
+  tests/combined-all-cli.grb2 >tests/checksums.txt)
 
 echo "functional merge validation passed: ${test_dir}/combined-cli.grb2"

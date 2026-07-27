@@ -53,6 +53,7 @@ private:
   void ApplyPreset(int selection);
   bool ConfirmLargeCopernicusRequest();
   bool ValidateUkvRequest();
+  bool ValidateMetNoRequest();
   bool ValidateEcmwfRequest();
   bool AutoWouldUseMarineIe() const;
   bool NeedsCopernicusCredentials() const;
