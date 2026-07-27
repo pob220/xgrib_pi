@@ -1,6 +1,6 @@
 # Alpha validation
 
-This is the reproducible, no-cost validation route for xGRIB 0.2.2.0. It keeps
+This is the reproducible, no-cost validation route for xGRIB 0.2.3.0. It keeps
 ordinary validation separate from publication. No Cloudsmith credential is
 needed to build or test any target.
 
@@ -75,6 +75,32 @@ runs the production merge API through its CLI, checks structured JSON, reopens
 the result through xGRIB's production reader and records checksums. Canonical
 small inputs are retained in `test/fixtures` so packaged runtimes can be tested
 without compiling the fixture generator first.
+
+### 0.2.3 projected-provider performance acceptance
+
+Treat source transfer, NetCDF reading, interpolation and GRIB encoding as
+separate phases. The generator records each phase in result metadata. Do not
+replace a provider's access pattern based only on a local NetCDF benchmark:
+MET Norway's live OPeNDAP server took about 609 seconds for strided multi-time
+reads in the full 199-message North Sea case, so 0.2.3 deliberately uses
+single-time remote hyperslabs while retaining bounded four-time processing.
+
+The 0.2.3 acceptance evidence includes:
+
+- the 199-message, 0.025-degree MET Norway North Sea `All available` weather
+  stream compared byte-for-byte with the pre-optimization helper;
+- a live two-hour MET request reporting `single-time-opendap`, followed by a
+  validated cache hit with an identical SHA-256;
+- a deliberately truncated cache fixture which must be rejected and rebuilt
+  byte-identically;
+- a live two-hour UKV Routing request compared byte-for-byte with the
+  pre-optimization helper, with one interpolation plan reused by all fields;
+- a six-hour MET fixture and two-hour UKV fixture covering batch/stream
+  boundaries, partial projected footprints and multi-provider merging.
+
+The MET cache is an optimization, never an availability fallback: generation
+still opens the `latest` dataset to discover its current reference time before
+selecting a key, and every cached stream is strictly rescanned before reuse.
 
 ## Clean Linux container matrix
 

@@ -1,6 +1,6 @@
 # Weather providers and display-data presets
 
-xGRIB 0.2.2 offers four weather presets. `Minimal wind` requests 10 m wind
+xGRIB 0.2.3 offers four weather presets. `Minimal wind` requests 10 m wind
 only. `Routing` adds mean-sea-level pressure and 2 m air temperature. `Marine
 comfort` adds the provider's available gust, precipitation and total-cloud
 fields. `All available display data` adds every further field from that
@@ -35,8 +35,8 @@ does not display.
 |---|---|---|
 | GFS | NOAA NOMADS regional GRIB2 filter | Downloads a bbox and selected variable/level set directly. |
 | HRRR | NOAA full Lambert-conformal GRIB2 plus text inventory | Uses HTTP byte ranges for selected messages. The selected messages retain the full model grid. |
-| UKV | Public Met Office AWS objects, one CF-NetCDF file per field/time | Selects pressure axes where required, projects and bilinearly regrids the requested bbox, then writes regular-lat/lon GRIB2. |
-| MET Norway | CF-NetCDF through the official THREDDS OPeNDAP endpoint | Reads only required projected hyperslabs, converts wind speed/direction to components, regrids the bbox and writes regular-lat/lon GRIB2. |
+| UKV | Public Met Office AWS objects, one CF-NetCDF file per field/time | Selects pressure axes where required, caches each distinct projection/interpolation map, regrids fields in parallel and streams regular-lat/lon GRIB2 by forecast hour. |
+| MET Norway | CF-NetCDF through the official THREDDS OPeNDAP endpoint | Processes bounded four-time groups while using single-time OPeNDAP hyperslab reads (faster on the live service), converts wind speed/direction to components, reuses one interpolation map, regrids fields in parallel and streams regular-lat/lon GRIB2. Completed cycle/request results are validated and cached for exact repeats. |
 | ICON-EU | Bzip2-compressed, full-domain regular-lat/lon GRIB2 files | Decompresses selected field files and converts CCSDS-packed messages to simple packing. |
 | IFS/AIFS | Global GRIB2 with JSON-lines `.index` files | Selects messages with HTTP byte ranges and converts CCSDS packing to simple packing. Current AIFS v2 data use the `aifs-single` path. |
 
@@ -70,6 +70,17 @@ The upstream format and access behavior are documented by the providers:
   uncovered cells with a standard GRIB bitmap. This partial coverage survives
   wave/current merging; generation fails only when a requested field has no
   covered cells.
+- These projected-provider optimisations do not alter the requested spacing,
+  bilinear weights, source masks, 24-bit GRIB packing or field order. Timing
+  metadata separates source access, plan construction, interpolation, GRIB
+  encoding and final inspection so performance regressions remain observable.
+- MET Norway's live OPeNDAP service was benchmarked with both multi-time
+  strided and single-time hyperslab requests. Single-time reads are retained
+  for remote access because the server answers them faster; local fixture
+  conversion still uses strided batch reads. The on-disk cache is keyed by the
+  current forecast reference time, dataset URL, exact bbox, spacing, preset and
+  requested hours. Every hit is rescanned as a strict GRIB stream before use,
+  and entries older than eight hours are removed.
 - ICON-EU covers 23.5° W–62.5° E and 29.5°–70.5° N. xGRIB supports 1/3-hour
   sampling through 120 hours.
 - ECMWF IFS is sampled at 3/6/12 hours; AIFS at 6/12 hours. The selected GRIB
