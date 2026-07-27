@@ -64,6 +64,12 @@ The upstream format and access behavior are documented by the providers:
 - MET Norway's compact Nordic forecast contains 57 hourly time records (0–56
   hours). xGRIB supports 1/3/6/12-hour sampling. The Nordic area preset selects
   this provider and a valid 48-hour hourly request.
+- UKV and MET Norway use projected regional grids whose true footprints are
+  not rectangular in latitude/longitude. If a requested rectangle partly
+  overlaps one of those footprints, xGRIB retains every covered cell and marks
+  uncovered cells with a standard GRIB bitmap. This partial coverage survives
+  wave/current merging; generation fails only when a requested field has no
+  covered cells.
 - ICON-EU covers 23.5° W–62.5° E and 29.5°–70.5° N. xGRIB supports 1/3-hour
   sampling through 120 hours.
 - ECMWF IFS is sampled at 3/6/12 hours; AIFS at 6/12 hours. The selected GRIB
