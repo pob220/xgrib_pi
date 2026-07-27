@@ -80,6 +80,27 @@ jq -e '
   "${test_dir}/combined-all-cli.grb2" --combined-all \
   >"${test_dir}/xgrib-all-data-reader-reopen.log" 2>&1
 
+"$helper" merge-environment-gribs \
+  --weather "${fixture_dir}/long-weather-known.grb2" \
+  --current "${fixture_dir}/long-current-known.grb" \
+  --output "${test_dir}/combined-long-cli.grb2" --overwrite \
+  >"${test_dir}/merge-long-result.json"
+
+jq -e '
+  .success == true and
+  .output_message_count == 12 and
+  .output_inspection.message_count == 12 and
+  .output_inspection.current_component_counts.u_49 == 4 and
+  .output_inspection.current_component_counts.v_50 == 4 and
+  .output_inspection.valid_times ==
+    ["20260712T0000", "20260722T1500", "20260722T1600", "20260727T0000"] and
+  (.errors | length) == 0
+' "${test_dir}/merge-long-result.json" >/dev/null
+
+"$reader" \
+  "${test_dir}/combined-long-cli.grb2" --long-current \
+  >"${test_dir}/xgrib-long-current-reader-reopen.log" 2>&1
+
 "$helper" inspect-grib \
   "${test_dir}/combined-cli.grb2" \
   >"${test_dir}/combined-inspection.json"
@@ -94,11 +115,15 @@ jq -e '
   fixtures/corrupt.grb \
   fixtures/combined-known.grb2 \
   fixtures/combined-all-known.grb2 \
+  fixtures/long-weather-known.grb2 \
+  fixtures/long-current-known.grb \
+  fixtures/combined-long-known.grb2 \
   fixtures/combined-matching.grb2 \
   fixtures/wind-only-combined.grb2 \
   fixtures/current-only-combined.grb \
   fixtures/fixture-manifest.json \
   tests/combined-cli.grb2 \
-  tests/combined-all-cli.grb2 >tests/checksums.txt)
+  tests/combined-all-cli.grb2 \
+  tests/combined-long-cli.grb2 >tests/checksums.txt)
 
 echo "functional merge validation passed: ${test_dir}/combined-cli.grb2"

@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
 
   Expect(argc == 2 || argc == 3,
          "usage: xgrib_reader_integration_tests FILE.grb "
-         "[--any|--combined|--combined-all]");
+         "[--any|--combined|--combined-all|--long-current]");
 
   GribReader reader(wxString::FromUTF8(argv[1]));
   Expect(reader.isOk(), "xGRIB reader rejected native generator output");
@@ -107,8 +107,34 @@ int main(int argc, char** argv) {
     std::cout << "xGRIB reader accepted generated output\n";
     return 0;
   }
-  Expect(mode.empty() || mode == "--combined" || mode == "--combined-all",
+  Expect(mode.empty() || mode == "--combined" || mode == "--combined-all" ||
+             mode == "--long-current",
          "unknown reader test option");
+
+  if (mode == "--long-current") {
+    Expect(reader.getTotalNumberOfGribRecords() == 12,
+           "long-range combined fixture should contain twelve records");
+    Expect(reader.getNumberOfDates() == 4,
+           "long-range fixture should expose hours 0, 255, 256 and 360");
+    int windU = 0, windV = 0, currentU = 0, currentV = 0;
+    for (const auto& [key, records] : *reader.getGribMap()) {
+      (void)key;
+      if (!records) continue;
+      for (const GribRecord* record : *records) {
+        if (record->getDataType() == GRB_WIND_VX) ++windU;
+        if (record->getDataType() == GRB_WIND_VY) ++windV;
+        if (record->getDataType() == GRB_UOGRD) ++currentU;
+        if (record->getDataType() == GRB_VOGRD) ++currentV;
+      }
+    }
+    Expect(windU == 2 && windV == 2,
+           "long-range fixture should retain both weather components");
+    Expect(currentU == 4 && currentV == 4,
+           "xGRIB should decode both GRIB1 current components beyond hour 255");
+    std::cout << "xGRIB reader accepted combined weather/current leads "
+                 "through hour 360\n";
+    return 0;
+  }
 
   if (mode == "--combined-all") {
     int windU = 0, windV = 0, currentU = 0, currentV = 0;
