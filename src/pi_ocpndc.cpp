@@ -122,13 +122,7 @@ pi_ocpnDC::pi_ocpnDC(wxDC &pdc)
       m_buseGL(false) {
 #if wxUSE_GRAPHICS_CONTEXT
   pgc = nullptr;
-  auto pmdc = dynamic_cast<wxMemoryDC *>(dc);
-  if (pmdc)
-    pgc = wxGraphicsContext::Create(*pmdc);
-  else {
-    auto pcdc = dynamic_cast<wxClientDC *>(dc);
-    if (pcdc) pgc = wxGraphicsContext::Create(*pcdc);
-  }
+  SetDC(&pdc);
 #endif
   m_textforegroundcolour = wxColour(0, 0, 0);
   m_buseTex = false;  // GetLocaleCanonicalName().IsSameAs("en_US");
@@ -176,6 +170,28 @@ void pi_ocpnDC::SetVP(PlugIn_ViewPort *vp) {
   }
   // #endif
   m_vpSize = wxSize(vp->pix_width, vp->pix_height);
+}
+
+void pi_ocpnDC::SetDC(wxDC *dc_in) {
+#if wxUSE_GRAPHICS_CONTEXT
+  // A wxGraphicsContext is bound to the native surface selected into the
+  // wxDC used to create it. OpenCPN supplies plugins with a frame-local
+  // wxMemoryDC, so retaining the context after changing (or releasing) the
+  // DC sends subsequent strokes to an obsolete frame buffer.
+  delete pgc;
+  pgc = nullptr;
+#endif
+
+  dc = dc_in;
+
+#if wxUSE_GRAPHICS_CONTEXT
+  if (!dc || m_buseGL) return;
+
+  if (auto pmdc = dynamic_cast<wxMemoryDC *>(dc))
+    pgc = wxGraphicsContext::Create(*pmdc);
+  else if (auto pcdc = dynamic_cast<wxClientDC *>(dc))
+    pgc = wxGraphicsContext::Create(*pcdc);
+#endif
 }
 
 void pi_ocpnDC::Clear() {

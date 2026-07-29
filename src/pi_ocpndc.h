@@ -78,7 +78,7 @@ public:
   static void SetGLAttrs(bool highQuality);
   void SetGLStipple() const;
   void SetVP(PlugIn_ViewPort *vp);
-  void SetDC(wxDC *dc_in) { dc = dc_in; }
+  void SetDC(wxDC *dc_in);
 
   const wxPen &GetPen() const;
   const wxBrush &GetBrush() const;

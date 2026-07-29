@@ -567,6 +567,13 @@ if (NOT OCPN_FLATPAK_CONFIG)
         -DPOTFILES_FILE=${CMAKE_CURRENT_SOURCE_DIR}/po/POTFILES.in
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/SelectedFilePathContract.cmake)
 
+    add_test(NAME xgrib_graphics_context_lifetime_contract
+      COMMAND ${CMAKE_COMMAND}
+        -DDC_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/pi_ocpndc.h
+        -DDC_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/pi_ocpndc.cpp
+        -DOVERLAY_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/GribOverlayFactory.cpp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/GraphicsContextLifetimeContract.cmake)
+
     add_test(NAME xgrib_plugin_version_contract
       COMMAND ${CMAKE_COMMAND}
         -DPLUGIN_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/grib_pi.h

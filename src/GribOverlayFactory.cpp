@@ -466,6 +466,11 @@ bool GRIBOverlayFactory::RenderGribOverlay(wxDC &dc, PlugIn_ViewPort *vp) {
 #endif
   bool rv = DoRenderGribOverlay(vp);
 
+  // Release the graphics context while OpenCPN's frame-local DC is still
+  // alive. The next render callback will bind a context to its new surface.
+  m_oDC->SetDC(nullptr);
+  m_pdc = nullptr;
+
   return rv;
 }
 
