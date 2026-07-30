@@ -1017,7 +1017,8 @@ void EnvironmentalGribDialog::OnGenerate(wxCommandEvent&) {
   SaveSettings();
   AppendLog("Starting environmental GRIB generation...");
   AppendLog("Source: " + SourceLabel());
-  wxString childPassword = copernicusForecast ? m_password->GetValue() : "";
+  wxString childPassword =
+      copernicusForecast ? m_password->GetValue() : wxString();
   StartCommand(command, childPassword, true);
 }
 
@@ -2380,10 +2381,10 @@ wxString EnvironmentalGribDialog::OutputPath() const {
 wxString EnvironmentalGribDialog::SourceLabel() const {
   wxString weather = m_generateWeather->GetValue()
                          ? m_weatherProvider->GetStringSelection()
-                         : "None";
+                         : wxString("None");
   wxString current = m_generateCurrents->GetValue()
                          ? m_currentSource->GetStringSelection()
-                         : "None";
+                         : wxString("None");
   wxString waves = "None";
   if (m_includeWaves->GetValue()) {
     waves = m_waveProvider->GetStringSelection();
@@ -2404,7 +2405,8 @@ wxString EnvironmentalGribDialog::ValidTimeSummary() const {
   if (start.IsValid()) {
     const wxDateTime end =
         start + wxTimeSpan::Hours(m_durationHours->GetValue());
-    const wxString zone = m_useLocalTimeZone ? m_displayTimeZone : "UTC";
+    const wxString zone =
+        m_useLocalTimeZone ? m_displayTimeZone : wxString("UTC");
     const auto format = [&zone](const wxDateTime& value) {
       const wxDateTime wall = marine_time::ToWallClock(value, zone);
       return wall.Format("%Y-%m-%dT%H:%M:%S", wxDateTime::UTC) + " " +
@@ -2422,7 +2424,8 @@ wxDateTime EnvironmentalGribDialog::DisplayedStartUtc() const {
   if (text.EndsWith("Z")) text.RemoveLast();
   wxDateTime fields;
   if (!fields.ParseISOCombined(text, 'T')) return wxInvalidDateTime;
-  const wxString zone = m_useLocalTimeZone ? m_displayTimeZone : "UTC";
+  const wxString zone =
+      m_useLocalTimeZone ? m_displayTimeZone : wxString("UTC");
   return marine_time::FromWallClock(
              fields.GetYear(), static_cast<int>(fields.GetMonth()) + 1,
              fields.GetDay(), fields.GetHour(), fields.GetMinute(),
@@ -2441,17 +2444,19 @@ void EnvironmentalGribDialog::SetDisplayTimeZone(
   const wxDateTime instant = DisplayedStartUtc();
   m_useLocalTimeZone =
       enabled && marine_time::IsTimeZoneAvailable(zoneName);
-  m_displayTimeZone =
-      marine_time::IsTimeZoneAvailable(zoneName) ? zoneName : "UTC";
-  const wxString zone = m_useLocalTimeZone ? m_displayTimeZone : "UTC";
+  m_displayTimeZone = marine_time::IsTimeZoneAvailable(zoneName)
+                          ? zoneName
+                          : wxString("UTC");
+  const wxString zone =
+      m_useLocalTimeZone ? m_displayTimeZone : wxString("UTC");
   m_startTimeLabel->SetLabel(m_useLocalTimeZone
                                  ? "Start (" + m_displayTimeZone + ")"
-                                 : "Start UTC");
+                                 : wxString("Start UTC"));
   if (instant.IsValid()) {
     const wxDateTime wall = marine_time::ToWallClock(instant, zone);
     m_startUtc->SetValue(
         wall.Format("%Y-%m-%dT%H:%M:%S", wxDateTime::UTC) +
-        (m_useLocalTimeZone ? wxString() : "Z"));
+        (m_useLocalTimeZone ? wxString() : wxString("Z")));
   }
   Layout();
 }
