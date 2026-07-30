@@ -46,6 +46,7 @@
 #include "email.h"
 #include "folder.xpm"
 #include "GribUIDialog.h"
+#include "TimeZoneDisplay.h"
 #include "GribVectorPolicy.h"
 #include "EnvironmentalGribDialog.h"
 #include <wx/arrimpl.cpp>
@@ -238,7 +239,7 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
   // Sample the current time format using a fixed reference date (January 1,
   // 2021 at noon)
   wxDateTime referenceDate(1, wxDateTime::Jan, 2021, 12, 0, 0);
-  m_sLastTimeFormat = toUsrDateTimeFormat_Plugin(referenceDate);
+  m_sLastTimeFormat = FormatTime(referenceDate);
 
   // Start timer to check for time format changes (every 5 seconds)
   m_tFormatRefresh.Start(5000);
@@ -571,7 +572,7 @@ void GRIBUICtrlBar::OpenFile(bool newestFile) {
     } else {
       PopulateComboDataList();
       title.append(" (" +
-                   toUsrDateTimeFormat_Plugin(
+                   FormatTime(
                        wxDateTime(m_bGRIBActiveFile->GetRefDateTime())) +
                    ")");
 
@@ -1254,6 +1255,9 @@ void GRIBUICtrlBar::OnEnvironmentalGrib(wxCommandEvent& event) {
   if (!m_environmentalGribDialog) {
     m_environmentalGribDialog = new EnvironmentalGribDialog(
         this, [this](const wxString& path) { OpenGeneratedGrib(path); });
+    m_environmentalGribDialog->SetDisplayTimeZone(
+        m_OverlaySettings.m_bUseLocalTimeZone,
+        m_OverlaySettings.m_sDisplayTimeZone);
     pPlugIn->SetDialogFont(m_environmentalGribDialog);
   }
   m_environmentalGribDialog->SetCurrentViewPort(pPlugIn->GetCurrentViewPort());
@@ -1325,6 +1329,7 @@ void GRIBUICtrlBar::OnSettings(wxCommandEvent& event) {
     m_InterpolateMode = false;  // Interpolate could have been unchecked
   SetTimeLineMax(true);
   SetFactoryOptions();
+  RefreshTimeZoneDisplay();
 
   SetDialogsStyleSizePosition(true);
   delete dialog;
@@ -1497,7 +1502,7 @@ void GRIBUICtrlBar::TimelineChanged() {
   } else {
     m_cRecordForecast->SetSelection(GetNearestIndex(time, 2));
     SaveSelectionString();  // memorize index and label
-    wxString formattedTime = toUsrDateTimeFormat_Plugin(time);
+    wxString formattedTime = FormatTime(time);
     m_cRecordForecast->SetString(m_Selection_index,
                                  formattedTime);  // replace it by the
                                                   // interpolated time label
@@ -1885,7 +1890,7 @@ void GRIBUICtrlBar::PopulateComboDataList() {
   ArrayOfGribRecordSets* rsa = m_bGRIBActiveFile->GetRecordSetArrayPtr();
   for (size_t i = 0; i < rsa->GetCount(); i++) {
     wxDateTime t(rsa->Item(i).m_Reference_Time);
-    m_cRecordForecast->Append(toUsrDateTimeFormat_Plugin(t));
+    m_cRecordForecast->Append(FormatTime(t));
   }
   m_cRecordForecast->SetSelection(index);
 }
@@ -2092,7 +2097,7 @@ void GRIBUICtrlBar::ComputeBestForecastForNow() {
                               // wxChoice date time label
   m_cRecordForecast->SetSelection(GetNearestIndex(now, 2));
   SaveSelectionString();  // memorize the new selected wxChoice date time label
-  wxString nowTime = toUsrDateTimeFormat_Plugin(now);
+  wxString nowTime = FormatTime(now);
   m_cRecordForecast->SetString(m_Selection_index,
                                nowTime);  // write the now date time label
                                           // in the right place in wxChoice
@@ -2151,7 +2156,7 @@ void GRIBUICtrlBar::OnFormatRefreshTimer(wxTimerEvent& event) {
   // Check if time format has changed by comparing current format with saved
   // format
   wxDateTime referenceDate(1, wxDateTime::Jan, 2021, 12, 0, 0);
-  wxString currentFormat = toUsrDateTimeFormat_Plugin(referenceDate);
+  wxString currentFormat = FormatTime(referenceDate);
 
   if (currentFormat != m_sLastTimeFormat) {
     // Time format has changed, update all time displays
@@ -2168,6 +2173,36 @@ void GRIBUICtrlBar::OnFormatRefreshTimer(wxTimerEvent& event) {
       RequestRefresh(GetGRIBCanvas());
     }
   }
+}
+
+wxString GRIBUICtrlBar::FormatTime(const wxDateTime& utc,
+                                   const wxString& format) const {
+  if (!utc.IsValid()) return wxEmptyString;
+  const wxString zone = m_OverlaySettings.m_bUseLocalTimeZone
+                            ? m_OverlaySettings.m_sDisplayTimeZone
+                            : wxString("UTC");
+  const wxDateTime wall = marine_time::ToWallClock(utc, zone);
+  if (!wall.IsValid()) return wxEmptyString;
+  DateTimeFormatOptions options;
+  if (!format.empty()) options.SetFormatString(format);
+  options.SetTimezone("UTC").SetShowTimezone(false);
+  wxString result = toUsrDateTimeFormat_Plugin(wall, options);
+  const wxString abbreviation =
+      marine_time::TimeZoneAbbreviation(utc, zone);
+  if (!abbreviation.empty()) result += " " + abbreviation;
+  return result;
+}
+
+void GRIBUICtrlBar::RefreshTimeZoneDisplay() {
+  if (m_bGRIBActiveFile && m_bGRIBActiveFile->IsOK()) {
+    PopulateComboDataList();
+    TimelineChanged();
+  }
+  if (m_environmentalGribDialog)
+    m_environmentalGribDialog->SetDisplayTimeZone(
+        m_OverlaySettings.m_bUseLocalTimeZone,
+        m_OverlaySettings.m_sDisplayTimeZone);
+  RequestRefresh(GetGRIBCanvas());
 }
 
 //----------------------------------------------------------------------------------------------------------

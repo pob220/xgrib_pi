@@ -1669,6 +1669,24 @@ GribSettingsDialogBase::GribSettingsDialogBase(wxWindow* parent, wxWindowID id,
 
   m_fgSetGuiSizer->Add(sbSizer9, 1, wxEXPAND | wxTOP, 10);
 
+  wxStaticBoxSizer* timeZoneSizer = new wxStaticBoxSizer(
+      new wxStaticBox(m_scSetGuiPanel, wxID_ANY, _("Time display")),
+      wxHORIZONTAL);
+  m_cbUseLocalTimeZone = new wxCheckBox(
+      timeZoneSizer->GetStaticBox(), wxID_ANY, _("Use local time zone"));
+  m_cbUseLocalTimeZone->SetToolTip(
+      _("Display GRIB valid times in the selected local time zone. GRIB data "
+        "and plugin messages remain UTC internally."));
+  timeZoneSizer->Add(m_cbUseLocalTimeZone, 0,
+                     wxALL | wxALIGN_CENTER_VERTICAL, 5);
+  m_cTimeZone = new wxChoice(timeZoneSizer->GetStaticBox(), wxID_ANY);
+  m_cTimeZone->SetMinSize(wxSize(220, -1));
+  m_cTimeZone->SetToolTip(
+      _("IANA time zone. Daylight-saving changes are applied for each "
+        "forecast date."));
+  timeZoneSizer->Add(m_cTimeZone, 1, wxALL | wxALIGN_CENTER_VERTICAL, 5);
+  m_fgSetGuiSizer->Add(timeZoneSizer, 0, wxEXPAND | wxTOP, 5);
+
   m_fgSetGuiSizer->Add(0, 0, 1, wxALL, 5);
 
   wxStaticBoxSizer* sbSizer10;
@@ -2008,6 +2026,14 @@ GribSettingsDialogBase::GribSettingsDialogBase(wxWindow* parent, wxWindowID id,
       wxEVT_COMMAND_RADIOBUTTON_SELECTED,
       wxCommandEventHandler(GribSettingsDialogBase::OnCtrlandDataStyleChanged),
       nullptr, this);
+  m_cbUseLocalTimeZone->Connect(
+      wxEVT_COMMAND_CHECKBOX_CLICKED,
+      wxCommandEventHandler(GribSettingsDialogBase::OnTimeZoneDisplay),
+      nullptr, this);
+  m_cTimeZone->Connect(
+      wxEVT_COMMAND_CHOICE_SELECTED,
+      wxCommandEventHandler(GribSettingsDialogBase::OnTimeZoneDisplay),
+      nullptr, this);
   m_sButtonApply->Connect(
       wxEVT_COMMAND_BUTTON_CLICKED,
       wxCommandEventHandler(GribSettingsDialogBase::OnApply), nullptr, this);
@@ -2110,6 +2136,14 @@ GribSettingsDialogBase::~GribSettingsDialogBase() {
   m_rbCurDataIsolVertic->Disconnect(
       wxEVT_COMMAND_RADIOBUTTON_SELECTED,
       wxCommandEventHandler(GribSettingsDialogBase::OnCtrlandDataStyleChanged),
+      nullptr, this);
+  m_cbUseLocalTimeZone->Disconnect(
+      wxEVT_COMMAND_CHECKBOX_CLICKED,
+      wxCommandEventHandler(GribSettingsDialogBase::OnTimeZoneDisplay),
+      nullptr, this);
+  m_cTimeZone->Disconnect(
+      wxEVT_COMMAND_CHOICE_SELECTED,
+      wxCommandEventHandler(GribSettingsDialogBase::OnTimeZoneDisplay),
       nullptr, this);
   m_sButtonApply->Disconnect(
       wxEVT_COMMAND_BUTTON_CLICKED,

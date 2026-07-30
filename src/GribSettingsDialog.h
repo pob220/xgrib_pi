@@ -86,6 +86,8 @@ struct GribOverlaySettings {
   // gui
   int m_iCtrlandDataStyle;
   wxString m_iCtrlBarCtrlVisible[2];
+  bool m_bUseLocalTimeZone = false;
+  wxString m_sDisplayTimeZone = "UTC";
 
   enum SettingsType {
     WIND,
@@ -178,6 +180,7 @@ private:
   void OnSpacingModeChange(wxCommandEvent& event);
   void OnPageChange(wxNotebookEvent& event);
   void OnCtrlandDataStyleChanged(wxCommandEvent& event);
+  void OnTimeZoneDisplay(wxCommandEvent& event);
 
   GRIBUICtrlBar& m_parent;
 

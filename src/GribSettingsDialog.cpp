@@ -25,6 +25,7 @@
 #include <algorithm>
 
 #include "GribDisplayGeometry.h"
+#include "TimeZoneDisplay.h"
 #include "grib_pi.h"
 #include "folder.xpm"
 
@@ -187,6 +188,16 @@ void GribOverlaySettings::Read() {
   if (s2.Len() != dflt.Len()) s2 = dflt;
   m_iCtrlBarCtrlVisible[0] = s1;
   m_iCtrlBarCtrlVisible[1] = s2;
+  pConf->Read(_T("UseLocalTimeZone"), &m_bUseLocalTimeZone, false);
+  pConf->Read(_T("DisplayTimeZone"), &m_sDisplayTimeZone,
+              marine_time::SystemTimeZone());
+  if (!marine_time::IsTimeZoneAvailable(m_sDisplayTimeZone)) {
+    m_sDisplayTimeZone = marine_time::SystemTimeZone();
+  }
+  if (!marine_time::IsTimeZoneAvailable(m_sDisplayTimeZone)) {
+    m_sDisplayTimeZone = "UTC";
+    m_bUseLocalTimeZone = false;
+  }
   // data options
   for (int i = 0; i < SETTINGS_COUNT; i++) {
     wxString Name = name_from_index[i];
@@ -294,6 +305,8 @@ void GribOverlaySettings::Write() {
   wxString s1 = m_iCtrlBarCtrlVisible[0], s2 = m_iCtrlBarCtrlVisible[1];
   pConf->Write(_T ( "CtrlBarCtrlVisibility1" ), s1);
   pConf->Write(_T ( "CtrlBarCtrlVisibility2" ), s2);
+  pConf->Write(_T("UseLocalTimeZone"), m_bUseLocalTimeZone);
+  pConf->Write(_T("DisplayTimeZone"), m_sDisplayTimeZone);
 
   for (int i = 0; i < SETTINGS_COUNT; i++) {
     pConf->Write(name_from_index[i] + _T ( "Units" ), (int)Settings[i].m_Units);
@@ -743,6 +756,17 @@ GribSettingsDialog::GribSettingsDialog(GRIBUICtrlBar &parent,
   m_rbCurDataAttaWoCap->SetValue(m_Settings.m_iCtrlandDataStyle == 1);
   m_rbCurDataIsolHoriz->SetValue(m_Settings.m_iCtrlandDataStyle == 2);
   m_rbCurDataIsolVertic->SetValue(m_Settings.m_iCtrlandDataStyle == 3);
+  for (const wxString& zone : marine_time::AvailableTimeZones())
+    m_cTimeZone->Append(zone);
+  if (!m_cTimeZone->SetStringSelection(m_Settings.m_sDisplayTimeZone)) {
+    m_Settings.m_sDisplayTimeZone = marine_time::SystemTimeZone();
+    if (!m_cTimeZone->SetStringSelection(m_Settings.m_sDisplayTimeZone)) {
+      m_Settings.m_sDisplayTimeZone = "UTC";
+      m_cTimeZone->SetStringSelection("UTC");
+    }
+  }
+  m_cbUseLocalTimeZone->SetValue(m_Settings.m_bUseLocalTimeZone);
+  m_cTimeZone->Enable(m_Settings.m_bUseLocalTimeZone);
 
   for (unsigned int i = 0; i < (m_Settings.m_iCtrlBarCtrlVisible[0].Len() * 2);
        i += 2) {
@@ -882,6 +906,8 @@ void GribSettingsDialog::WriteSettings() {
       : m_rbCurDataAttaWoCap->GetValue() ? ATTACHED_NO_CAPTION
       : m_rbCurDataIsolHoriz->GetValue() ? SEPARATED_HORIZONTAL
                                          : SEPARATED_VERTICAL;
+  m_Settings.m_bUseLocalTimeZone = m_cbUseLocalTimeZone->GetValue();
+  m_Settings.m_sDisplayTimeZone = m_cTimeZone->GetStringSelection();
 
   for (unsigned int i = 0; i < (m_Settings.m_iCtrlBarCtrlVisible[0].Len() * 2);
        i += 2) {
@@ -1190,6 +1216,10 @@ void GribSettingsDialog::OnCtrlandDataStyleChanged(wxCommandEvent &event) {
   }
 }
 
+void GribSettingsDialog::OnTimeZoneDisplay(wxCommandEvent& event) {
+  m_cTimeZone->Enable(m_cbUseLocalTimeZone->GetValue());
+}
+
 void GribSettingsDialog::OnApply(wxCommandEvent &event) {
   if (m_Settings.Settings[GribOverlaySettings::WIND].m_Units !=
           m_extSettings.Settings[GribOverlaySettings::WIND].m_Units &&
@@ -1201,6 +1231,8 @@ void GribSettingsDialog::OnApply(wxCommandEvent &event) {
         STARTING_STATE_STYLE;  // must recompute dialogs size
 
   WriteSettings();
+  m_extSettings.Write();
+  m_parent.RefreshTimeZoneDisplay();
   m_parent.SetFactoryOptions();
   m_parent.SetDialogsStyleSizePosition(true);
 }

@@ -221,6 +221,9 @@ public:
   void TimelineChanged();
   void CreateActiveFileFromNames(const wxArrayString &filenames);
   void PopulateComboDataList();
+  wxString FormatTime(const wxDateTime& utc,
+                      const wxString& format = wxEmptyString) const;
+  void RefreshTimeZoneDisplay();
   void ComputeBestForecastForNow();
   /** Set the ViewPort under the mouse. */
   void SetViewPortUnderMouse(PlugIn_ViewPort *vp);

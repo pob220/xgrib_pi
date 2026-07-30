@@ -19,6 +19,7 @@ public:
                                    GribReadyCallback onGribReady = {});
   ~EnvironmentalGribDialog() override;
   void SetCurrentViewPort(const PlugIn_ViewPort& vp);
+  void SetDisplayTimeZone(bool enabled, const wxString& zoneName);
   void PrepareForParentShutdown();
   void RunConfiguredSmokeTest();
 
@@ -72,6 +73,8 @@ private:
   wxString OutputPath() const;
   wxString SourceLabel() const;
   wxString ValidTimeSummary() const;
+  wxDateTime DisplayedStartUtc() const;
+  wxString StartUtcText() const;
   int ExpectedMessageCount() const;
   wxString DefaultOutputFilenameForSelection() const;
   wxString FindDefaultGenerator() const;
@@ -84,6 +87,7 @@ private:
   wxTextCtrl* m_east;
   wxTextCtrl* m_north;
   wxTextCtrl* m_startUtc;
+  wxStaticText* m_startTimeLabel;
   wxSpinCtrl* m_durationHours;
   wxSpinCtrl* m_stepHours;
   wxCheckBox* m_extendForecast;
@@ -170,4 +174,6 @@ private:
   bool m_offlineTidalPackageValid{false};
   bool m_offlineClimatologyAvailable{false};
   bool m_smokeTestConfigured{false};
+  bool m_useLocalTimeZone{false};
+  wxString m_displayTimeZone{"UTC"};
 };

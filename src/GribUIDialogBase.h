@@ -383,6 +383,8 @@ protected:
   wxRadioButton* m_rbCurDataAttaWoCap;
   wxRadioButton* m_rbCurDataIsolHoriz;
   wxRadioButton* m_rbCurDataIsolVertic;
+  wxCheckBox* m_cbUseLocalTimeZone;
+  wxChoice* m_cTimeZone;
   wxStaticBitmap* m_biAltitude;
   wxStaticBitmap* m_biNow;
   wxStaticBitmap* m_biZoomToCenter;
@@ -403,6 +405,7 @@ protected:
   virtual void OnCtrlandDataStyleChanged(wxCommandEvent& event) {
     event.Skip();
   }
+  virtual void OnTimeZoneDisplay(wxCommandEvent& event) { event.Skip(); }
   virtual void OnApply(wxCommandEvent& event) { event.Skip(); }
 
 public:

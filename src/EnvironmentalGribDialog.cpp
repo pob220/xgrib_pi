@@ -1,5 +1,6 @@
 #include "EnvironmentalGribDialog.h"
 
+#include "TimeZoneDisplay.h"
 #include "GeneratorJobJson.h"
 #include "ProcessCommand.h"
 #include "XgribPaths.h"
@@ -534,7 +535,7 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   addRow("East longitude", m_east);
   addRow("North latitude", m_north);
   addRow("Area preset", m_presetChoice);
-  addRow("Start UTC", m_startUtc);
+  m_startTimeLabel = addRow("Start UTC", m_startUtc);
   addRow("Forecast duration hours (maximum 15 days)", m_durationHours);
   addRow("Step hours", m_stepHours);
   grid->Add(new wxStaticText(scrolled, wxID_ANY, "Forecast extension"), 0,
@@ -2278,7 +2279,14 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
   request["bbox"]["south"] = south;
   request["bbox"]["east"] = east;
   request["bbox"]["north"] = north;
-  request["start"] = m_startUtc->GetValue();
+  const wxString startUtc = StartUtcText();
+  if (startUtc.empty()) {
+    if (error)
+      *error = "start time is invalid or does not exist in the selected time "
+               "zone";
+    return false;
+  }
+  request["start"] = startUtc;
   request["hours"] = m_durationHours->GetValue();
   request["stepHours"] = m_stepHours->GetValue();
   request["weatherProvider"] = weatherProvider;
@@ -2392,17 +2400,60 @@ wxString EnvironmentalGribDialog::SourceLabel() const {
 }
 
 wxString EnvironmentalGribDialog::ValidTimeSummary() const {
-  wxString startText = m_startUtc->GetValue();
-  wxString parseText = startText;
-  if (parseText.EndsWith("Z")) parseText.RemoveLast();
-  wxDateTime start;
-  if (start.ParseISOCombined(parseText, 'T')) {
-    wxDateTime end = start + wxTimeSpan::Hours(m_durationHours->GetValue());
-    return start.FormatISOCombined('T') + "Z to " + end.FormatISOCombined('T') +
-           "Z";
+  const wxDateTime start = DisplayedStartUtc();
+  if (start.IsValid()) {
+    const wxDateTime end =
+        start + wxTimeSpan::Hours(m_durationHours->GetValue());
+    const wxString zone = m_useLocalTimeZone ? m_displayTimeZone : "UTC";
+    const auto format = [&zone](const wxDateTime& value) {
+      const wxDateTime wall = marine_time::ToWallClock(value, zone);
+      return wall.Format("%Y-%m-%dT%H:%M:%S", wxDateTime::UTC) + " " +
+             marine_time::TimeZoneAbbreviation(value, zone);
+    };
+    return format(start) + " to " + format(end);
   }
-  return startText + " plus " +
+  return m_startUtc->GetValue() + " plus " +
          wxString::Format("%d hours", m_durationHours->GetValue());
+}
+
+wxDateTime EnvironmentalGribDialog::DisplayedStartUtc() const {
+  wxString text = m_startUtc->GetValue();
+  text.Trim(true).Trim(false);
+  if (text.EndsWith("Z")) text.RemoveLast();
+  wxDateTime fields;
+  if (!fields.ParseISOCombined(text, 'T')) return wxInvalidDateTime;
+  const wxString zone = m_useLocalTimeZone ? m_displayTimeZone : "UTC";
+  return marine_time::FromWallClock(
+             fields.GetYear(), static_cast<int>(fields.GetMonth()) + 1,
+             fields.GetDay(), fields.GetHour(), fields.GetMinute(),
+             fields.GetSecond(), zone)
+      .utc;
+}
+
+wxString EnvironmentalGribDialog::StartUtcText() const {
+  const wxDateTime utc = DisplayedStartUtc();
+  if (!utc.IsValid()) return wxEmptyString;
+  return utc.Format("%Y-%m-%dT%H:%M:%SZ", wxDateTime::UTC);
+}
+
+void EnvironmentalGribDialog::SetDisplayTimeZone(
+    bool enabled, const wxString& zoneName) {
+  const wxDateTime instant = DisplayedStartUtc();
+  m_useLocalTimeZone =
+      enabled && marine_time::IsTimeZoneAvailable(zoneName);
+  m_displayTimeZone =
+      marine_time::IsTimeZoneAvailable(zoneName) ? zoneName : "UTC";
+  const wxString zone = m_useLocalTimeZone ? m_displayTimeZone : "UTC";
+  m_startTimeLabel->SetLabel(m_useLocalTimeZone
+                                 ? "Start (" + m_displayTimeZone + ")"
+                                 : "Start UTC");
+  if (instant.IsValid()) {
+    const wxDateTime wall = marine_time::ToWallClock(instant, zone);
+    m_startUtc->SetValue(
+        wall.Format("%Y-%m-%dT%H:%M:%S", wxDateTime::UTC) +
+        (m_useLocalTimeZone ? wxString() : "Z"));
+  }
+  Layout();
 }
 
 int EnvironmentalGribDialog::ExpectedMessageCount() const {

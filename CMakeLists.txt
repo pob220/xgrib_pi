@@ -124,7 +124,8 @@ option(XGRIB_USE_BUNDLED_JASPER
 set(XGRIB_EXTERNAL_GENERATOR_DIR "" CACHE PATH
     "Prebuilt generator root containing bin/ and runtime/ (Windows split-ABI builds)")
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Use local version of GLU library requires libs/glu directory
 set(USE_LOCAL_GLU FALSE)
@@ -192,6 +193,7 @@ set(SRCS
     src/EnvironmentalGribDialog.cpp
     src/GeneratorJobJson.cpp
     src/ProcessCommand.cpp
+    src/TimeZoneDisplay.cpp
     src/XgribPaths.cpp
     src/XgribPluginPolicy.cpp
     src/CursorData.cpp
@@ -226,6 +228,7 @@ set(HDRS
     src/EnvironmentalGribDialog.h
     src/GeneratorJobJson.h
     src/ProcessCommand.h
+    src/TimeZoneDisplay.h
     src/XgribPaths.h
     src/XgribPluginPolicy.h
     src/CursorData.h
@@ -522,6 +525,15 @@ if (NOT OCPN_FLATPAK_CONFIG)
   endif()
 
   if(BUILD_TESTING)
+    add_executable(xgrib_time_zone_display_tests
+      test/TimeZoneDisplayTests.cpp src/TimeZoneDisplay.cpp)
+    target_include_directories(xgrib_time_zone_display_tests PRIVATE
+      ${PROJECT_SOURCE_DIR}/src)
+    target_link_libraries(xgrib_time_zone_display_tests PRIVATE
+      ${wxWidgets_LIBRARIES})
+    add_test(NAME xgrib_time_zone_display_tests
+             COMMAND xgrib_time_zone_display_tests)
+
     add_executable(xgrib_generator_job_json_tests
       test/GeneratorJobJsonTests.cpp src/GeneratorJobJson.cpp)
     target_include_directories(xgrib_generator_job_json_tests PRIVATE

@@ -782,16 +782,23 @@ void grib_pi::SetPluginMessage(wxString& message_id, wxString& message_body) {
     w.Write(v, out);
     SendPluginMessage(wxString("GRIB_VERSION"), out);
   } else if (message_id == "GRIB_TIMELINE_REQUEST") {
-    // local time
     SendTimelineMessage(m_pGribCtrlBar ? m_pGribCtrlBar->TimelineTime()
                                        : wxDateTime::Now());
   } else if (message_id == "GRIB_TIMELINE_RECORD_REQUEST") {
     wxJSONReader r;
     wxJSONValue v;
     r.Parse(message_body, &v);
-    wxDateTime time(v["Day"].AsInt(), (wxDateTime::Month)v["Month"].AsInt(),
-                    v["Year"].AsInt(), v["Hour"].AsInt(), v["Minute"].AsInt(),
-                    v["Second"].AsInt());
+    wxDateTime time;
+    wxLongLong_t epochSeconds = 0;
+    if (v.HasMember("EpochSeconds") &&
+        v["EpochSeconds"].AsString().ToLongLong(&epochSeconds)) {
+      time = wxDateTime(static_cast<time_t>(epochSeconds));
+    } else {
+      // Legacy compatibility: historical GRIB clients send split fields.
+      time.Set(v["Day"].AsInt(), (wxDateTime::Month)v["Month"].AsInt(),
+               v["Year"].AsInt(), v["Hour"].AsInt(), v["Minute"].AsInt(),
+               v["Second"].AsInt());
+    }
 
     if (!m_pGribCtrlBar) OnToolbarToolCallback(-1);
 
@@ -917,6 +924,11 @@ void grib_pi::SendTimelineMessage(wxDateTime time) {
 
   wxJSONValue v;
   if (time.IsValid()) {
+    // EpochSeconds is the authoritative, timezone-independent protocol value.
+    // Keep the split fields for compatibility with older plugin consumers.
+    v["EpochSeconds"] =
+        wxString::Format("%lld", static_cast<long long>(time.GetTicks()));
+    v["TimeZone"] = "UTC";
     v["Day"] = time.GetDay();
     v["Month"] = time.GetMonth();
     v["Year"] = time.GetYear();
