@@ -137,6 +137,7 @@ public:
   PlugIn_ViewPort &GetCurrentViewPort() { return m_current_vp; }
 
   void OnGribCtrlBarClose();
+  void OnGribCtrlBarDestroyed(GRIBUICtrlBar* ctrlBar);
 
   wxPoint GetCtrlBarXY() { return m_CtrlBarxy; }
   wxPoint GetCursorDataXY() { return m_CursorDataxy; }

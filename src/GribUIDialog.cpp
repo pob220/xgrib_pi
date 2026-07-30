@@ -355,74 +355,78 @@ GRIBUICtrlBar::~GRIBUICtrlBar() {
     m_environmentalGribDialog = nullptr;
   }
 
-  wxFileConfig* pConf = GetOCPNConfigObject();
-  ;
-
-  if (pConf) {
-    pConf->SetPath(_T ( "/Settings/xGRIB" ));
-    pConf->Write(_T ( "WindPlot" ), m_bDataPlot[GribOverlaySettings::WIND]);
-    pConf->Write(_T ( "WindGustPlot" ),
-                 m_bDataPlot[GribOverlaySettings::WIND_GUST]);
-    pConf->Write(_T ( "PressurePlot" ),
-                 m_bDataPlot[GribOverlaySettings::PRESSURE]);
-    pConf->Write(_T ( "WavePlot" ), m_bDataPlot[GribOverlaySettings::WAVE]);
-    pConf->Write(_T ( "CurrentPlot" ),
-                 m_bDataPlot[GribOverlaySettings::CURRENT]);
-    pConf->Write(_T ( "PrecipitationPlot" ),
-                 m_bDataPlot[GribOverlaySettings::PRECIPITATION]);
-    pConf->Write(_T ( "CloudPlot" ), m_bDataPlot[GribOverlaySettings::CLOUD]);
-    pConf->Write(_T ( "AirTemperaturePlot" ),
-                 m_bDataPlot[GribOverlaySettings::AIR_TEMPERATURE]);
-    pConf->Write(_T ( "SeaTemperaturePlot" ),
-                 m_bDataPlot[GribOverlaySettings::SEA_TEMPERATURE]);
-    pConf->Write(_T ( "CAPEPlot" ), m_bDataPlot[GribOverlaySettings::CAPE]);
-    pConf->Write(_T ( "CompReflectivityPlot" ),
-                 m_bDataPlot[GribOverlaySettings::COMP_REFL]);
-
-    pConf->Write(_T ( "CursorDataShown" ), m_CDataIsShown);
-
-    pConf->Write(_T ( "lastdatatype" ), m_lastdatatype);
-
-    pConf->SetPath(_T ( "/Settings/xGRIB/FileNames" ));
-    int iFileMax = pConf->GetNumberOfEntries();
-    if (iFileMax) {
-      wxString key;
-      long dummy;
-      for (int i = 0; i < iFileMax; i++) {
-        if (pConf->GetFirstEntry(key, dummy)) pConf->DeleteEntry(key, false);
-      }
-    }
-
-    for (unsigned int i = 0; i < m_file_names.GetCount(); i++) {
-      wxString key;
-      key.Printf("Filename%d", i);
-      pConf->Write(key, m_file_names[i]);
-    }
-
-    pConf->SetPath(_T ( "/Directories" ));
-    pConf->Write(_T ( "xGRIBDirectory" ), m_grib_dir);
-
-    // Write current XyGrib panel configuration to configuration file
-    pConf->SetPath(_T ( "/Settings/xGRIB/XyGrib" ));
-    pConf->Write(_T( "AtmModelIndex" ), xyGribConfig.atmModelIndex);
-    pConf->Write(_T( "WaveModelIndex" ), xyGribConfig.waveModelIndex);
-    pConf->Write(_T( "ResolutionIndex" ), xyGribConfig.resolutionIndex);
-    pConf->Write(_T( "DurationIndex" ), xyGribConfig.durationIndex);
-    pConf->Write(_T( "RunIndex" ), xyGribConfig.runIndex);
-    pConf->Write(_T( "IntervalIndex" ), xyGribConfig.intervalIndex);
-    pConf->Write(_T( "Wind" ), xyGribConfig.wind);
-    pConf->Write(_T( "Gust" ), xyGribConfig.gust);
-    pConf->Write(_T( "Pressure" ), xyGribConfig.pressure);
-    pConf->Write(_T( "Temperature" ), xyGribConfig.temperature);
-    pConf->Write(_T( "Cape" ), xyGribConfig.cape);
-    pConf->Write(_T( "Reflectivity" ), xyGribConfig.reflectivity);
-    pConf->Write(_T( "CloudCover" ), xyGribConfig.cloudCover);
-    pConf->Write(_T( "Precipitation" ), xyGribConfig.precipitation);
-    pConf->Write(_T( "WaveHeight" ), xyGribConfig.waveHeight);
-    pConf->Write(_T( "WindWaves" ), xyGribConfig.windWaves);
-  }
+  // A parent ChartCanvas can destroy this window after OpenCPN's configuration
+  // service has already been deleted.  Persist state from normal close/DeInit,
+  // never by reaching back into host-owned services from this destructor.
+  if (pPlugIn) pPlugIn->OnGribCtrlBarDestroyed(this);
   delete m_vpMouse;
   delete m_pTimelineSet;
+}
+
+void GRIBUICtrlBar::SaveState() {
+  wxFileConfig* pConf = GetOCPNConfigObject();
+  if (!pConf) return;
+
+  pConf->SetPath(_T ( "/Settings/xGRIB" ));
+  pConf->Write(_T ( "WindPlot" ), m_bDataPlot[GribOverlaySettings::WIND]);
+  pConf->Write(_T ( "WindGustPlot" ),
+               m_bDataPlot[GribOverlaySettings::WIND_GUST]);
+  pConf->Write(_T ( "PressurePlot" ),
+               m_bDataPlot[GribOverlaySettings::PRESSURE]);
+  pConf->Write(_T ( "WavePlot" ), m_bDataPlot[GribOverlaySettings::WAVE]);
+  pConf->Write(_T ( "CurrentPlot" ), m_bDataPlot[GribOverlaySettings::CURRENT]);
+  pConf->Write(_T ( "PrecipitationPlot" ),
+               m_bDataPlot[GribOverlaySettings::PRECIPITATION]);
+  pConf->Write(_T ( "CloudPlot" ), m_bDataPlot[GribOverlaySettings::CLOUD]);
+  pConf->Write(_T ( "AirTemperaturePlot" ),
+               m_bDataPlot[GribOverlaySettings::AIR_TEMPERATURE]);
+  pConf->Write(_T ( "SeaTemperaturePlot" ),
+               m_bDataPlot[GribOverlaySettings::SEA_TEMPERATURE]);
+  pConf->Write(_T ( "CAPEPlot" ), m_bDataPlot[GribOverlaySettings::CAPE]);
+  pConf->Write(_T ( "CompReflectivityPlot" ),
+               m_bDataPlot[GribOverlaySettings::COMP_REFL]);
+
+  pConf->Write(_T ( "CursorDataShown" ), m_CDataIsShown);
+
+  pConf->Write(_T ( "lastdatatype" ), m_lastdatatype);
+
+  pConf->SetPath(_T ( "/Settings/xGRIB/FileNames" ));
+  int iFileMax = pConf->GetNumberOfEntries();
+  if (iFileMax) {
+    wxString key;
+    long dummy;
+    for (int i = 0; i < iFileMax; i++) {
+      if (pConf->GetFirstEntry(key, dummy)) pConf->DeleteEntry(key, false);
+    }
+  }
+
+  for (unsigned int i = 0; i < m_file_names.GetCount(); i++) {
+    wxString key;
+    key.Printf("Filename%d", i);
+    pConf->Write(key, m_file_names[i]);
+  }
+
+  pConf->SetPath(_T ( "/Directories" ));
+  pConf->Write(_T ( "xGRIBDirectory" ), m_grib_dir);
+
+  // Write current XyGrib panel configuration to configuration file
+  pConf->SetPath(_T ( "/Settings/xGRIB/XyGrib" ));
+  pConf->Write(_T( "AtmModelIndex" ), xyGribConfig.atmModelIndex);
+  pConf->Write(_T( "WaveModelIndex" ), xyGribConfig.waveModelIndex);
+  pConf->Write(_T( "ResolutionIndex" ), xyGribConfig.resolutionIndex);
+  pConf->Write(_T( "DurationIndex" ), xyGribConfig.durationIndex);
+  pConf->Write(_T( "RunIndex" ), xyGribConfig.runIndex);
+  pConf->Write(_T( "IntervalIndex" ), xyGribConfig.intervalIndex);
+  pConf->Write(_T( "Wind" ), xyGribConfig.wind);
+  pConf->Write(_T( "Gust" ), xyGribConfig.gust);
+  pConf->Write(_T( "Pressure" ), xyGribConfig.pressure);
+  pConf->Write(_T( "Temperature" ), xyGribConfig.temperature);
+  pConf->Write(_T( "Cape" ), xyGribConfig.cape);
+  pConf->Write(_T( "Reflectivity" ), xyGribConfig.reflectivity);
+  pConf->Write(_T( "CloudCover" ), xyGribConfig.cloudCover);
+  pConf->Write(_T( "Precipitation" ), xyGribConfig.precipitation);
+  pConf->Write(_T( "WaveHeight" ), xyGribConfig.waveHeight);
+  pConf->Write(_T( "WindWaves" ), xyGribConfig.windWaves);
 }
 
 void GRIBUICtrlBar::RemoveLegacyActionButton(wxWindow* button) {
@@ -1192,6 +1196,7 @@ void GRIBUICtrlBar::OnClose(wxCloseEvent& event) {
     }
   pPlugIn->SendTimelineMessage(wxInvalidDateTime);
 
+  SaveState();
   pPlugIn->OnGribCtrlBarClose();
 }
 

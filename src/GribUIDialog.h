@@ -221,6 +221,12 @@ public:
   void TimelineChanged();
   void CreateActiveFileFromNames(const wxArrayString &filenames);
   void PopulateComboDataList();
+  /**
+   * Persist control-bar state while the OpenCPN configuration object is known
+   * to be alive.  Destructors must not query host-owned services because a
+   * parent canvas can destroy this window after OpenCPN has torn them down.
+   */
+  void SaveState();
   wxString FormatTime(const wxDateTime& utc,
                       const wxString& format = wxEmptyString) const;
   void RefreshTimeZoneDisplay();

@@ -221,6 +221,7 @@ bool grib_pi::DeInit(void) {
   SendTimelineMessage(wxInvalidDateTime);
 
   if (m_pGribCtrlBar) {
+    m_pGribCtrlBar->SaveState();
     m_pGribCtrlBar->Close();
     delete m_pGribCtrlBar;
     m_pGribCtrlBar = nullptr;
@@ -611,6 +612,10 @@ void grib_pi::OnGribCtrlBarClose() {
     m_pGribCtrlBar = nullptr;
     m_DialogStyleChanged = false;
   }
+}
+
+void grib_pi::OnGribCtrlBarDestroyed(GRIBUICtrlBar* ctrlBar) {
+  if (m_pGribCtrlBar == ctrlBar) m_pGribCtrlBar = nullptr;
 }
 
 bool grib_pi::RenderOverlay(wxDC& dc, PlugIn_ViewPort* vp) { return false; }

@@ -586,6 +586,12 @@ if (NOT OCPN_FLATPAK_CONFIG)
         -DOVERLAY_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/GribOverlayFactory.cpp
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/GraphicsContextLifetimeContract.cmake)
 
+    add_test(NAME xgrib_host_service_lifetime_contract
+      COMMAND ${CMAKE_COMMAND}
+        -DCTRL_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/GribUIDialog.cpp
+        -DPLUGIN_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/grib_pi.cpp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/HostServiceLifetimeContract.cmake)
+
     add_test(NAME xgrib_plugin_version_contract
       COMMAND ${CMAKE_COMMAND}
         -DPLUGIN_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/grib_pi.h
