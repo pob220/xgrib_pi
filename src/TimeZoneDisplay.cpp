@@ -37,6 +37,27 @@ wxDateTime DateTimeFromSeconds(std::chrono::seconds value) {
   return wxDateTime(static_cast<time_t>(value.count()));
 }
 
+wxString CanonicalAbbreviation(const wxString& zoneName,
+                               std::chrono::seconds utcOffset,
+                               const wxString& databaseAbbreviation) {
+  // MSVC obtains IANA transitions from Windows ICU, whose localized short
+  // display name can be an offset such as "GMT+1" rather than the canonical
+  // tzdata abbreviation. Keep the database authoritative for transitions and
+  // offsets, but make the familiar British Isles labels deterministic.
+  static const std::set<wxString> britishZones = {
+      "Europe/London", "Europe/Guernsey", "Europe/Isle_of_Man",
+      "Europe/Jersey", "GB",              "GB-Eire"};
+  if (britishZones.count(zoneName) != 0) {
+    if (utcOffset == std::chrono::hours{0}) return "GMT";
+    if (utcOffset == std::chrono::hours{1}) return "BST";
+  }
+  if (zoneName == "Europe/Dublin" || zoneName == "Eire") {
+    if (utcOffset == std::chrono::hours{0}) return "GMT";
+    if (utcOffset == std::chrono::hours{1}) return "IST";
+  }
+  return databaseAbbreviation;
+}
+
 struct TzifType {
   std::int32_t utcOffset = 0;
   bool daylight = false;
@@ -482,13 +503,18 @@ wxString TimeZoneAbbreviation(const wxDateTime& utc,
   if (zoneName == "UTC") return "UTC";
 #if MARINE_TIME_HAS_CHRONO_TZDB
   if (const auto* zone = Locate(zoneName)) {
-    return wxString::FromUTF8(zone->get_info(ToSysSeconds(utc)).abbrev);
+    const auto info = zone->get_info(ToSysSeconds(utc));
+    return CanonicalAbbreviation(
+        zoneName, std::chrono::duration_cast<std::chrono::seconds>(info.offset),
+        wxString::FromUTF8(info.abbrev));
   }
 #endif
   if (const auto zone = LoadTzif(zoneName)) {
     if (const auto* type =
             TypeAt(*zone, static_cast<std::int64_t>(utc.GetTicks())))
-      return wxString::FromUTF8(type->abbreviation);
+      return CanonicalAbbreviation(
+          zoneName, std::chrono::seconds{type->utcOffset},
+          wxString::FromUTF8(type->abbreviation));
   }
   return wxEmptyString;
 }
