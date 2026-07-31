@@ -196,6 +196,175 @@ gettext from its formula source only if the installed Apple-Silicon bottle
 crashes. Flatpak manifests use the canonical public repository and pin the
 exact CircleCI commit instead of a moving branch.
 
+### Follow-up portability pass: 29–31 July 2026
+
+The timezone and long-lived-renderer work exposed several reusable failures
+which were not visible in the initial publication matrix:
+
+- A `wxGraphicsContext` created from OpenCPN's software-render callback is
+  bound to that callback's frame-local native surface. Retaining it while
+  swapping only the `wxDC` pointer eventually directs line strokes to an old
+  buffer, while separately rendered arrowheads remain visible. This presents
+  as proportional current arrows losing their shafts after OpenCPN has run for
+  a while. Recreate the graphics context for every supplied software `wxDC`
+  and release it before the callback returns. The
+  `xgrib_graphics_context_lifetime_contract` test protects this lifecycle.
+- Plugin-window destructors can run after OpenCPN has started dismantling
+  host-owned configuration services. A destructor which saves settings
+  through `GetOCPNConfigObject()` can therefore cause a shutdown or reopen
+  crash even when normal dialog use is sound. Persist state on normal close
+  and explicitly in plugin `DeInit()`, while host services are live; make the
+  destructor release plugin-owned resources only. Keep a destruction callback
+  so the plugin never retains a dead top-level window pointer.
+- C++20 support does not imply that the standard library ships the C++20
+  timezone database. In particular, supported GCC/libstdc++ and MSVC
+  combinations can compile calendar types without providing
+  `std::chrono::get_tzdb`, `current_zone` or `locate_zone`. xGRIB now uses the
+  standard API when genuinely available and otherwise reads validated IANA
+  TZif data from the platform zoneinfo database. Zone names are constrained
+  beneath known roots, parsed zones are immutable and cached, and nonexistent
+  and ambiguous local times remain explicit results.
+- Local time is a presentation boundary only. Generator job timestamps,
+  provider cycles, GRIB validity times, filenames and plugin messages remain
+  UTC. Switching between UTC and an IANA display zone preserves the instant;
+  it must not reinterpret the displayed fields as a new request. Spring
+  forward gaps are rejected and autumn repeats use the documented earliest
+  instant. Met Office cycle identifiers ending in `Z`, like every other
+  provider request, are UTC rather than Europe/London wall time.
+- Do not assert the exact platform-provided spelling of a familiar
+  abbreviation. The same Europe/London offset can be reported as `GMT+1` or
+  `BST` depending on the timezone backend. Canonicalize only well-known
+  zone/offset combinations for display, retain the numeric offset as the
+  authority, and test winter and summer separately.
+- MSVC treats a conditional expression combining `wxString` and a narrow
+  string literal as ambiguous because conversions exist in both directions.
+  The same applies to wide `_T("...")` literals, nested conditionals and
+  arguments passed through macros. Make every string branch an explicit
+  `wxString` value. Native Windows compilation is required to find this; GCC
+  and Clang accepting the expression is not portability evidence.
+- Parenthesize every use of a function-like macro argument. A batch-dialog
+  macro which evaluated `value != VALUE` was not merely noisy when `VALUE` was
+  a conditional expression: operator precedence changed it into
+  `(value != condition) ? first : second`, producing a wrong all-values-equal
+  result. Prefer a typed helper when practical; when maintaining a macro, use
+  `(VALUE)` both when capturing and comparing it.
+- Do not depend on the non-standard `M_PI` extension in a translation unit
+  which does not include a project's fallback definition. For C++20 code use
+  `std::numbers::pi_v<double>` and include `<numbers>`.
+- An in-tree plugin build has a different `CMAKE_CURRENT_BINARY_DIR` from the
+  top-level `CMAKE_BINARY_DIR`. Tests which inspect a generated plugin header
+  must use the former, or they pass standalone and fail when built as part of
+  OpenCPN.
+- CMake 3.22 does not support every modern `FetchContent_Declare` convenience
+  argument used by newer examples. Prefer `find_package` first and use a
+  conservative `FetchContent` fallback if the declared minimum must remain
+  3.22.
+- On native Apple Silicon, smoke-test Homebrew `msgfmt` against the largest
+  real catalogue before beginning an expensive build. Some image revisions
+  have supplied a gettext bottle which crashes; rebuild that formula from
+  source only when the preflight reproduces the fault. On Windows, install and
+  verify both `msgfmt.exe` and `msgmerge.exe` before CMake 4's `FindGettext`
+  runs, and refresh the environment before initializing the Visual Studio
+  toolchain so that toolchain paths are not discarded.
+- `/std:c++20` does not make MSVC report the current language level through
+  `__cplusplus` unless `/Zc:__cplusplus` is also enabled. A bundled dependency
+  can otherwise select a pre-C++11 compatibility branch and try to compile
+  removed facilities such as `std::auto_ptr`. Enable the conformance switch at
+  project scope so it reaches vendored targets, and retain a build-contract
+  test as well as the native Windows build.
+- GoogleTest can instantiate platform formatters merely to print a failed
+  value. Direct assertions on `std::chrono` objects caused the macOS 11
+  deployment build to instantiate libc++ floating `to_chars`, whose deployment
+  availability begins at macOS 13.3, although the routing code itself built
+  successfully. Compare normalized integer duration/time-point ticks when an
+  older macOS runtime remains supported; do not raise the deployment target to
+  hide a test-only pretty-printer dependency.
+- Match `class` and `struct` in forward declarations and definitions. Clang's
+  Microsoft-ABI warning is actionable: a mismatch can produce different name
+  mangling and a later Windows link failure even when ELF builds happen to
+  link.
+- Do not assume a package-discovery variable such as `${ZLIB_LIBRARIES}` is
+  populated on every toolchain. The Windows plugin can link successfully from
+  an explicit archive while a test executable which compiles the same gzip
+  wrapper fails later with unresolved `gzopen`, `gzread` and `gzclose`.
+  Represent the dependency as one imported/interface CMake target and link
+  both production and test targets to it. If the Windows library is an import
+  library, stage its matching architecture DLL beside the test executable
+  before GoogleTest discovery; otherwise the executor can select a different
+  DLL from `PATH` and terminate with `0xc000007b`. A subsequent
+  `0xc0000135` means the architecture conflict is gone but another runtime DLL
+  is still absent. Standalone plugin tests which link dynamic wxWidgets must
+  add the recorded wx library/DLL directory to `PATH`, since OpenCPN is not
+  present to supply the host runtime. Also inspect whether GoogleTest inherited
+  a parent `BUILD_SHARED_LIBS` setting: if the PE dependency table names
+  `gtest.dll` and `gtest_main.dll`, copy those exact target files beside the
+  test executable before discovery.
+- Replacing an existing file with `std::rename` has different contracts on
+  POSIX and Windows. POSIX normally replaces the destination atomically,
+  while the Windows CRT call fails when the destination already exists. For
+  append-only cache compaction, use `ReplaceFileW` with write-through
+  semantics and a `MoveFileExW(MOVEFILE_REPLACE_EXISTING)` fallback. Do not
+  delete the live cache first merely to make the rename succeed: that creates
+  a failure window in which the durable copy is lost. Exercise the real
+  compact-over-existing path on native Windows.
+- Avoid unconditional wx logging in a normal-result, high-frequency predicate.
+  An "outside contour" result is ordinary routing control flow, not an error;
+  routing it through the GUI logging subsystem made a headless native-Windows
+  polar test stall and would also add needless work to the solver hot path.
+  Return the explicit status to the caller and reserve logging for actionable
+  boundary failures.
+- Do not combine `gtest_discover_tests` with a second `add_test` which invokes
+  the same GoogleTest executable without a filter. CTest then runs every
+  discovered case and reruns the complete suite as one aggregate test. The
+  duplicate pass may look harmless on a fast Linux build but exceed CTest's
+  default timeout under supported 32-bit MSVC. Keep the individually
+  discovered tests, their per-case reporting and their real assertions; remove
+  only the redundant aggregate registration.
+- Toolbar and Plugin Manager assets need two deliberately separate lookup
+  contracts. An installed package must resolve SVG/PNG files through
+  OpenCPN's plugin data directory. An in-tree developer build has no installed
+  data directory, so it may use an explicitly scoped source-tree fallback.
+  Do not compile that workstation path into standalone artifacts. Validate
+  normal, rollover and toggled SVGs plus the panel PNG in the staged package,
+  and inspect a standalone binary to ensure it contains no local source path.
+  A generic puzzle-piece icon can otherwise conceal a missing-asset packaging
+  or lookup defect.
+
+For private GitHub App projects, CircleCI's legacy
+`/api/v1.1/project/github/<owner>/<repository>/<number>` path can return 404
+even when the browser shows the job. Obtain the opaque workflow and job IDs
+from the GitHub commit status, query the v2 workflow/job endpoints, and use the
+canonical project slug returned by the workflow (of the form
+`circleci/<organisation-id>/<project-id>`) for the v1.1 step-output request.
+The returned per-step `output_url` is short-lived and signed. Fetch it
+directly, record the first real compiler/test error rather than the final
+wrapper failure, and do not copy the URL, API token or browser profile into
+logs or source. Use a short-lived personal API token stored in a mode-0600
+temporary file and remove both it and downloaded signed-URL metadata when the
+diagnosis is complete. Failed jobs can still retain build artifacts: download
+the test executable through a freshly queried artifact URL and inspect its PE
+import table (`objdump -p` or `dumpbin /dependents`) to enumerate missing
+runtimes instead of iterating one loader error at a time.
+
+The completed xGRIB rerun at commit
+`69cee37dda2706b68364c8f24ff8a08f8c33f409` passed all eleven retained
+contexts: Debian 12 x86_64/arm64, Debian 13 x86_64, Ubuntu 22.04/24.04
+x86_64, Flatpak x86_64/aarch64, native Apple-Silicon macOS, Windows x86,
+Windows dependency preparation and the stock OpenCPN Windows runtime test.
+This verifies the xGRIB corrections; it must not be used to claim that another
+plugin's native jobs pass until that plugin's own retained logs are green.
+
+The standalone xWeatherRouting follow-up at commit
+`5dc0fe27473ccb237c190db667511fb618eedaa1` passed its own nine retained jobs
+in workflow `aacce5fa-9927-4eab-b979-d933e96556ed`: Debian 12
+x86_64/arm64, Debian 13 x86_64, Ubuntu 22.04/24.04 x86_64, Flatpak 25.08
+x86_64/aarch64, native Apple-Silicon macOS and the supported native Windows
+x86 plugin ABI. Its Windows job 104 ran the individually discovered cache,
+polar and routing engine tests successfully and completed package validation.
+This is the authoritative evidence for the Windows replacement,
+runtime-staging, headless-logging and duplicate-test corrections described
+above.
+
 ## Change-safety rules
 
 Keep these invariants when changing or updating source, dependencies or CI:

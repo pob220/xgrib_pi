@@ -40,6 +40,55 @@ normal control bar and the supplied file through its production viewer path.
 Set `XGRIB_TEST_OPEN_GENERATOR=1` to open the integrated generator dialog as
 well. These variables are developer test hooks and are ignored when unset.
 
+Before accepting a GUI or timezone change, also verify these lifecycle
+boundaries:
+
+- Keep request/provider/GRIB times in UTC and convert only the visible controls
+  and labels. Toggle UTC to a daylight-saving IANA zone and back without
+  changing the represented instant; test a spring gap and autumn repeat.
+- Test the supported compiler and standard-library combinations rather than
+  assuming that C++20 provides `std::chrono` timezone data. The packaged
+  runtime must either have a working standard tzdb or the validated TZif
+  fallback and zoneinfo data it uses.
+- Close and reopen the xGRIB control bar, disable and re-enable the plugin, and
+  shut down OpenCPN. State must be saved before host configuration services are
+  torn down, not from a late window destructor.
+- Leave software overlays updating for multiple frames. Proportional arrow
+  shafts and heads must remain together; a graphics context created from a
+  frame-local OpenCPN `wxDC` must never be cached across callbacks.
+- Exercise both standalone and in-tree OpenCPN builds. Generated-file
+  contracts must resolve relative to `CMAKE_CURRENT_BINARY_DIR`.
+- Compile on native MSVC. Conditional expressions involving `wxString` must
+  use explicit `wxString` operands even if GCC and Clang accept a narrow or
+  wide literal. Parenthesize macro arguments which can contain a conditional
+  expression, and use standard C++20 constants rather than relying on
+  platform-only `M_PI`.
+- Enable MSVC's conforming `__cplusplus` value when using C++20 so bundled
+  dependencies do not select obsolete compatibility code. On an older macOS
+  deployment baseline, keep test assertions from instantiating newer libc++
+  formatters solely for GoogleTest diagnostics.
+- Treat class/struct forward-declaration mismatch warnings as cross-ABI
+  defects, not cosmetic warnings.
+- Link compression and other native dependencies through explicit imported
+  CMake targets shared by the plugin and its tests; do not rely on a
+  package-discovery variable being populated identically on MSVC. Stage the
+  matching-architecture runtime DLL beside Windows test executables before
+  discovery, and add the selected dynamic wxWidgets DLL directory to the test
+  `PATH` when no OpenCPN host process supplies it. If GoogleTest is shared,
+  stage `GTest::gtest` and `GTest::gtest_main` target files there too.
+- Exercise file replacement over an existing destination on native Windows.
+  Use the Win32 replace/move APIs where POSIX code relies on `rename`
+  overwriting its destination, and preserve the atomic live-file contract.
+- Keep normal hot-path outcomes out of GUI-bound logging. Headless native
+  tests should be able to evaluate routing predicates without constructing or
+  waiting on UI logging services.
+- Register a GoogleTest suite once. If `gtest_discover_tests` is used, do not
+  also add the unfiltered executable as a second aggregate CTest test.
+- Verify normal, rollover and toggled toolbar SVGs and the Plugin Manager PNG
+  in the staged archive. Installed plugins must resolve them from OpenCPN's
+  plugin data directory; an in-tree source fallback must be developer-only
+  and absent from standalone binaries.
+
 ## Catalogue package
 
 Frontend2's `package`/`tarball` and `cloudsmith-upload.sh` flow produces an
@@ -125,6 +174,24 @@ left to CircleCI's native ARM executor rather than mislabelled emulation.
 Flatpak aarch64 uses the same pinned manifest and has a native ARM CircleCI
 job, but was not built on this x86_64 laptop. Debian armhf remains a later
 candidate rather than an asserted supported target.
+
+### Verification snapshot (31 July 2026)
+
+The follow-up renderer, host-lifecycle and IANA-timezone pass completed all
+eleven hosted xGRIB contexts at
+`69cee37dda2706b68364c8f24ff8a08f8c33f409`, including native Apple Silicon,
+the supported Windows x86 plugin build, and the disposable stock OpenCPN
+Windows runtime job. The pass also confirmed that provider request and GRIB
+validity times remain UTC when the UI displays Europe/London as GMT or BST.
+Detailed failure modes and CI corrections are recorded in
+`docs/alpha-validation.md`.
+
+The related standalone xWeatherRouting portability run completed all nine of
+its hosted package jobs at
+`5dc0fe27473ccb237c190db667511fb618eedaa1`, including native Windows x86 test
+execution and package validation. This evidence is recorded here as reusable
+plugin-rebuild guidance; it does not publish either plugin to the alpha
+catalogue.
 
 ## Raspberry Pi release-candidate test
 
