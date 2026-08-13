@@ -528,6 +528,32 @@ gh api repos/pob220/xgrib_pi/git/ref/tags/<tag> --jq .object.sha
 Use the corresponding generator repository when checking its tag. Never
 force-push a release tag to recover from a transport stall.
 
+### Recovering a rejected Cloudsmith credential
+
+If `deploy-alpha` fails on the first `Checking raw package upload parameters`
+step with HTTP 401, that first object was rejected before upload. Do not move
+the release tags, enable deployment on `main`, or start another publication
+branch merely to repair the credential.
+
+1. Verify the replacement key using a Cloudsmith raw-package `--dry-run`,
+   passing it from a secure credential store or prompt rather than placing it
+   in a command argument or log.
+2. Open the **ID-based CircleCI organization which owns the project**, then
+   use **Organization Settings > Contexts > xgrib-deployment**. Do not use
+   Project Settings > Environment Variables, and do not assume a legacy
+   `/github/<user>/` organization URL owns a GitHub App project.
+3. Delete and recreate `CLOUDSMITH_API_KEY`; CircleCI cannot reveal or edit a
+   stored secret value in place. Paste it directly from the password manager
+   or provider page and clear the clipboard immediately after saving.
+4. From the failed workflow, choose **Rerun workflow from failed**, not
+   **Rerun workflow from beginning**, when that option is available. Confirm
+   the rerun scope before leaving the page. A from-beginning rerun repeats the
+   complete release matrix and creates a new manual approval job.
+5. If the complete matrix was rerun, treat it as a fresh gated publication:
+   wait for every prerequisite to pass and approve its new hold exactly once.
+   In either case, verify the final Cloudsmith object count, status, version
+   and public URLs independently of the CircleCI result.
+
 Current hosted-run timing is uneven. A Flatpak x86_64 job taking about
 29–32 minutes while still reporting `running` is normal, not evidence of a
 stall; the 0.2.3.0 run took 32 minutes 10 seconds. Flatpak aarch64 took about
@@ -550,3 +576,21 @@ The 0.2.3.0 evidence snapshot is:
 
 The object count is twice the number of published platform candidates, not a
 permanent constant. Recalculate it if the supported matrix changes.
+
+The 0.2.4.0 evidence snapshot is:
+
+| Evidence | Result |
+| --- | --- |
+| Plugin tag | `v0.2.4.0` at `1c1e8a252757d10c67ba07b85360efd607d2061c` |
+| Generator tag | `v0.1.6` at `7d8351d5f4ef6c13cc70a8e2bf05d499fffbc947` |
+| Ordinary validation | Pipeline 66, workflow `0235bbd1-ce04-4acd-aeb9-926dbe3b06d4`; all 11 contexts green |
+| Gated publication rebuild | Pipeline 68, workflow `9085bd84-6f44-492e-943e-87dc2e89a4d3`; all target jobs green |
+| Approval/deployment | Hold job 525 approved manually; deploy job 526 succeeded |
+| Public package version | `0.2.4.0+526.48a05c4` |
+| Cloudsmith result | 18 `Completed` raw objects; all nine metadata and nine tarball URLs returned HTTP 200 without authentication |
+
+The first deploy attempt in pipeline 68 stopped at job 513 on the initial
+Cloudsmith parameter check with HTTP 401 and uploaded nothing. The key was
+validated independently, corrected in the ID-based `xgrib-deployment`
+context, and the successful run followed the full rebuild and new approval
+path described above.
