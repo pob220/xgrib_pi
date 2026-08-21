@@ -381,7 +381,7 @@ int ExternalEnvironmentProvider::RunRequest(
   wxFileName job_result(directory.GetPath(), ".result-" + token + ".json");
   wxJSONValue envelope;
   envelope["schemaVersion"] = 1;
-  envelope["operation"] = "generateEnvironment";
+  envelope["operation"] = wxString("generateEnvironment");
   auto& request = envelope["request"];
   request["bbox"]["west"] = west;
   request["bbox"]["south"] = south;
@@ -395,8 +395,8 @@ int ExternalEnvironmentProvider::RunRequest(
   request["extendForecast"] = boolean("extendForecast", false);
   request["fallbackWeatherProvider"] =
       text("fallbackWeatherProvider", "none");
-  request["fallbackWaveProvider"] = "none";
-  request["fallbackCurrentSource"] = "none";
+  request["fallbackWaveProvider"] = wxString("none");
+  request["fallbackCurrentSource"] = wxString("none");
   request["weatherGridSpacingDeg"] =
       number("weatherGridSpacingDegrees", 0.25);
   request["includeWaves"] = include_waves;
@@ -465,9 +465,9 @@ int ExternalEnvironmentProvider::RunRequest(
     for (const auto& name : inspection["short_name_counts"].GetMemberNames())
       fields.Append(name);
   }
-  if (fields.Size() == 0) fields.Append("environmental-grib");
+  if (fields.Size() == 0) fields.Append(wxString("environmental-grib"));
   wxJSONValue response;
-  response["identity"] = "xgrib-" +
+  response["identity"] = wxString("xgrib-") +
                          wxString::FromUTF8(checksum.substr(0, 20));
   response["providerHandle"] = output.GetFullPath();
   response["model"] = weather + (include_waves ? "+" + wave : "") +
@@ -484,14 +484,20 @@ int ExternalEnvironmentProvider::RunRequest(
       coverage.HasMember("north") ? coverage["north"].AsDouble() : north;
   response["coverage"]["east"] =
       coverage.HasMember("east") ? coverage["east"].AsDouble() : east;
-  response["validFromEpochSeconds"] = static_cast<wxLongLong_t>(valid_from);
-  response["validToEpochSeconds"] = static_cast<wxLongLong_t>(valid_to);
+  // wxJSON's 64-bit integer assignment is conditional on build-time wx
+  // feature macros.  On hosts where that overload is absent a long long can
+  // otherwise bind to bool and serialize as true.  These protocol values are
+  // bounded well below JSON's exactly representable integer range (2^53), so
+  // use an unambiguous numeric overload on every supported host.
+  response["validFromEpochSeconds"] = static_cast<double>(valid_from);
+  response["validToEpochSeconds"] = static_cast<double>(valid_to);
   response["fields"] = fields;
   response["checksumSha256"] = wxString::FromUTF8(checksum);
-  response["byteSize"] = static_cast<wxLongLong_t>(
+  response["byteSize"] = static_cast<double>(
       helper_result["byte_count"].AsUInt64());
-  response["provenance"].Append("environmental-grib job schema v1");
-  response["provenance"].Append("provider:" + weather);
+  response["provenance"].Append(
+      wxString("environmental-grib job schema v1"));
+  response["provenance"].Append(wxString("provider:") + weather);
   result_ = JsonText(response);
   if (result_json) *result_json = result_.c_str();
   if (report_progress) report_progress(progress_context, 1.0);
