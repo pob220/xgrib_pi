@@ -36,7 +36,9 @@
 #include <wx/stdpaths.h>
 
 #include <limits>
+#include <memory>
 
+#include "ExternalEnvironmentProvider.h"
 #include "GribProtocolVersion.h"
 #include "grib_pi.h"
 
@@ -210,6 +212,12 @@ int grib_pi::Init(void) {
     });
   }
 
+  if (!m_bBundledGribConflict) {
+    m_externalEnvironmentProvider =
+        std::make_unique<ExternalEnvironmentProvider>(*this);
+    m_externalEnvironmentProvider->RegisterIfSupported();
+  }
+
   return (WANTS_OVERLAY_CALLBACK | WANTS_OPENGL_OVERLAY_CALLBACK |
           WANTS_CURSOR_LATLON | WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL |
           WANTS_CONFIG | WANTS_PREFERENCES | WANTS_PLUGIN_MESSAGING |
@@ -217,6 +225,12 @@ int grib_pi::Init(void) {
 }
 
 bool grib_pi::DeInit(void) {
+  if (m_externalEnvironmentProvider &&
+      !m_externalEnvironmentProvider->Unregister()) {
+    wxLogWarning("xGRIB: environmental provider still has active work");
+    return false;
+  }
+  m_externalEnvironmentProvider.reset();
   // Reset timeline to system time before shutting down
   SendTimelineMessage(wxInvalidDateTime);
 
@@ -231,6 +245,29 @@ bool grib_pi::DeInit(void) {
   m_pGRIBOverlayFactory = nullptr;
 
   return true;
+}
+
+bool grib_pi::OpenExternalDataset(const wxString& path, wxString* error) {
+  if (m_bBundledGribConflict) {
+    if (error) *error = "Bundled GRIB is enabled; xGRIB cannot own the viewer";
+    return false;
+  }
+  if (!wxFileExists(path)) {
+    if (error) *error = "Dataset file does not exist";
+    return false;
+  }
+  if (!m_pGribCtrlBar) OnToolbarToolCallback(-1);
+  if (!m_pGribCtrlBar) {
+    if (error) *error = "xGRIB control bar is unavailable";
+    return false;
+  }
+  m_pGribCtrlBar->OpenGeneratedGrib(path);
+  return true;
+}
+
+bool OpenExternalGribDataset(grib_pi& plugin, const wxString& path,
+                             wxString* error) {
+  return plugin.OpenExternalDataset(path, error);
 }
 
 int grib_pi::GetAPIVersionMajor() { return MY_API_VERSION_MAJOR; }

@@ -191,6 +191,8 @@ set(SRCS
     src/GrabberWin.cpp
     src/GribUIDialog.cpp
     src/EnvironmentalGribDialog.cpp
+    src/ExternalEnvironmentProvider.cpp
+    src/FileDigest.cpp
     src/GeneratorJobJson.cpp
     src/ProcessCommand.cpp
     src/TimeZoneDisplay.cpp
@@ -226,6 +228,8 @@ set(HDRS
     src/GrabberWin.h
     src/GribUIDialog.h
     src/EnvironmentalGribDialog.h
+    src/ExternalEnvironmentProvider.h
+    src/FileDigest.h
     src/GeneratorJobJson.h
     src/ProcessCommand.h
     src/TimeZoneDisplay.h
@@ -566,6 +570,12 @@ if (NOT OCPN_FLATPAK_CONFIG)
       ${wxWidgets_LIBRARIES})
     add_test(NAME xgrib_process_command_tests
              COMMAND xgrib_process_command_tests)
+
+    add_executable(xgrib_file_digest_tests
+      test/FileDigestTests.cpp src/FileDigest.cpp)
+    target_include_directories(xgrib_file_digest_tests PRIVATE
+      ${PROJECT_SOURCE_DIR}/src)
+    add_test(NAME xgrib_file_digest_tests COMMAND xgrib_file_digest_tests)
 
     add_test(NAME xgrib_environmental_process_output_contract
       COMMAND ${CMAKE_COMMAND}

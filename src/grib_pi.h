@@ -36,6 +36,8 @@
 #ifndef _GRIBPI_H_
 #define _GRIBPI_H_
 
+#include <memory>
+
 #include "wx/wxprec.h"
 
 #ifndef WX_PRECOMP
@@ -58,6 +60,7 @@
 #include "GribUIDialog.h"
 
 class GribPreferencesDialog;
+class ExternalEnvironmentProvider;
 
 //----------------------------------------------------------------------------------------------------------
 //    The PlugIn Class Definition
@@ -138,6 +141,7 @@ public:
 
   void OnGribCtrlBarClose();
   void OnGribCtrlBarDestroyed(GRIBUICtrlBar* ctrlBar);
+  bool OpenExternalDataset(const wxString& path, wxString* error);
 
   wxPoint GetCtrlBarXY() { return m_CtrlBarxy; }
   wxPoint GetCursorDataXY() { return m_CursorDataxy; }
@@ -238,6 +242,7 @@ private:
    */
   PlugIn_ViewPort m_current_vp;
   wxBitmap m_panelBitmap;
+  std::unique_ptr<ExternalEnvironmentProvider> m_externalEnvironmentProvider;
 };
 
 //----------------------------------------------------------------------------------------
