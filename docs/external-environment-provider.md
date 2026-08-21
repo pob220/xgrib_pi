@@ -16,6 +16,9 @@ callback opens the retained file through the existing xGRIB viewer on the GUI
 thread.  Cancellation terminates the helper process and a failed acquisition
 leaves the previously displayed dataset unchanged.
 
-Current preview limits are deliberate: one acquisition runs at a time, the
-bounding box must not cross the antimeridian, and credential configuration
-remains owned by the environmental-grib runtime rather than the Scheduler.
+Current preview limits are deliberate: one acquisition runs at a time and the
+bounding box must not cross the antimeridian.  Public providers require no
+credential.  For unattended Copernicus Marine runs the non-secret username is
+part of the typed request while the password is supplied only through the
+helper's `ENVIRONMENTAL_GRIB_COPERNICUS_PASSWORD` environment variable.  The
+password is never accepted in HTTP, provider JSON, job files or logs.

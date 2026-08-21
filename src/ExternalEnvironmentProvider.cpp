@@ -76,6 +76,7 @@ constexpr const char* kDescriptor = R"json({
     {"name":"includeWaves","label":"Include waves","type":"boolean","required":false,"defaultValue":"false"},
     {"name":"waveProvider","label":"Wave provider","type":"resource","required":false,"resourceKind":"wave-provider","defaultValue":"gfs_wave"},
     {"name":"currentSource","label":"Current source","type":"resource","required":false,"resourceKind":"current-source","defaultValue":"none"},
+    {"name":"copernicusUsername","label":"Copernicus Marine username","type":"string","required":false},
     {"name":"weatherGridSpacingDegrees","label":"Weather grid spacing","type":"number","required":false,"unit":"degrees","defaultValue":"0.25","minimum":0.01,"maximum":5},
     {"name":"currentGridSpacingDegrees","label":"Current grid spacing","type":"number","required":false,"unit":"degrees","defaultValue":"0.05","minimum":0.005,"maximum":5}
   ],
@@ -93,8 +94,14 @@ constexpr const char* kDescriptor = R"json({
     {"kind":"weather-preset","identity":"marine","label":"Marine comfort"},
     {"kind":"weather-preset","identity":"all","label":"All available display data"},
     {"kind":"wave-provider","identity":"gfs_wave","label":"NOAA GFS Wave"},
+    {"kind":"wave-provider","identity":"copernicus_global_waves","label":"Copernicus Marine Global Waves"},
     {"kind":"current-source","identity":"none","label":"None"},
-    {"kind":"current-source","identity":"noaa_rtofs_global","label":"NOAA RTOFS global"}
+    {"kind":"current-source","identity":"marine_ie_irish_sea","label":"Marine Institute Irish Sea"},
+    {"kind":"current-source","identity":"noaa_rtofs_global","label":"NOAA RTOFS global"},
+    {"kind":"current-source","identity":"copernicus_nws","label":"Copernicus Marine North-West Shelf"},
+    {"kind":"current-source","identity":"copernicus_global","label":"Copernicus Marine Global"},
+    {"kind":"current-source","identity":"copernicus_ibi","label":"Copernicus Marine Iberia-Biscay-Ireland"},
+    {"kind":"current-source","identity":"copernicus_mediterranean","label":"Copernicus Marine Mediterranean"}
   ]
 })json";
 
@@ -363,6 +370,10 @@ int ExternalEnvironmentProvider::RunRequest(
   const wxString preset = text("weatherPreset", "routing");
   const wxString wave = text("waveProvider", "gfs_wave");
   const wxString current = text("currentSource", "none");
+  const wxString copernicus_username = text("copernicusUsername", "");
+  if (copernicus_username.length() > 256)
+    return Fail("invalid_request", "Copernicus username is too long",
+                error_code, error_message);
   const bool include_waves = boolean("includeWaves", false);
 
   wxFileName directory(*GetpPrivateApplicationDataLocation(), "");
@@ -382,6 +393,8 @@ int ExternalEnvironmentProvider::RunRequest(
   wxJSONValue envelope;
   envelope["schemaVersion"] = 1;
   envelope["operation"] = wxString("generateEnvironment");
+  envelope["credentials"]["copernicusPasswordEnvironment"] =
+      wxString("ENVIRONMENTAL_GRIB_COPERNICUS_PASSWORD");
   auto& request = envelope["request"];
   request["bbox"]["west"] = west;
   request["bbox"]["south"] = south;
@@ -403,6 +416,8 @@ int ExternalEnvironmentProvider::RunRequest(
   request["waveProvider"] = wave;
   request["waveStepHours"] = 3;
   request["currentSource"] = current;
+  if (!copernicus_username.empty())
+    request["copernicusUsername"] = copernicus_username;
   request["currentGridSpacingDeg"] =
       number("currentGridSpacingDegrees", 0.05);
   request["output"] = output.GetFullPath();

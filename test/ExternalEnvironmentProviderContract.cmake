@@ -5,6 +5,12 @@ file(READ "${SOURCE_FILE}" source)
 # therefore use explicit wxString and unambiguous numeric assignments.
 set(required_literals
   "envelope[\"operation\"] = wxString(\"generateEnvironment\")"
+  "envelope[\"credentials\"][\"copernicusPasswordEnvironment\"]"
+  "wxString(\"ENVIRONMENTAL_GRIB_COPERNICUS_PASSWORD\")"
+  "request[\"copernicusUsername\"] = copernicus_username"
+  "Copernicus Marine Global Waves"
+  "Copernicus Marine North-West Shelf"
+  "Copernicus username is too long"
   "request[\"fallbackWaveProvider\"] = wxString(\"none\")"
   "request[\"fallbackCurrentSource\"] = wxString(\"none\")"
   "fields.Append(wxString(\"environmental-grib\"))"
