@@ -485,8 +485,11 @@ int ExternalEnvironmentProvider::RunRequest(
   response["identity"] = wxString("xgrib-") +
                          wxString::FromUTF8(checksum.substr(0, 20));
   response["providerHandle"] = output.GetFullPath();
-  response["model"] = weather + (include_waves ? "+" + wave : "") +
-                      (current != "none" ? "+" + current : "");
+  const wxString wave_model =
+      include_waves ? wxString("+") + wave : wxString();
+  const wxString current_model =
+      current != "none" ? wxString("+") + current : wxString();
+  response["model"] = weather + wave_model + current_model;
   response["cycle"] = helper_result.HasMember("selected_cycle")
                             ? helper_result["selected_cycle"].AsString()
                             : wxString::FromUTF8(start);
