@@ -353,7 +353,7 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   areaPresetSizer->Add(m_presetChoice, 1, wxEXPAND | wxRIGHT, 8);
   areaPresetSizer->Add(m_manageAreaPresetsButton, 0);
   areaPresetPanel->SetSizer(areaPresetSizer);
-  m_areaPresets = xgrib::LoadAreaPresets(wxConfigBase::Get(false));
+  m_areaPresets = xgrib::LoadAreaPresets(GetOCPNConfigObject());
   PopulateAreaPresetChoice();
   m_startUtc = new wxTextCtrl(scrolled, wxID_ANY, DefaultStartUtc());
   m_durationHours = new wxSpinCtrl(scrolled, wxID_ANY);
@@ -1061,7 +1061,7 @@ void EnvironmentalGribDialog::OnManageAreaPresets(wxCommandEvent&) {
   wxString error;
   selectedId = dialog.SelectedPresetId();
   const auto updated = dialog.Presets();
-  if (!xgrib::SaveAreaPresets(wxConfigBase::Get(false), updated, &error)) {
+  if (!xgrib::SaveAreaPresets(GetOCPNConfigObject(), updated, &error)) {
     wxMessageBox(error, "Could not save area presets", wxOK | wxICON_ERROR,
                  this);
     return;
@@ -2715,7 +2715,7 @@ void EnvironmentalGribDialog::RefreshOutputFilenameDefault() {
 }
 
 void EnvironmentalGribDialog::LoadSettings() {
-  wxConfigBase* config = wxConfigBase::Get(false);
+  wxConfigBase* config = GetOCPNConfigObject();
   if (!config) return;
   wxString oldPath = config->GetPath();
   config->SetPath("/PlugIns/xGRIB/EnvironmentalGenerator");
@@ -2780,7 +2780,7 @@ void EnvironmentalGribDialog::LoadSettings() {
 }
 
 void EnvironmentalGribDialog::SaveSettings() {
-  wxConfigBase* config = wxConfigBase::Get(false);
+  wxConfigBase* config = GetOCPNConfigObject();
   if (!config) return;
   wxString oldPath = config->GetPath();
   config->SetPath("/PlugIns/xGRIB/EnvironmentalGenerator");

@@ -584,6 +584,11 @@ if (NOT OCPN_FLATPAK_CONFIG)
         -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/src/EnvironmentalGribDialog.cpp
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/EnvironmentalGribDialogContract.cmake)
 
+    add_test(NAME xgrib_environmental_config_contract
+      COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/src/EnvironmentalGribDialog.cpp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/EnvironmentalGribConfigContract.cmake)
+
     add_test(NAME xgrib_selected_file_path_contract
       COMMAND ${CMAKE_COMMAND}
         -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/src/GribUIDialog.cpp
