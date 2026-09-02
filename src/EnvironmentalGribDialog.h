@@ -1,6 +1,8 @@
 #pragma once
 
 #include <functional>
+#include <optional>
+#include <vector>
 
 #include <wx/filepicker.h>
 #include <wx/process.h>
@@ -10,6 +12,7 @@
 #include <wx/wx.h>
 
 #include "ocpn_plugin.h"
+#include "AreaPreset.h"
 
 class EnvironmentalGribDialog : public wxDialog {
 public:
@@ -33,6 +36,8 @@ private:
   void OnExistingGribFileChanged(wxFileDirPickerEvent& event);
   void OnOfflineTidalFileChanged(wxFileDirPickerEvent& event);
   void OnPresetChanged(wxCommandEvent& event);
+  void OnManageAreaPresets(wxCommandEvent& event);
+  void OnAreaCoordinateChanged(wxCommandEvent& event);
   void OnProviderChanged(wxCommandEvent& event);
   void OnModeChanged(wxCommandEvent& event);
   void OnCancel(wxCommandEvent& event);
@@ -52,6 +57,13 @@ private:
   bool OutputFileLooksValidGrib(wxString* details = nullptr) const;
   void SetBusy(bool busy);
   void ApplyPreset(int selection);
+  void PopulateAreaPresetChoice(const wxString& selected_id = {});
+  xgrib::AreaPreset CurrentAreaBounds() const;
+  std::optional<xgrib::AreaPreset> CurrentChartBounds() const;
+  void ApplyProviderPreference(
+      const wxString& provider_id,
+      const std::vector<xgrib::ProviderPreferenceOption>& options,
+      wxChoice* choice, wxCheckBox* enabled);
   bool ConfirmLargeCopernicusRequest();
   bool ValidateUkvRequest();
   bool ValidateMetNoRequest();
@@ -123,6 +135,7 @@ private:
   wxChoice* m_offlineCurrentMode;
   wxChoice* m_mode;
   wxChoice* m_presetChoice;
+  wxButton* m_manageAreaPresetsButton;
   wxChoice* m_provider;
   wxStaticText* m_usernameLabel;
   wxTextCtrl* m_username;
@@ -171,6 +184,8 @@ private:
   GribReadyCallback m_onGribReady;
   bool m_outputFileUserCustomized{false};
   bool m_updatingOutputFilename{false};
+  bool m_applyingAreaPreset{false};
+  std::vector<xgrib::AreaPreset> m_areaPresets;
   bool m_offlineTidalPackageValid{false};
   bool m_offlineClimatologyAvailable{false};
   bool m_smokeTestConfigured{false};

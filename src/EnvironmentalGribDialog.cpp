@@ -1,5 +1,6 @@
 #include "EnvironmentalGribDialog.h"
 
+#include "AreaPresetManagerDialog.h"
 #include "TimeZoneDisplay.h"
 #include "GeneratorJobJson.h"
 #include "ProcessCommand.h"
@@ -344,19 +345,16 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   m_south = new wxTextCtrl(scrolled, wxID_ANY, "50.5");
   m_east = new wxTextCtrl(scrolled, wxID_ANY, "-2.5");
   m_north = new wxTextCtrl(scrolled, wxID_ANY, "56.5");
-  wxString presets[] = {"Custom bbox",
-                        "Current chart area",
-                        "Irish Sea / North Channel",
-                        "Western English Channel",
-                        "North Sea",
-                        "Bay of Biscay",
-                        "Gulf Stream / Florida Straits",
-                        "US East Coast / Gulf Stream",
-                        "Caribbean",
-                        "Nordic coastal waters"};
-  m_presetChoice = new wxChoice(scrolled, wxID_ANY, wxDefaultPosition,
-                                wxDefaultSize, WXSIZEOF(presets), presets);
-  m_presetChoice->SetSelection(0);
+  auto* areaPresetPanel = new wxPanel(scrolled, wxID_ANY);
+  auto* areaPresetSizer = new wxBoxSizer(wxHORIZONTAL);
+  m_presetChoice = new wxChoice(areaPresetPanel, wxID_ANY);
+  m_manageAreaPresetsButton =
+      new wxButton(areaPresetPanel, wxID_ANY, "Manage Areas...");
+  areaPresetSizer->Add(m_presetChoice, 1, wxEXPAND | wxRIGHT, 8);
+  areaPresetSizer->Add(m_manageAreaPresetsButton, 0);
+  areaPresetPanel->SetSizer(areaPresetSizer);
+  m_areaPresets = xgrib::LoadAreaPresets(GetOCPNConfigObject());
+  PopulateAreaPresetChoice();
   m_startUtc = new wxTextCtrl(scrolled, wxID_ANY, DefaultStartUtc());
   m_durationHours = new wxSpinCtrl(scrolled, wxID_ANY);
   m_durationHours->SetRange(1, 360);
@@ -389,18 +387,9 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   m_generateWeather =
       new wxCheckBox(scrolled, wxID_ANY, "Generate/include weather");
   m_generateWeather->SetValue(true);
-  wxString weatherProviders[] = {"NOAA GFS forecast",
-                                 "NOAA HRRR 3 km forecast",
-                                 "Met Office UKV 2 km forecast",
-                                 "MET Norway Nordic 1 km forecast",
-                                 "DWD ICON-EU 7 km forecast",
-                                 "ECMWF IFS Open Data forecast",
-                                 "ECMWF AIFS Open Data forecast (experimental)",
-                                 "Existing weather GRIB file",
-                                 "None"};
-  m_weatherProvider =
-      new wxChoice(scrolled, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                   WXSIZEOF(weatherProviders), weatherProviders);
+  m_weatherProvider = new wxChoice(scrolled, wxID_ANY);
+  for (const auto& option : xgrib::WeatherProviderOptions())
+    m_weatherProvider->Append(option.label);
   m_weatherProvider->SetSelection(0);
   wxString weatherPresets[] = {"Minimal wind", "Routing", "Marine comfort",
                                "All available display data"};
@@ -436,23 +425,9 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   m_generateCurrents =
       new wxCheckBox(scrolled, wxID_ANY, "Generate/include currents");
   m_generateCurrents->SetValue(true);
-  wxString currentSources[] = {
-      "None",
-      "Existing current GRIB file",
-      "TPXO cache",
-      "TPXO direct astronomical tide model",
-      "Marine.ie Irish Sea latest run",
-      "Copernicus NWS forecast/model currents",
-      "Copernicus Global forecast/model currents",
-      "NOAA RTOFS Global ocean currents",
-      "NOAA OFS / S-111 coastal currents (experimental)",
-      "Auto forecast/model current provider",
-      _("Offline current (.xtd)"),
-      _("Copernicus IBI high-resolution forecast/model currents"),
-      _("Copernicus Mediterranean forecast/model currents")};
-  m_currentSource =
-      new wxChoice(scrolled, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                   WXSIZEOF(currentSources), currentSources);
+  m_currentSource = new wxChoice(scrolled, wxID_ANY);
+  for (const auto& option : xgrib::CurrentProviderOptions())
+    m_currentSource->Append(option.label);
   m_currentSource->SetSelection(2);
   m_existingCurrentFile = new wxFilePickerCtrl(
       scrolled, wxID_ANY, "", "Select current GRIB", "*.grb;*.grb2");
@@ -534,7 +509,7 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   addRow("South latitude", m_south);
   addRow("East longitude", m_east);
   addRow("North latitude", m_north);
-  addRow("Area preset", m_presetChoice);
+  addRow("Area preset", areaPresetPanel);
   m_startTimeLabel = addRow("Start UTC", m_startUtc);
   addRow("Forecast duration hours (maximum 15 days)", m_durationHours);
   addRow("Step hours", m_stepHours);
@@ -655,6 +630,12 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
                            this);
   m_presetChoice->Bind(wxEVT_CHOICE, &EnvironmentalGribDialog::OnPresetChanged,
                        this);
+  m_manageAreaPresetsButton->Bind(
+      wxEVT_BUTTON, &EnvironmentalGribDialog::OnManageAreaPresets, this);
+  for (wxTextCtrl* field : {m_west, m_south, m_east, m_north}) {
+    field->Bind(wxEVT_TEXT, &EnvironmentalGribDialog::OnAreaCoordinateChanged,
+                this);
+  }
   m_provider->Bind(wxEVT_CHOICE, &EnvironmentalGribDialog::OnProviderChanged,
                    this);
   m_mode->Bind(wxEVT_CHOICE, &EnvironmentalGribDialog::OnModeChanged, this);
@@ -1066,6 +1047,39 @@ void EnvironmentalGribDialog::OnPresetChanged(wxCommandEvent& event) {
   if (IsOfflineTidalNeeded()) ValidateOfflineTidalPackage();
 }
 
+void EnvironmentalGribDialog::OnManageAreaPresets(wxCommandEvent&) {
+  wxString selectedId;
+  const int previousSelection = m_presetChoice->GetSelection();
+  if (previousSelection >= 2 &&
+      previousSelection - 2 < static_cast<int>(m_areaPresets.size()))
+    selectedId = m_areaPresets[static_cast<size_t>(previousSelection - 2)].id;
+
+  AreaPresetManagerDialog dialog(this, m_areaPresets, CurrentAreaBounds(),
+                                 CurrentChartBounds(), selectedId);
+  if (dialog.ShowModal() != wxID_OK) return;
+
+  wxString error;
+  selectedId = dialog.SelectedPresetId();
+  const auto updated = dialog.Presets();
+  if (!xgrib::SaveAreaPresets(GetOCPNConfigObject(), updated, &error)) {
+    wxMessageBox(error, "Could not save area presets", wxOK | wxICON_ERROR,
+                 this);
+    return;
+  }
+  m_areaPresets = updated;
+  PopulateAreaPresetChoice(selectedId);
+  if (m_presetChoice->GetSelection() >= 2)
+    ApplyPreset(m_presetChoice->GetSelection());
+  AppendLog("Saved area presets.");
+}
+
+void EnvironmentalGribDialog::OnAreaCoordinateChanged(wxCommandEvent& event) {
+  if (!m_applyingAreaPreset && m_presetChoice->GetSelection() != 0)
+    m_presetChoice->SetSelection(0);
+  RefreshOutputFilenameDefault();
+  event.Skip();
+}
+
 void EnvironmentalGribDialog::OnProviderChanged(wxCommandEvent& event) {
   if (event.GetEventObject() == m_currentSource ||
       event.GetEventObject() == m_fallbackCurrentSource ||
@@ -1080,6 +1094,63 @@ void EnvironmentalGribDialog::OnProviderChanged(wxCommandEvent& event) {
 void EnvironmentalGribDialog::OnModeChanged(wxCommandEvent&) {
   RefreshOutputFilenameDefault();
   UpdateProviderUi();
+}
+
+void EnvironmentalGribDialog::PopulateAreaPresetChoice(
+    const wxString& selected_id) {
+  m_presetChoice->Freeze();
+  m_presetChoice->Clear();
+  m_presetChoice->Append("Custom bbox");
+  m_presetChoice->Append("Current chart area");
+  int selection = 0;
+  for (size_t index = 0; index < m_areaPresets.size(); ++index) {
+    m_presetChoice->Append(m_areaPresets[index].name);
+    if (!selected_id.empty() && m_areaPresets[index].id == selected_id)
+      selection = static_cast<int>(index) + 2;
+  }
+  m_presetChoice->SetSelection(selection);
+  m_presetChoice->Thaw();
+}
+
+xgrib::AreaPreset EnvironmentalGribDialog::CurrentAreaBounds() const {
+  xgrib::AreaPreset bounds;
+  bounds.id = "current-bounds";
+  bounds.name = "New area";
+  m_west->GetValue().ToDouble(&bounds.west);
+  m_south->GetValue().ToDouble(&bounds.south);
+  m_east->GetValue().ToDouble(&bounds.east);
+  m_north->GetValue().ToDouble(&bounds.north);
+  return bounds;
+}
+
+std::optional<xgrib::AreaPreset> EnvironmentalGribDialog::CurrentChartBounds()
+    const {
+  if (!m_hasCurrentViewPort ||
+      m_currentViewPort.lon_min >= m_currentViewPort.lon_max ||
+      m_currentViewPort.lat_min >= m_currentViewPort.lat_max)
+    return std::nullopt;
+  xgrib::AreaPreset bounds;
+  bounds.id = "chart-bounds";
+  bounds.name = "Chart area";
+  bounds.west = m_currentViewPort.lon_min;
+  bounds.south = m_currentViewPort.lat_min;
+  bounds.east = m_currentViewPort.lon_max;
+  bounds.north = m_currentViewPort.lat_max;
+  if (!xgrib::ValidateAreaPreset(bounds).empty()) return std::nullopt;
+  return bounds;
+}
+
+void EnvironmentalGribDialog::ApplyProviderPreference(
+    const wxString& provider_id,
+    const std::vector<xgrib::ProviderPreferenceOption>& options,
+    wxChoice* choice, wxCheckBox* enabled) {
+  if (provider_id.empty()) return;
+  for (size_t index = 0; index < options.size(); ++index) {
+    if (options[index].id != provider_id) continue;
+    choice->SetSelection(static_cast<int>(index));
+    enabled->SetValue(provider_id != "none");
+    return;
+  }
 }
 
 void EnvironmentalGribDialog::ApplyPreset(int selection) {
@@ -1111,53 +1182,33 @@ void EnvironmentalGribDialog::ApplyPreset(int selection) {
       m_presetChoice->SetSelection(0);
       return;
     }
-    m_west->SetValue(wxString::Format("%.6f", m_currentViewPort.lon_min));
-    m_south->SetValue(wxString::Format("%.6f", m_currentViewPort.lat_min));
-    m_east->SetValue(wxString::Format("%.6f", m_currentViewPort.lon_max));
-    m_north->SetValue(wxString::Format("%.6f", m_currentViewPort.lat_max));
+    m_applyingAreaPreset = true;
+    m_west->ChangeValue(wxString::Format("%.6f", m_currentViewPort.lon_min));
+    m_south->ChangeValue(wxString::Format("%.6f", m_currentViewPort.lat_min));
+    m_east->ChangeValue(wxString::Format("%.6f", m_currentViewPort.lon_max));
+    m_north->ChangeValue(wxString::Format("%.6f", m_currentViewPort.lat_max));
+    m_applyingAreaPreset = false;
     RefreshOutputFilenameDefault();
     AppendLog("Applied current chart area preset.");
     m_presetChoice->SetSelection(0);
     return;
   }
-  struct AreaPreset {
-    double west;
-    double south;
-    double east;
-    double north;
-    int currentSourceSelection;
-  };
-  const AreaPreset presets[] = {
-      {-8.5, 50.5, -2.5, 56.5, 5},   {-7.0, 48.0, -1.0, 51.5, 5},
-      {-5.0, 51.0, 9.0, 60.0, 5},    {-10.5, 43.0, -1.0, 48.5, 6},
-      {-81.0, 24.0, -77.0, 28.0, 7}, {-81.0, 24.0, -70.0, 36.0, 7},
-      {-85.0, 10.0, -60.0, 25.0, 7}, {3.0, 57.0, 12.0, 66.0, -1},
-  };
   int areaIndex = selection - 2;
-  if (areaIndex >= 0 && areaIndex < static_cast<int>(WXSIZEOF(presets))) {
-    const AreaPreset& area = presets[areaIndex];
-    m_west->SetValue(wxString::Format("%.1f", area.west));
-    m_south->SetValue(wxString::Format("%.1f", area.south));
-    m_east->SetValue(wxString::Format("%.1f", area.east));
-    m_north->SetValue(wxString::Format("%.1f", area.north));
-    if (area.currentSourceSelection >= 0 &&
-        area.currentSourceSelection <
-            static_cast<int>(m_currentSource->GetCount())) {
-      m_generateCurrents->SetValue(true);
-      m_currentSource->SetSelection(area.currentSourceSelection);
-    } else {
-      m_generateCurrents->SetValue(false);
-    }
-    if (areaIndex == 7) {
-      const int metNo =
-          m_weatherProvider->FindString("MET Norway Nordic 1 km forecast");
-      if (metNo != wxNOT_FOUND) {
-        m_generateWeather->SetValue(true);
-        m_weatherProvider->SetSelection(metNo);
-        m_durationHours->SetValue(std::min(m_durationHours->GetValue(), 48));
-        m_stepHours->SetValue(1);
-      }
-    }
+  if (areaIndex >= 0 && areaIndex < static_cast<int>(m_areaPresets.size())) {
+    const xgrib::AreaPreset& area =
+        m_areaPresets[static_cast<size_t>(areaIndex)];
+    m_applyingAreaPreset = true;
+    m_west->ChangeValue(wxString::Format("%.6g", area.west));
+    m_south->ChangeValue(wxString::Format("%.6g", area.south));
+    m_east->ChangeValue(wxString::Format("%.6g", area.east));
+    m_north->ChangeValue(wxString::Format("%.6g", area.north));
+    m_applyingAreaPreset = false;
+    ApplyProviderPreference(area.weather_provider,
+                            xgrib::WeatherProviderOptions(), m_weatherProvider,
+                            m_generateWeather);
+    ApplyProviderPreference(area.current_provider,
+                            xgrib::CurrentProviderOptions(), m_currentSource,
+                            m_generateCurrents);
     RefreshOutputFilenameDefault();
     UpdateProviderUi();
     AppendLog("Applied area preset: " + m_presetChoice->GetString(selection));
@@ -2613,10 +2664,9 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
   if (!prefix.empty()) return TimestampedFilename(prefix);
 
   int mode = m_mode->GetSelection();
-  int preset = m_presetChoice->GetSelection();
   if (mode == 1) {
-    return preset == 2 ? IrishSeaTpxoOutputFilename()
-                       : DefaultTpxoOutputFilename();
+    return looksIrishSea ? IrishSeaTpxoOutputFilename()
+                         : DefaultTpxoOutputFilename();
   }
   if (mode == 2) return TimestampedFilename("local_netcdf_current");
   if (mode == 3) return TimestampedFilename("synthetic_current");
@@ -2665,7 +2715,7 @@ void EnvironmentalGribDialog::RefreshOutputFilenameDefault() {
 }
 
 void EnvironmentalGribDialog::LoadSettings() {
-  wxConfigBase* config = wxConfigBase::Get(false);
+  wxConfigBase* config = GetOCPNConfigObject();
   if (!config) return;
   wxString oldPath = config->GetPath();
   config->SetPath("/PlugIns/xGRIB/EnvironmentalGenerator");
@@ -2730,7 +2780,7 @@ void EnvironmentalGribDialog::LoadSettings() {
 }
 
 void EnvironmentalGribDialog::SaveSettings() {
-  wxConfigBase* config = wxConfigBase::Get(false);
+  wxConfigBase* config = GetOCPNConfigObject();
   if (!config) return;
   wxString oldPath = config->GetPath();
   config->SetPath("/PlugIns/xGRIB/EnvironmentalGenerator");

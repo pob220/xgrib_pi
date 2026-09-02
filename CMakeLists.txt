@@ -73,9 +73,9 @@ set(LONG_DESCRIPTION
 
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "2")
-set(VERSION_PATCH "4")
-set(VERSION_TWEAK "1")
-set(VERSION_DATE "31/08/2026") # DD/MM/YYYY format
+set(VERSION_PATCH "5")
+set(VERSION_TWEAK "0")
+set(VERSION_DATE "02/09/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -190,6 +190,8 @@ set(SRCS
     src/GribUIDialogBase.cpp
     src/GrabberWin.cpp
     src/GribUIDialog.cpp
+    src/AreaPreset.cpp
+    src/AreaPresetManagerDialog.cpp
     src/EnvironmentalGribDialog.cpp
     src/GeneratorJobJson.cpp
     src/ProcessCommand.cpp
@@ -225,6 +227,8 @@ set(HDRS
     src/GribUIDialogBase.h
     src/GrabberWin.h
     src/GribUIDialog.h
+    src/AreaPreset.h
+    src/AreaPresetManagerDialog.h
     src/EnvironmentalGribDialog.h
     src/GeneratorJobJson.h
     src/ProcessCommand.h
@@ -551,6 +555,14 @@ if (NOT OCPN_FLATPAK_CONFIG)
       ${wxWidgets_LIBRARIES})
     add_test(NAME xgrib_plugin_policy_tests COMMAND xgrib_plugin_policy_tests)
 
+    add_executable(xgrib_area_preset_tests
+      test/AreaPresetTests.cpp src/AreaPreset.cpp)
+    target_include_directories(xgrib_area_preset_tests PRIVATE
+      ${PROJECT_SOURCE_DIR}/src)
+    target_link_libraries(xgrib_area_preset_tests PRIVATE
+      ${wxWidgets_LIBRARIES})
+    add_test(NAME xgrib_area_preset_tests COMMAND xgrib_area_preset_tests)
+
     add_executable(xgrib_display_geometry_tests
       test/GribDisplayGeometryTests.cpp)
     target_include_directories(xgrib_display_geometry_tests PRIVATE
@@ -571,6 +583,11 @@ if (NOT OCPN_FLATPAK_CONFIG)
       COMMAND ${CMAKE_COMMAND}
         -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/src/EnvironmentalGribDialog.cpp
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/EnvironmentalGribDialogContract.cmake)
+
+    add_test(NAME xgrib_environmental_config_contract
+      COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/src/EnvironmentalGribDialog.cpp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/EnvironmentalGribConfigContract.cmake)
 
     add_test(NAME xgrib_selected_file_path_contract
       COMMAND ${CMAKE_COMMAND}
