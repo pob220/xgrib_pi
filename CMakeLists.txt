@@ -190,6 +190,8 @@ set(SRCS
     src/GribUIDialogBase.cpp
     src/GrabberWin.cpp
     src/GribUIDialog.cpp
+    src/AreaPreset.cpp
+    src/AreaPresetManagerDialog.cpp
     src/EnvironmentalGribDialog.cpp
     src/GeneratorJobJson.cpp
     src/ProcessCommand.cpp
@@ -225,6 +227,8 @@ set(HDRS
     src/GribUIDialogBase.h
     src/GrabberWin.h
     src/GribUIDialog.h
+    src/AreaPreset.h
+    src/AreaPresetManagerDialog.h
     src/EnvironmentalGribDialog.h
     src/GeneratorJobJson.h
     src/ProcessCommand.h
@@ -550,6 +554,14 @@ if (NOT OCPN_FLATPAK_CONFIG)
     target_link_libraries(xgrib_plugin_policy_tests PRIVATE
       ${wxWidgets_LIBRARIES})
     add_test(NAME xgrib_plugin_policy_tests COMMAND xgrib_plugin_policy_tests)
+
+    add_executable(xgrib_area_preset_tests
+      test/AreaPresetTests.cpp src/AreaPreset.cpp)
+    target_include_directories(xgrib_area_preset_tests PRIVATE
+      ${PROJECT_SOURCE_DIR}/src)
+    target_link_libraries(xgrib_area_preset_tests PRIVATE
+      ${wxWidgets_LIBRARIES})
+    add_test(NAME xgrib_area_preset_tests COMMAND xgrib_area_preset_tests)
 
     add_executable(xgrib_display_geometry_tests
       test/GribDisplayGeometryTests.cpp)
