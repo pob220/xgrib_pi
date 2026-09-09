@@ -529,6 +529,14 @@ if (NOT OCPN_FLATPAK_CONFIG)
   endif()
 
   if(BUILD_TESTING)
+    if(APPLE)
+      add_test(NAME xgrib_macos_generator_signing
+        COMMAND ${CMAKE_COMMAND}
+          -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+          -DTEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/test/MacGeneratorSigningTests.cmake)
+    endif()
+
     add_executable(xgrib_time_zone_display_tests
       test/TimeZoneDisplayTests.cpp src/TimeZoneDisplay.cpp)
     target_include_directories(xgrib_time_zone_display_tests PRIVATE
@@ -648,6 +656,9 @@ if (NOT OCPN_FLATPAK_CONFIG)
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/PublicationContract.cmake)
 
     if(UNIX)
+      add_test(NAME xgrib_macos_signing_failure_tests
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/test/MacGeneratorSigningFailureTests.sh
+          ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_COMMAND})
       add_test(NAME xgrib_package_selection_tests
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/PackageSelectionTests.sh
           ${CMAKE_CURRENT_SOURCE_DIR}/scripts/resolve-package-pair.sh)

@@ -34,6 +34,21 @@ Run `git diff --check` and verify the generated archive contains the plugin
 library, launcher, native helper, runtime libraries, ecCodes definitions and
 samples, PROJ data, toolbar assets, and metadata.
 
+For macOS, run `bash scripts/test-macos-catalogue-archive.sh PACKAGE_ARCHIVE`
+on the final CPack archive. The Apple-Silicon CI job requires this check before
+accepting a package. It verifies each bundled dylib and the helper separately,
+then runs `capabilities` and an offline dry-run job from an extracted path
+containing spaces. Build-tree tests alone do not validate the distributed
+runtime.
+
+The macOS installer signs each bundled dependency, then the helper, **after**
+`fixup_bundle` has rewritten library paths. Both signing and strict signature
+verification must succeed or packaging fails. The local ad-hoc signatures
+preserve code integrity; this does not constitute Developer ID signing or
+notarization. The native `xgrib_macos_generator_signing` test reproduces the
+stale-signature defect with a small dylib, repairs it through the production
+installer, removes the original library and runs the relocated helper.
+
 For a bounded GUI lifecycle/parser smoke test in an isolated OpenCPN profile,
 set `XGRIB_TEST_OPEN_FILE=/path/to/test.grb` for one launch. xGRIB opens the
 normal control bar and the supplied file through its production viewer path.

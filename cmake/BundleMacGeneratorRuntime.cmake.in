@@ -12,3 +12,8 @@ foreach(_prefix IN LISTS _configured_prefixes)
   list(APPEND _search_dirs "${_prefix}/lib")
 endforeach()
 fixup_bundle("${_helper}" "" "${_search_dirs}")
+
+# This must be the last operation that changes the installed Mach-O files,
+# including when CPack runs this script in its own staging directory.
+include("@CMAKE_CURRENT_SOURCE_DIR@/cmake/SignMacGeneratorRuntime.cmake")
+xgrib_sign_mac_generator_runtime("${_helper}")

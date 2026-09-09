@@ -92,6 +92,8 @@ grep -q '<source> https://github.com/pob220/xgrib_pi </source>' "$metadata"
 tar -tzf "$archive" >"$test_dir/archive-contents.txt"
 grep -q 'libxgrib_pi.dylib' "$test_dir/archive-contents.txt"
 grep -q 'environmental-grib' "$test_dir/archive-contents.txt"
+bash scripts/test-macos-catalogue-archive.sh "$archive" \
+  2>&1 | tee "$log_dir/packaged-helper.log"
 
 jq -n \
   --arg commit "$(git rev-parse HEAD)" \
@@ -115,6 +117,7 @@ jq -n \
       {eccodes: $eccodes, netcdf: $netcdf, blosc: $blosc, proj: $proj},
     build_status: "passed", test_status: "passed", package_status: "passed",
     metadata_validation_status: "passed", installation_status: "not-run",
+    packaged_helper_status: "passed", packaged_signature_status: "passed",
     plugin_discovery_status: "not-run", plugin_load_status: "not-run",
     graphical_test_status: "not-run", file_path_display_status: "contract-tested",
     merge_status: "passed", output_validation_status: "passed",
@@ -122,7 +125,7 @@ jq -n \
     log_paths: ["logs/dependencies.log", "logs/configure.log",
                 "logs/build.log", "logs/test.log",
                 "logs/functional-merge.log", "logs/install.log",
-                "logs/package.log"],
+                "logs/package.log", "logs/packaged-helper.log"],
     package_filename: $package, package_checksum_sha256: $checksum,
     elapsed_time_seconds: null,
     result_classification: "build-and-package-only",
