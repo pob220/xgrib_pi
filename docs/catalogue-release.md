@@ -37,9 +37,12 @@ samples, PROJ data, toolbar assets, and metadata.
 For macOS, run `bash scripts/test-macos-catalogue-archive.sh PACKAGE_ARCHIVE`
 on the final CPack archive. The Apple-Silicon CI job requires this check before
 accepting a package. It verifies each bundled dylib and the helper separately,
-then runs `capabilities` and an offline dry-run job from an extracted path
-containing spaces. Build-tree tests alone do not validate the distributed
-runtime.
+then runs `capabilities`, an offline dry-run job, and real synthetic GRIB
+generation/reopening from an extracted path containing spaces. ecCodes
+definitions and samples are installed under the helper's adjacent
+`bin/share/eccodes` directory, which the native CLI discovers automatically;
+the package must not rely on the build machine's Homebrew data directories.
+Build-tree tests alone do not validate the distributed runtime.
 
 The macOS installer signs each bundled dependency, then the helper, **after**
 `fixup_bundle` has rewritten library paths. Both signing and strict signature

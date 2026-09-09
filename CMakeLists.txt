@@ -484,6 +484,20 @@ elseif(APPLE)
   install(TARGETS environmental-grib RUNTIME DESTINATION
           "OpenCPN.app/Contents/SharedSupport/plugins/${PACKAGE_NAME}/bin")
   if(BUNDLE_GENERATOR_RUNTIME)
+    # The native CLI discovers ecCodes data next to its executable. Homebrew
+    # libraries otherwise retain paths into the build machine's Cellar.
+    find_path(ECCODES_DEFINITIONS_DIR NAMES grib1/boot.def
+      HINTS ${CMAKE_PREFIX_PATH} PATHS /opt/homebrew /usr/local
+      PATH_SUFFIXES share/eccodes/definitions)
+    find_path(ECCODES_SAMPLES_DIR NAMES regular_ll_sfc_grib1.tmpl
+      HINTS ${CMAKE_PREFIX_PATH} PATHS /opt/homebrew /usr/local
+      PATH_SUFFIXES share/eccodes/samples)
+    if(NOT IS_DIRECTORY "${ECCODES_DEFINITIONS_DIR}" OR
+       NOT IS_DIRECTORY "${ECCODES_SAMPLES_DIR}")
+      message(FATAL_ERROR "ecCodes runtime definitions or samples were not found")
+    endif()
+    install(DIRECTORY "${ECCODES_DEFINITIONS_DIR}" "${ECCODES_SAMPLES_DIR}"
+      DESTINATION "OpenCPN.app/Contents/SharedSupport/plugins/${PACKAGE_NAME}/bin/share/eccodes")
     configure_file(cmake/BundleMacGeneratorRuntime.cmake.in
       "${CMAKE_CURRENT_BINARY_DIR}/BundleMacGeneratorRuntime.cmake" @ONLY)
     install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/BundleMacGeneratorRuntime.cmake")

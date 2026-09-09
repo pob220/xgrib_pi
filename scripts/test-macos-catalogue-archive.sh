@@ -25,6 +25,8 @@ helper=${helpers[0]}
 frameworks="$(dirname "$helper")/../Frameworks"
 test -x "$helper"
 test -f "$frameworks/libeccodes.dylib"
+test -f "$(dirname "$helper")/share/eccodes/definitions/grib1/boot.def"
+test -f "$(dirname "$helper")/share/eccodes/samples/regular_ll_sfc_grib1.tmpl"
 
 # Verify every physical library, not just the executable or a --deep traversal
 # of this non-app directory. Do not repair the package during validation.
@@ -36,6 +38,7 @@ codesign --verify --strict --verbose=2 "$helper"
 # Do not let build-machine DYLD overrides hide broken bundled dependencies.
 unset DYLD_LIBRARY_PATH DYLD_FALLBACK_LIBRARY_PATH DYLD_FRAMEWORK_PATH
 unset DYLD_FALLBACK_FRAMEWORK_PATH DYLD_INSERT_LIBRARIES
+unset ECCODES_DEFINITION_PATH ECCODES_SAMPLES_PATH GRIB_DEFINITION_PATH GRIB_SAMPLES_PATH
 cd "$tmp"
 "$helper" capabilities >capabilities.json
 jq -e '.schemaVersion == 1 and .operations == ["generateEnvironment"]' \
@@ -61,4 +64,15 @@ EOF
   >progress.jsonl
 jq -e '.status == "complete" and .schemaVersion == 1' result.json >/dev/null
 grep -q '"event":"complete"' progress.jsonl
-echo "Packaged macOS helper signatures, capabilities and dry-run job passed"
+
+# A dry run does not open ecCodes templates or definitions. Exercise actual
+# GRIB creation with the adjacent data selected by the native CLI, then read
+# the resulting file back through the same packaged runtime.
+"$helper" generate --bbox -6.3 53.0 -5.9 53.4 \
+  --start 2026-07-12T00:00:00Z --hours 6 --step-hours 3 \
+  --grid-spacing-deg 0.1 --source synthetic --output "$tmp/synthetic.grb" \
+  --overwrite >generation.log
+test -s synthetic.grb
+"$helper" inspect-grib "$tmp/synthetic.grb" >inspection.json
+jq -e '.stream_valid == true and .message_count > 0' inspection.json >/dev/null
+echo "Packaged macOS signatures, capabilities, dry-run and GRIB generation/reopen passed"
