@@ -36,5 +36,32 @@ int main() {
               << encoded << '\n';
     return 1;
   }
+  // Same parser the GUI uses for a completed native job, including >32-bit
+  // numeric counts and backward compatibility with older helpers.
+  wxJSONValue result;
+  double mib = -1;
+  if (ReadGeneratorActualNumericMiB(result, &mib)) return 2;
+  result["schemaVersion"] = 1;
+  result["status"] = wxString("complete");
+  auto& report = result["result"]["size_comparison"];
+  report["schemaVersion"] = 1;
+  report["actual"]["numericComplete"] = true;
+  report["actual"]["decodedBytes"] = static_cast<wxULongLong_t>(8589934592ULL);
+  writer.Write(result, encoded);
+  if (reader.Parse(encoded, &decoded) != 0 ||
+      !ReadGeneratorActualNumericMiB(decoded, &mib) || mib != 8192.0) return 3;
+  report["actual"]["numericComplete"] = false;
+  if (ReadGeneratorActualNumericMiB(result, &mib)) return 4;
+  report["actual"]["numericComplete"] = true;
+  report["actual"]["decodedBytes"] = wxString("8589934592");
+  if (ReadGeneratorActualNumericMiB(result, &mib)) return 5;
+  report["actual"]["decodedBytes"] = -1;
+  if (ReadGeneratorActualNumericMiB(result, &mib)) return 6;
+  report["actual"]["decodedBytes"] = 1024;
+  result["status"] = wxString("failed");
+  if (ReadGeneratorActualNumericMiB(result, &mib)) return 7;
+  result["status"] = wxString("complete");
+  report["schemaVersion"] = 2;
+  if (ReadGeneratorActualNumericMiB(result, &mib)) return 8;
   return 0;
 }

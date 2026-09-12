@@ -2303,6 +2303,7 @@ void EnvironmentalGribDialog::FinishCommand(long exit_code, bool launched) {
 
   wxString nativeError;
   wxString extensionSummary;
+  wxJSONValue completedResult;
   if (!m_resultPath.empty() && wxFileName::FileExists(m_resultPath)) {
     wxFile resultFile(m_resultPath);
     wxString resultText;
@@ -2310,13 +2311,14 @@ void EnvironmentalGribDialog::FinishCommand(long exit_code, bool launched) {
       wxJSONValue resultValue;
       wxJSONReader reader;
       if (reader.Parse(resultText, &resultValue) == 0) {
+        completedResult = resultValue;
         if (resultValue.HasMember("error") &&
             resultValue["error"].HasMember("message")) {
           nativeError = resultValue["error"]["message"].AsString();
           AppendLog("Native generator error: " + Redact(nativeError));
         }
         wxJSONValue coverage =
-            resultValue["diagnostics"]["forecast_extension"]["coverage"];
+            resultValue["result"]["diagnostics"]["forecast_extension"]["coverage"];
         for (const wxString& component :
              {wxString("weather"), wxString("waves"), wxString("current")}) {
           wxJSONValue entries = coverage[component];
@@ -2366,9 +2368,36 @@ void EnvironmentalGribDialog::FinishCommand(long exit_code, bool launched) {
     if (m_estimateProcess || m_estimateTimer.IsRunning())
       m_estimateDecoded = _("Decoded forecast data: not yet known");
     StopEstimate();
+    double actualNumericMiB = 0;
+    if (ReadGeneratorActualNumericMiB(completedResult, &actualNumericMiB))
+      m_estimateDecoded = wxString::Format(
+          _("Decoded numeric data in generated file: %.2f MiB"), actualNumericMiB);
+    else
+      m_estimateDecoded = _("Decoded numeric data in generated file: not yet known");
     const double mib = wxFileName(OutputPath()).GetSize().ToDouble() / 1048576.0;
     ShowEstimate(wxString::Format(_("Actual GRIB file: %.2f MiB"), mib),
                  m_estimateDecoded);
+    m_estimateSummary->UnsetToolTip();
+    wxJSONValue report = completedResult["result"]["size_comparison"];
+    if (completedResult["status"].AsString() == "complete" &&
+        report["schemaVersion"].IsInt() && report["schemaVersion"].AsInt() == 1) {
+      const wxString reportPath = OutputPath() + ".size-report.json";
+      wxString reportText;
+      wxJSONWriter writer;
+      writer.Write(report, reportText);
+      // wxTempFile stages beside the destination then commits the complete
+      // report. A reporting failure must not discard a valid generated GRIB.
+      wxTempFile reportFile(reportPath);
+      if (reportFile.IsOpened() && reportFile.Write(reportText) && reportFile.Commit())
+        AppendLog("Size comparison saved: " + reportPath +
+                  "\nContains area/time and settings, but no credentials or source paths.");
+      else
+        AppendLog("Could not save size comparison; the generated GRIB is unaffected.");
+      m_estimateSummary->SetToolTip(
+          _("Final inventory includes all generated fields, levels, times and missing cells.\n"
+            "A size comparison report is saved beside the GRIB when possible.\n"
+            "It contains area/time and settings; review before sharing."));
+    }
     wxString message =
         "Generated environmental GRIB\nSource: " + SourceLabel() +
         "\nValid time: " + ValidTimeSummary() +
