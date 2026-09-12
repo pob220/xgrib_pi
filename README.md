@@ -10,6 +10,16 @@ UKV regridding, current calculation and ecCodes writing therefore do not run
 inside OpenCPN. Generated files open directly in xGRIB after strict GRIB
 validation.
 
+### New in 0.2.5.2
+
+The generator shows automatically refreshed GRIB file and decoded-data size
+estimates where supported, then measured totals after generation. Estimates
+are planning guides, not total application RAM or memory limits; uncertain
+components are labelled explicitly. A small `.size-report.json` beside each
+GUI-generated GRIB supports estimate comparisons without storing credentials.
+It does include the requested area/time, so review it before sharing.
+See [size-estimate coverage and reporting](generator/docs/estimates.md).
+
 The environmental generator can optionally extend a manually selected
 short-range forecast to 15 days. Preferred weather, wave and current records
 retain priority over explicitly selected long-range sources; xGRIB writes one
