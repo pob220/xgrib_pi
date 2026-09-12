@@ -327,6 +327,7 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
                wxDefaultPosition, wxSize(880, 760),
                wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
       m_processTimer(this),
+      m_estimateTimer(this),
       m_onGribReady(std::move(onGribReady)) {
   auto* top = new wxBoxSizer(wxVERTICAL);
   m_scrolled =
@@ -334,7 +335,7 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
                            wxVSCROLL | wxALWAYS_SHOW_SB | wxTAB_TRAVERSAL);
   m_scrolled->SetScrollRate(0, 12);
   m_scrolled->ShowScrollbars(wxSHOW_SB_NEVER, wxSHOW_SB_ALWAYS);
-  m_scrolled->SetMinSize(wxSize(760, 330));
+  m_scrolled->SetMinSize(wxSize(300, 180));
   auto* scrolled = m_scrolled;
   auto* form = new wxBoxSizer(wxVERTICAL);
   auto* grid = new wxFlexGridSizer(2, 8, 8);
@@ -579,6 +580,17 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   grid->Add(outputFileSizer, 1, wxEXPAND);
 
   form->Add(grid, 0, wxEXPAND | wxALL, 12);
+  m_estimateSummary = new wxStaticText(
+      scrolled, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
+      wxST_NO_AUTORESIZE);
+  m_estimateSummary->SetMinSize(wxSize(100, GetCharHeight() * 4));
+  form->Add(m_estimateSummary, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+  ShowEstimate(_("Estimated GRIB file: waiting for settings"),
+               _("Decoded forecast data: not yet known"));
+  m_scrolled->Bind(wxEVT_SIZE, [this](wxSizeEvent& event) {
+    ShowEstimate(m_estimateFile, m_estimateDecoded);
+    event.Skip();
+  });
   form->Add(m_rememberUsername, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
   form->Add(m_openAfter, 0, wxLEFT | wxRIGHT | wxBOTTOM, 12);
   scrolled->SetSizer(form);
@@ -587,7 +599,7 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
 
   m_log = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 220),
                          wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
-  m_log->SetMinSize(wxSize(760, 180));
+  m_log->SetMinSize(wxSize(300, 100));
   top->Add(m_log, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 12);
 
   auto* buttons = new wxBoxSizer(wxHORIZONTAL);
@@ -603,8 +615,10 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   top->Add(buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
   SetSizerAndFit(top);
-  SetMinSize(wxSize(880, 720));
-  SetSize(wxSize(900, 780));
+  SetMinSize(wxSize(740, 500));
+  const wxRect desktop = wxGetClientDisplayRect();
+  SetSize(wxSize(std::min(900, desktop.width),
+                 std::min(780, desktop.height)));
   CentreOnParent();
 
   m_checkButton->Bind(wxEVT_BUTTON,
@@ -666,8 +680,26 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   m_cancelButton->Bind(wxEVT_BUTTON, &EnvironmentalGribDialog::OnCancel, this);
   m_closeButton->Bind(wxEVT_BUTTON, &EnvironmentalGribDialog::OnClose, this);
   Bind(wxEVT_CLOSE_WINDOW, &EnvironmentalGribDialog::OnDialogClose, this);
-  Bind(wxEVT_TIMER, &EnvironmentalGribDialog::OnProcessTimer, this);
+  Bind(wxEVT_TIMER, &EnvironmentalGribDialog::OnProcessTimer, this,
+        m_processTimer.GetId());
+  Bind(wxEVT_TIMER, &EnvironmentalGribDialog::OnEstimateTimer, this,
+        m_estimateTimer.GetId());
   Bind(wxEVT_END_PROCESS, &EnvironmentalGribDialog::OnProcessTerminated, this);
+  // Existing handlers still run. Also catch fields which previously had no
+  // change handler (date, duration, cadence and grid spacing).
+  for (wxTextCtrl* field : {m_west, m_south, m_east, m_north, m_startUtc,
+                           m_tpxoGridSpacing, m_generatorPath})
+    field->Bind(wxEVT_TEXT, [this](wxCommandEvent& event) {
+      QueueEstimate(); event.Skip();
+    });
+  for (wxSpinCtrl* field : {m_durationHours, m_stepHours}) {
+    field->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent& event) {
+      QueueEstimate(); event.Skip();
+    });
+    field->Bind(wxEVT_TEXT, [this](wxCommandEvent& event) {
+      QueueEstimate(); event.Skip();
+    });
+  }
 
   AppendLog(
       "Generated environmental GRIBs are model data for planning and "
@@ -754,6 +786,7 @@ EnvironmentalGribDialog::~EnvironmentalGribDialog() {
 }
 
 void EnvironmentalGribDialog::PrepareForParentShutdown() {
+  StopEstimate();
   m_processTimer.Stop();
   if (m_processRunning && m_processPid != 0 && ChildProcessStillExists()) {
     wxKillError error = wxKILL_OK;
@@ -1434,6 +1467,7 @@ bool EnvironmentalGribDialog::ValidateOfflineTidalPackage() {
 }
 
 void EnvironmentalGribDialog::UpdateProviderUi() {
+  QueueEstimate();
   int mode = m_mode->GetSelection();
   wxString provider = m_provider->GetStringSelection();
   bool forecastMode = mode == 0;
@@ -1953,7 +1987,171 @@ void EnvironmentalGribDialog::OnProcessTimer(wxTimerEvent& event) {
   }
 }
 
+void EnvironmentalGribDialog::ShowEstimate(const wxString& file,
+                                           const wxString& decoded) {
+  m_estimateFile = file;
+  m_estimateDecoded = decoded;
+  m_estimateSummary->SetLabel(file + "\n" + decoded + "\n" +
+      _("Generation and routing need extra RAM; this is not a RAM limit."));
+  m_estimateSummary->Wrap(std::max(200, m_scrolled->GetClientSize().x - 32));
+  const int lines = 1 + m_estimateSummary->GetLabel().Freq('\n');
+  m_estimateSummary->SetMinSize(wxSize(100, GetCharHeight() * lines + 6));
+  if (m_scrolled->GetSizer()) {
+    m_scrolled->GetSizer()->Layout();
+    m_scrolled->FitInside();
+  }
+}
+
+void EnvironmentalGribDialog::QueueEstimate() {
+  if (!m_estimateSummary) return;
+  wxString request, error;
+  const bool valid = BuildGenerateJobText(&request, &error);
+  const wxString key = m_generatorPath->GetValue() + "\n" +
+                       (valid ? request : "invalid: " + error);
+  if (key == m_lastEstimateRequest) return;
+  m_lastEstimateRequest = key;
+  ++m_estimateRevision;
+  if (!valid) {
+    StopEstimate();
+    ShowEstimate(_("Estimated GRIB file: check settings"),
+                 _("Decoded forecast data: not yet known"));
+    m_estimateSummary->SetToolTip(error);
+    return;
+  }
+  ShowEstimate(_("Estimated GRIB file: updating..."),
+               _("Decoded forecast data: updating..."));
+  // Never display a previous request's estimate while an edit is pending.
+  m_estimateSummary->UnsetToolTip();
+  if (!m_estimateProcess) m_estimateTimer.StartOnce(400);
+}
+
+void EnvironmentalGribDialog::StopEstimate() {
+  m_estimateTimer.Stop();
+  if (m_estimateProcess) {
+    if (m_estimatePid) wxKill(m_estimatePid, wxSIGKILL, nullptr, wxKILL_CHILDREN);
+    m_estimateProcess->Detach();
+    m_estimateProcess = nullptr;
+  }
+  m_estimatePid = 0;
+  if (!m_estimateJobPath.empty()) {
+    wxRemoveFile(m_estimateJobPath);
+    m_estimateJobPath.clear();
+  }
+}
+
+void EnvironmentalGribDialog::DrainEstimateOutput() {
+  if (!m_estimateProcess) return;
+  // Bounded response and work per UI tick, even with a misconfigured helper.
+  for (auto* stream : {m_estimateProcess->GetInputStream(),
+                       m_estimateProcess->GetErrorStream()}) {
+    for (int chunk = 0; stream && stream->CanRead() && chunk < 16; ++chunk) {
+      char bytes[4096];
+      stream->Read(bytes, sizeof(bytes));
+      if (!stream->LastRead()) break;
+      if (stream == m_estimateProcess->GetInputStream() &&
+          m_estimateOutput.length() < 65536)
+        m_estimateOutput += wxString::FromUTF8(bytes, stream->LastRead());
+    }
+  }
+}
+
+void EnvironmentalGribDialog::OnEstimateTimer(wxTimerEvent&) {
+  if (m_estimateProcess) {
+    DrainEstimateOutput();
+    if (wxGetUTCTimeMillis() - m_estimateStarted > 10000) {
+      StopEstimate();
+      ShowEstimate(_("Estimated GRIB file: unavailable (helper timed out)"),
+                   _("Decoded forecast data: not yet known"));
+      if (m_runningEstimateRevision != m_estimateRevision)
+        m_estimateTimer.StartOnce(400);
+    }
+    return;
+  }
+  m_runningEstimateRevision = m_estimateRevision;
+  m_estimateJobPath = wxFileName::CreateTempFileName("xgrib-estimate-");
+  wxString error;
+  if (m_estimateJobPath.empty() || !WriteGenerateJob(m_estimateJobPath, &error)) {
+    StopEstimate();
+    ShowEstimate(_("Estimated GRIB file: check settings"),
+                 _("Decoded forecast data: not yet known"));
+    m_estimateSummary->SetToolTip(error);
+    return;
+  }
+  m_estimateOutput.clear();
+  m_estimateProcess = new wxProcess(this);
+  m_estimateProcess->Redirect();
+  const wxString command =
+      xgrib::QuoteProcessArgument(m_generatorPath->GetValue()) +
+      " estimate-job --job " + xgrib::QuoteProcessArgument(m_estimateJobPath);
+  // Separate process from generation: estimate-job only parses this small job
+  // and does arithmetic. No download, model loading or credential handling.
+  m_estimatePid = wxExecute(command, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE |
+                                       wxEXEC_MAKE_GROUP_LEADER,
+                            m_estimateProcess);
+  if (m_estimatePid <= 0) {
+    delete m_estimateProcess;
+    m_estimateProcess = nullptr;
+    StopEstimate();
+    ShowEstimate(_("Estimated GRIB file: helper unavailable"),
+                 _("Decoded forecast data: not yet known"));
+    return;
+  }
+  m_estimateStarted = wxGetUTCTimeMillis();
+  m_estimateTimer.Start(100);
+}
+
+void EnvironmentalGribDialog::FinishEstimate(long exit_code) {
+  m_estimateTimer.Stop();
+  delete m_estimateProcess;
+  m_estimateProcess = nullptr;
+  m_estimatePid = 0;
+  wxRemoveFile(m_estimateJobPath);
+  m_estimateJobPath.clear();
+  if (m_runningEstimateRevision != m_estimateRevision) {
+    m_estimateTimer.StartOnce(400);
+    return;
+  }
+  wxJSONValue estimate;
+  wxJSONReader reader;
+  if (exit_code != 0 || reader.Parse(m_estimateOutput, &estimate) != 0 ||
+      !estimate.HasMember("schemaVersion") || !estimate["schemaVersion"].IsInt() ||
+      !estimate.HasMember("knownDecodedBytes") || !estimate["components"].IsArray() ||
+      estimate["schemaVersion"].AsInt() != 1) {
+    ShowEstimate(_("Estimated GRIB file: unavailable; check settings/helper"),
+                 _("Decoded forecast data: not yet known"));
+    return;
+  }
+  auto mib = [&](const wxString& key) {
+    double value = 0;
+    estimate[key].AsString().ToDouble(&value);
+    return value / 1048576.0;
+  };
+  const wxString file = estimate.HasMember("fileUpperBytes")
+      ? wxString::Format(_("Estimated GRIB file: up to %.2f MiB (packing varies)"),
+                         mib("fileUpperBytes"))
+      : _("Estimated GRIB file: not yet known");
+  const wxString decoded = estimate.HasMember("decodedBytes")
+      ? wxString::Format(_("Decoded numeric data: approximately %.2f MiB"),
+                         mib("decodedBytes"))
+      : wxString::Format(_("Decoded numeric data: %.2f MiB known; total not yet known"),
+                         mib("knownDecodedBytes"));
+  ShowEstimate(file, decoded);
+  wxString detail;
+  for (int i = 0; i < estimate["components"].Size(); ++i) {
+    auto item = estimate["components"].ItemAt(i);
+    detail += item["component"].AsString() + ": " + item["status"].AsString();
+    if (item.HasMember("reason")) detail += " — " + item["reason"].AsString();
+    detail += "\n";
+  }
+  m_estimateSummary->SetToolTip(detail);
+}
+
 void EnvironmentalGribDialog::OnProcessTerminated(wxProcessEvent& event) {
+  if (m_estimateProcess && event.GetPid() == m_estimatePid) {
+    DrainEstimateOutput();
+    FinishEstimate(event.GetExitCode());
+    return;
+  }
   if (!m_processRunning || event.GetPid() != m_processPid) {
     AppendLog(
         wxString::Format("Ignoring stale process completion event, pid=%d",
@@ -2165,6 +2363,12 @@ void EnvironmentalGribDialog::FinishCommand(long exit_code, bool launched) {
     return;
   }
   if (generationSucceeded) {
+    if (m_estimateProcess || m_estimateTimer.IsRunning())
+      m_estimateDecoded = _("Decoded forecast data: not yet known");
+    StopEstimate();
+    const double mib = wxFileName(OutputPath()).GetSize().ToDouble() / 1048576.0;
+    ShowEstimate(wxString::Format(_("Actual GRIB file: %.2f MiB"), mib),
+                 m_estimateDecoded);
     wxString message =
         "Generated environmental GRIB\nSource: " + SourceLabel() +
         "\nValid time: " + ValidTimeSummary() +
@@ -2247,8 +2451,8 @@ void EnvironmentalGribDialog::TryOpenGeneratedGrib() {
   AppendLog("Requested GRIB open through plugin messaging: " + path);
 }
 
-bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
-                                               wxString* error) const {
+bool EnvironmentalGribDialog::BuildGenerateJobText(wxString* text,
+                                                  wxString* error) const {
   double west = 0.0;
   double south = 0.0;
   double east = 0.0;
@@ -2393,8 +2597,14 @@ bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
     request["copernicusUsername"] = m_username->GetValue();
   }
   wxJSONWriter writer;
+  writer.Write(root, *text);
+  return true;
+}
+
+bool EnvironmentalGribDialog::WriteGenerateJob(const wxString& job_path,
+                                               wxString* error) const {
   wxString text;
-  writer.Write(root, text);
+  if (!BuildGenerateJobText(&text, error)) return false;
   wxFile file(job_path, wxFile::write);
   if (!file.IsOpened() || !file.Write(text)) {
     if (error) *error = "cannot write " + job_path;
@@ -2701,6 +2911,7 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
 }
 
 void EnvironmentalGribDialog::RefreshOutputFilenameDefault() {
+  QueueEstimate();
   wxString previousAuto = m_lastAutoOutputFilename;
   wxString current = m_outputFile->GetValue();
   wxString nextAuto = DefaultOutputFilenameForSelection();
