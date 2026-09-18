@@ -36,6 +36,7 @@
 
 #include <wx/stdpaths.h>
 
+#include <algorithm>
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
@@ -49,6 +50,9 @@
 #include "TimeZoneDisplay.h"
 #include "GribVectorPolicy.h"
 #include "EnvironmentalGribDialog.h"
+#ifdef __OCPN__ANDROID__
+#include "AndroidGribGenerator.h"
+#endif
 #include <wx/arrimpl.cpp>
 
 #ifdef __ANDROID__
@@ -225,7 +229,6 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
 #endif
   m_fgCtrlGrabberSize->Add(m_actionDownloadButton, 0, wxALL | wxEXPAND, 1);
 
-#ifndef __OCPN__ANDROID__
   m_actionGenerateButton = CreateActionButton(
       _("Generate GRIB"),
       _("Generate a combined weather, wave and current GRIB for OpenCPN and "
@@ -233,7 +236,6 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
   m_actionGenerateButton->Bind(wxEVT_BUTTON,
                                &GRIBUICtrlBar::OnEnvironmentalGrib, this);
   m_fgCtrlGrabberSize->Add(m_actionGenerateButton, 0, wxALL | wxEXPAND, 1);
-#endif
 
   SetActionButtonBitmaps();
 
@@ -255,6 +257,7 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
   m_fgCtrlGrabberSize->Detach(m_actionOpenButton);
   m_fgCtrlGrabberSize->Detach(m_actionSettingsButton);
   m_fgCtrlGrabberSize->Detach(m_actionDownloadButton);
+  m_fgCtrlGrabberSize->Detach(m_actionGenerateButton);
   auto actions = new wxBoxSizer(wxVERTICAL);
   m_actionOpenButton->SetMinSize(wxSize(580, 56));
   actions->Add(m_actionOpenButton, 0, wxEXPAND | wxALL, 4);
@@ -264,6 +267,8 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
   secondary->Add(m_actionSettingsButton, 1, wxEXPAND | wxALL, 4);
   secondary->Add(m_actionDownloadButton, 1, wxEXPAND | wxALL, 4);
   actions->Add(secondary, 0, wxEXPAND);
+  m_actionGenerateButton->SetMinSize(wxSize(580, 56));
+  actions->Add(m_actionGenerateButton, 0, wxEXPAND | wxALL, 4);
   androidContent->Insert(2, actions, 0, wxEXPAND | wxLEFT | wxRIGHT, 4);
   androidContent->Insert(3,
                          new wxStaticText(this, wxID_ANY, _("Forecast time")),
@@ -394,6 +399,10 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
 }
 
 GRIBUICtrlBar::~GRIBUICtrlBar() {
+#ifdef __OCPN__ANDROID__
+  delete m_androidGribGeneratorDialog;
+  m_androidGribGeneratorDialog = nullptr;
+#endif
   if (m_environmentalGribDialog) {
     m_environmentalGribDialog->PrepareForParentShutdown();
     delete m_environmentalGribDialog;
@@ -1302,6 +1311,24 @@ void GRIBUICtrlBar::OnEnvironmentalGrib(wxCommandEvent& event) {
     return;
   }
 
+#ifdef __OCPN__ANDROID__
+  if (!m_androidGribGeneratorDialog) {
+    m_androidGribGeneratorDialog = new AndroidGribGeneratorDialog(
+        GetParent(), [this](const wxString& path) { OpenGeneratedGrib(path); });
+    pPlugIn->SetDialogFont(m_androidGribGeneratorDialog);
+  }
+  m_androidGribGeneratorDialog->Show();
+  m_androidGribGeneratorDialog->Raise();
+  const wxRect screen = wxGetClientDisplayRect();
+  const wxSize size = m_androidGribGeneratorDialog->GetSize();
+  const int centeredY = screen.y + std::max(0, (screen.height - size.y) / 2);
+  const int belowToolbarY = GetScreenRect().GetBottom() + 8;
+  const int bottomLimitY = screen.y + screen.height - size.y;
+  m_androidGribGeneratorDialog->Move(wxPoint(
+      screen.x + std::max(0, (screen.width - size.x) / 2),
+      belowToolbarY <= bottomLimitY ? std::max(centeredY, belowToolbarY)
+                                    : centeredY));
+#else
   if (!m_environmentalGribDialog) {
     m_environmentalGribDialog = new EnvironmentalGribDialog(
         this, [this](const wxString& path) { OpenGeneratedGrib(path); });
@@ -1313,6 +1340,7 @@ void GRIBUICtrlBar::OnEnvironmentalGrib(wxCommandEvent& event) {
   m_environmentalGribDialog->SetCurrentViewPort(pPlugIn->GetCurrentViewPort());
   m_environmentalGribDialog->Show();
   m_environmentalGribDialog->Raise();
+#endif
 }
 
 void GRIBUICtrlBar::ShowEnvironmentalGenerator() {

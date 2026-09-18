@@ -74,7 +74,7 @@ set(LONG_DESCRIPTION
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "2")
 set(VERSION_PATCH "5")
-set(VERSION_TWEAK "3")
+set(VERSION_TWEAK "4")
 set(VERSION_DATE "18/09/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
@@ -153,9 +153,9 @@ message(STATUS "${CMLOC}Build type: ${CMAKE_BUILD_TYPE}")
 project(${PACKAGE})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Android")
-  set(SHORT_DESCRIPTION "Display and download GRIB files on Android.")
+  set(SHORT_DESCRIPTION "Display, download and combine GRIB files on Android.")
   set(LONG_DESCRIPTION
-      "An Android GRIB viewer with local file selection and forecast downloads. The native environmental GRIB generator is available on desktop platforms only.")
+      "An Android GRIB viewer with local file selection, forecast downloads and on-tablet combination of weather, wave and current GRIB files. Provider-based environmental generation is available on desktop platforms only.")
   set(XML_SUMMARY ${SHORT_DESCRIPTION})
   set(XML_DESCRIPTION ${LONG_DESCRIPTION})
 endif()
@@ -307,7 +307,7 @@ endif (OD_JSON_SCHEMA_VALIDATOR)
 # ----- If using JSON validation in plugin section above is needed
 
 if (QT_ANDROID)
-
+  list(APPEND SRCS src/AndroidGribGenerator.cpp)
 endif (QT_ANDROID)
 
 # =============================================================

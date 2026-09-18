@@ -64,6 +64,7 @@ class GRIBUICtrlBar;
 class GRIBUICData;
 class GRIBFile;
 class EnvironmentalGribDialog;
+class AndroidGribGeneratorDialog;
 class GRIBRecord;
 class GribRecordTree;
 class GRIBOverlayFactory;
@@ -424,6 +425,9 @@ private:
   wxButton *m_actionDownloadButton;
   wxButton *m_actionGenerateButton;
   EnvironmentalGribDialog *m_environmentalGribDialog{nullptr};
+#ifdef __OCPN__ANDROID__
+  AndroidGribGeneratorDialog *m_androidGribGeneratorDialog{nullptr};
+#endif
 
   wxTimer m_tFormatRefresh;
   wxString m_sLastTimeFormat;  // Used to detect time format changes

@@ -35,6 +35,7 @@
 #include <wx/fileconf.h>
 #include <wx/stdpaths.h>
 
+#include <algorithm>
 #include <limits>
 
 #include "GribProtocolVersion.h"
@@ -470,9 +471,9 @@ void grib_pi::MoveDialog(wxDialog* dialog, wxPoint position) {
   // Check and ensure there is always a "grabb" zone always visible wathever the
   // dialoue size is.
   if (p.x + dialog->GetSize().GetX() > frame->GetClientSize().GetX())
-    p.x = frame->GetClientSize().GetX() - dialog->GetSize().GetX();
+    p.x = std::max(0, frame->GetClientSize().GetX() - dialog->GetSize().GetX());
   if (p.y + dialog->GetSize().GetY() > frame->GetClientSize().GetY())
-    p.y = frame->GetClientSize().GetY() - dialog->GetSize().GetY();
+    p.y = std::max(0, frame->GetClientSize().GetY() - dialog->GetSize().GetY());
 
 #ifdef __WXGTK__
   dialog->Move(0, 0);
