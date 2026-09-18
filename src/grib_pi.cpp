@@ -449,10 +449,13 @@ bool grib_pi::QualifyCtrlBarPosition(
 
 void grib_pi::MoveDialog(wxDialog* dialog, wxPoint position) {
   //  Use the application frame to bound the control bar position.
-  wxApp* app = wxTheApp;
-
-  wxWindow* frame =
-      app->GetTopWindow();  // or GetOCPNCanvasWindow()->GetParent();
+#ifdef __OCPN__ANDROID__
+  // Android plugins have their own statically linked wxWidgets globals, so
+  // wxTheApp can be null even while the host application's canvas is live.
+  wxWindow* frame = m_parent_window ? m_parent_window->GetParent() : nullptr;
+#else
+  wxWindow* frame = wxTheApp ? wxTheApp->GetTopWindow() : nullptr;
+#endif
   if (!frame) return;
 
   wxPoint p = frame->ScreenToClient(position);

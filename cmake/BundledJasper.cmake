@@ -40,6 +40,24 @@ FetchContent_Declare(
 FetchContent_GetProperties(xgrib_jasper)
 if(NOT xgrib_jasper_POPULATED)
   FetchContent_Populate(xgrib_jasper)
+  if(QT_ANDROID)
+    # Jasper 4.2.9 caches 0L on the second CMake pass even when
+    # JAS_STDC_VERSION is supplied on the first. Pin the NDK Clang C11 value
+    # in this fetched source before configuring it.
+    set(_jasper_cmake "${xgrib_jasper_SOURCE_DIR}/CMakeLists.txt")
+    file(READ "${_jasper_cmake}" _jasper_text)
+    set(_jasper_old "set(JAS_STDC_VERSION \"0L\" CACHE INTERNAL \"The value of __STDC_VERSION__.\")")
+    set(_jasper_new "set(JAS_STDC_VERSION \"201112L\" CACHE INTERNAL \"The value of __STDC_VERSION__.\")")
+    string(FIND "${_jasper_text}" "${_jasper_old}" _jasper_position)
+    if(_jasper_position EQUAL -1)
+      string(FIND "${_jasper_text}" "${_jasper_new}" _jasper_position)
+      if(_jasper_position EQUAL -1)
+        message(FATAL_ERROR "Pinned Jasper cross-compile setting has changed")
+      endif()
+    endif()
+    string(REPLACE "${_jasper_old}" "${_jasper_new}" _jasper_text "${_jasper_text}")
+    file(WRITE "${_jasper_cmake}" "${_jasper_text}")
+  endif()
   add_subdirectory(
     "${xgrib_jasper_SOURCE_DIR}"
     "${xgrib_jasper_BINARY_DIR}"

@@ -74,8 +74,8 @@ set(LONG_DESCRIPTION
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "2")
 set(VERSION_PATCH "5")
-set(VERSION_TWEAK "2")
-set(VERSION_DATE "12/09/2026") # DD/MM/YYYY format
+set(VERSION_TWEAK "3")
+set(VERSION_DATE "18/09/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -151,6 +151,14 @@ message(STATUS "${CMLOC}Build type: ${CMAKE_BUILD_TYPE}")
 # ----- process -- Do not remove --
 
 project(${PACKAGE})
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+  set(SHORT_DESCRIPTION "Display and download GRIB files on Android.")
+  set(LONG_DESCRIPTION
+      "An Android GRIB viewer with local file selection and forecast downloads. The native environmental GRIB generator is available on desktop platforms only.")
+  set(XML_SUMMARY ${SHORT_DESCRIPTION})
+  set(XML_DESCRIPTION ${LONG_DESCRIPTION})
+endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -316,6 +324,13 @@ set(SRC ${SRCS} ${HDRS})
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/include)
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/ocpninclude)
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/src)
+if(QT_ANDROID)
+  include_directories(BEFORE ${PROJECT_SOURCE_DIR}/opencpn-libs/plugin_dc/glu/include)
+  if(NOT EXISTS "${OCPN_ANDROID_CORE_SOURCE}/libs/android_jvm/include/android_jvm.h")
+    message(FATAL_ERROR "Set OCPN_ANDROID_CORE_SOURCE to the OpenCPN 5.14 source tree")
+  endif()
+  include_directories(BEFORE ${OCPN_ANDROID_CORE_SOURCE}/libs/android_jvm/include)
+endif()
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/libs/manual/include)
 # Change target_sources to match your project needs.
 # ==============================================================
@@ -325,7 +340,7 @@ target_sources(${PACKAGE_NAME} PUBLIC ${SRC})
 # The generator is a separate native process.  Keeping it out of the plugin
 # address space isolates network/model parsing failures from OpenCPN while
 # sharing one pinned implementation across development and catalogue builds.
-if(NOT OCPN_FLATPAK_CONFIG)
+if(NOT OCPN_FLATPAK_CONFIG AND NOT QT_ANDROID)
 include(CTest)
 
 if(XGRIB_EXTERNAL_GENERATOR_DIR)
@@ -526,14 +541,29 @@ if (NOT OCPN_FLATPAK_CONFIG)
   target_link_libraries(${PACKAGE_NAME} ocpn::wxjson)
 
   if(XGRIB_USE_BUNDLED_JASPER)
+    if(QT_ANDROID)
+      # Clang in the pinned NDK uses C11 for Jasper's C sources. Jasper's
+      # configure step cannot run a target binary to discover this value.
+      set(JAS_STDC_VERSION "201112L")
+    endif()
     include(BundledJasper)
   else()
     find_package(Jasper REQUIRED)
     set(XGRIB_JASPER_TARGET Jasper::Jasper)
   endif()
-  find_package(BZip2 REQUIRED)
+  if(QT_ANDROID)
+    add_library(xgrib_bzip2 STATIC
+      src/bzip2/blocksort.c src/bzip2/bzlib.c src/bzip2/compress.c
+      src/bzip2/crctable.c src/bzip2/decompress.c src/bzip2/huffman.c
+      src/bzip2/randtable.c)
+    target_include_directories(xgrib_bzip2 PUBLIC src/bzip2)
+    set(XGRIB_BZIP2_TARGET xgrib_bzip2)
+  else()
+    find_package(BZip2 REQUIRED)
+    set(XGRIB_BZIP2_TARGET BZip2::BZip2)
+  endif()
   find_package(ZLIB REQUIRED)
-  target_link_libraries(${PACKAGE_NAME} ${XGRIB_JASPER_TARGET} BZip2::BZip2
+  target_link_libraries(${PACKAGE_NAME} ${XGRIB_JASPER_TARGET} ${XGRIB_BZIP2_TARGET}
                         ZLIB::ZLIB)
 
   if(XGRIB_USE_BUNDLED_JASPER AND EXISTS "${XGRIB_JASPER_LICENSE}")

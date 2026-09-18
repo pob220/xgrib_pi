@@ -206,13 +206,23 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
 
   m_actionSettingsButton = CreateActionButton(
       _("Settings"), _("Configure GRIB display and behaviour."));
+#ifdef __OCPN__ANDROID__
+  m_actionSettingsButton->Bind(wxEVT_BUTTON,
+                               &GRIBUICtrlBar::OnCompositeDialog, this);
+#else
   m_actionSettingsButton->Bind(wxEVT_BUTTON, &GRIBUICtrlBar::OnSettings, this);
+#endif
   m_fgCtrlGrabberSize->Add(m_actionSettingsButton, 0, wxALL | wxEXPAND, 1);
 
   m_actionDownloadButton =
       CreateActionButton(_("Download GRIB"), _("Download a forecast GRIB."));
+#ifdef __OCPN__ANDROID__
+  m_actionDownloadButton->Bind(wxEVT_BUTTON,
+                               &GRIBUICtrlBar::OnCompositeDialog, this);
+#else
   m_actionDownloadButton->Bind(wxEVT_BUTTON,
                                &GRIBUICtrlBar::OnRequestForecastData, this);
+#endif
   m_fgCtrlGrabberSize->Add(m_actionDownloadButton, 0, wxALL | wxEXPAND, 1);
 
 #ifndef __OCPN__ANDROID__

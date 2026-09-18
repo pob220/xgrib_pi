@@ -220,6 +220,26 @@ jobs:
           root: .
           paths: [artifacts]
 
+  android-arm64:
+    machine:
+      image: ubuntu-2404:current
+    resource_class: large
+    environment:
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+    steps:
+      - checkout
+      - run:
+          name: Install Android cross-build tools
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y git cmake curl unzip gettext python3 openjdk-17-jdk-headless
+      - run:
+          name: Build OpenCPN 5.14 core and xGRIB for Android arm64
+          command: bash ci/build-android-arm64.sh
+          no_output_timeout: 60m
+      - store_artifacts:
+          path: artifacts/android-arm64
+
   deploy-alpha:
     docker:
       - image: cimg/python:3.13
@@ -294,6 +314,8 @@ workflows:
           requires: [windows-x86]
           filters: *std-filters
       - macos-arm64:
+          filters: *std-filters
+      - android-arm64:
           filters: *std-filters
 
   windows-focused:
