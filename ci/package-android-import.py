@@ -13,7 +13,10 @@ def main(package_path: Path, xml_path: Path, output_dir: Path) -> None:
     root = ET.fromstring(metadata)
     assert root.findtext("target", "").strip() == "android-arm64"
     assert root.findtext("api-version", "").strip() == "1.21"
-    assert root.findtext("version", "").strip() == "0.2.5.3"
+    version = root.findtext("version", "").strip()
+    assert version and package_path.name.startswith(
+        f"xgrib_pi-{version}-android-arm64-"
+    ), "package filename and metadata version differ"
     output_dir.mkdir(parents=True, exist_ok=True)
     output = output_dir / package_path.name.replace(".tar.gz", "-import.tar.gz")
     with tarfile.open(package_path, "r:gz") as source, tarfile.open(
