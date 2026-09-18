@@ -31,6 +31,22 @@ UTC start; model-cycle age is allowed for and the final file is capped at the
 requested end so weather, waves and currents cannot silently leave a
 current-only tail.
 
+### Android in 0.2.5.3
+
+The `android-arm64` CircleCI job builds against OpenCPN 5.14 and retains an
+`-import.tar.gz` archive for Android's plugin manager. Run
+`bash ci/build-android-arm64.sh` locally with an Android NDK to produce the
+same artifacts in `artifacts/android-arm64/package/`.
+
+The Android build includes the GRIB viewer, local-file opening and the native
+download settings screen. The separate environmental generator is omitted
+from this package. On a Galaxy Tab A9+ with Android 15, xGRIB opened a GRIB2
+file and supplied seven forecast frames to a completed Weather Routing
+1.17.12 route. The stock OpenCPN 5.14 Android file chooser returns an empty
+filename to plugins; this test used the fix on the
+`fix/android-5.14-plugin-support` core branch. A live provider download has
+not yet been tested on Android.
+
 ## Important installation rule
 
 xGRIB replaces the bundled GRIB plugin; the two must not be active together.
