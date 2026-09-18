@@ -237,6 +237,41 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
 
   SetActionButtonBitmaps();
 
+#ifdef __OCPN__ANDROID__
+  // Keep the forecast controls beside the chart, but give them a tablet
+  // layout instead of the narrow desktop toolbar layout.
+  wxBoxSizer* androidContent =
+      static_cast<wxBoxSizer*>(m_fgCtrlBarSizer->GetItem(size_t(0))->GetSizer());
+  auto header = new wxBoxSizer(wxHORIZONTAL);
+  header->Add(new wxStaticText(this, wxID_ANY, _("xGRIB weather")), 1,
+              wxALIGN_CENTER_VERTICAL | wxALL, 8);
+  auto closeButton = new wxButton(this, wxID_ANY, _("Close"));
+  closeButton->SetMinSize(wxSize(105, 50));
+  closeButton->Bind(wxEVT_BUTTON,
+                    [this](wxCommandEvent&) { Close(); });
+  header->Add(closeButton, 0, wxALL, 5);
+  androidContent->Insert(0, header, 0, wxEXPAND);
+
+  m_fgCtrlGrabberSize->Detach(m_actionOpenButton);
+  m_fgCtrlGrabberSize->Detach(m_actionSettingsButton);
+  m_fgCtrlGrabberSize->Detach(m_actionDownloadButton);
+  auto actions = new wxBoxSizer(wxVERTICAL);
+  m_actionOpenButton->SetMinSize(wxSize(580, 56));
+  actions->Add(m_actionOpenButton, 0, wxEXPAND | wxALL, 4);
+  auto secondary = new wxBoxSizer(wxHORIZONTAL);
+  m_actionSettingsButton->SetMinSize(wxSize(275, 56));
+  m_actionDownloadButton->SetMinSize(wxSize(275, 56));
+  secondary->Add(m_actionSettingsButton, 1, wxEXPAND | wxALL, 4);
+  secondary->Add(m_actionDownloadButton, 1, wxEXPAND | wxALL, 4);
+  actions->Add(secondary, 0, wxEXPAND);
+  androidContent->Insert(2, actions, 0, wxEXPAND | wxLEFT | wxRIGHT, 4);
+  androidContent->Insert(3,
+                         new wxStaticText(this, wxID_ANY, _("Forecast time")),
+                         0, wxLEFT | wxTOP, 8);
+  m_cRecordForecast->SetMinSize(wxSize(445, 50));
+  androidContent->SetMinSize(wxSize(650, -1));
+#endif
+
   this->SetSizer(m_fgCtrlBarSizer);
   this->Layout();
   m_fgCtrlBarSizer->Fit(this);
@@ -524,8 +559,8 @@ void GRIBUICtrlBar::SetScaledBitmap(double factor) {
   // Careful here, this MinSize() sets the final width of the control bar,
   // overriding the width of the wxChoice above it.
 #ifdef __OCPN__ANDROID__
-  m_sTimeline->SetSize(wxSize(20 * m_ScaledFactor, -1));
-  m_sTimeline->SetMinSize(wxSize(20 * m_ScaledFactor, -1));
+  m_sTimeline->SetSize(wxSize(220 * m_ScaledFactor, -1));
+  m_sTimeline->SetMinSize(wxSize(220 * m_ScaledFactor, -1));
 #else
   m_sTimeline->SetSize(wxSize(90 * m_ScaledFactor, -1));
   m_sTimeline->SetMinSize(wxSize(90 * m_ScaledFactor, -1));

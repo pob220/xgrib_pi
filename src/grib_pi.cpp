@@ -168,9 +168,17 @@ int grib_pi::Init(void) {
     wxCopyFile(shareLocn + local_grib_catalog, m_local_sources_catalog);
   }
   if (m_bGRIBShowIcon) {
+#ifdef __OCPN__ANDROID__
+    // The desktop SVG has a fixed 32px size and no viewBox, leaving a tiny
+    // drawing inside OpenCPN's touch-sized Android toolbar slot.
+    wxString normalIcon = shareLocn + "grib-android.svg";
+    wxString toggledIcon = normalIcon;
+    wxString rolloverIcon = normalIcon;
+#else
     wxString normalIcon = shareLocn + "grib.svg";
     wxString toggledIcon = shareLocn + "grib_toggled.svg";
     wxString rolloverIcon = shareLocn + "grib_rollover.svg";
+#endif
 
     wxLogMessage(normalIcon);
     m_leftclick_tool_id = InsertPlugInToolSVG(
