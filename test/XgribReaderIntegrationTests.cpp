@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iostream>
 #include <memory>
+#include <set>
 #include <string>
 
 #include <wx/string.h>
@@ -96,11 +97,31 @@ int main(int argc, char** argv) {
 
   Expect(argc == 2 || argc == 3,
          "usage: xgrib_reader_integration_tests FILE.grb "
-         "[--any|--combined|--combined-all|--long-current]");
+         "[--any|--combined|--combined-all|--long-current|--tonga]");
 
   GribReader reader(wxString::FromUTF8(argv[1]));
   Expect(reader.isOk(), "xGRIB reader rejected native generator output");
   const std::string mode = argc == 3 ? argv[2] : "";
+  if (mode == "--tonga") {
+    std::set<int> sampled;
+    for (const auto& [key, records] : *reader.getGribMap()) {
+      (void)key;
+      if (!records) continue;
+      for (const auto* record : *records) {
+        const int type = record->getDataType();
+        if (type != GRB_WIND_VX && type != GRB_WIND_VY &&
+            type != GRB_UOGRD && type != GRB_VOGRD)
+          continue;
+        const double value = record->getInterpolatedValue(-175.0, -20.0);
+        Expect(value != GRIB_NOTDEF && std::isfinite(value),
+               "global weather and regional current must be sampleable at Tonga");
+        sampled.insert(type);
+      }
+    }
+    Expect(sampled.size() == 4, "Tonga has both wind and current components");
+    std::cout << "xGRIB reader sampled wind and current at 20 S, 175 W\n";
+    return 0;
+  }
   if (mode == "--any") {
     Expect(reader.getTotalNumberOfGribRecords() > 0,
            "generated GRIB should contain at least one recognized record");

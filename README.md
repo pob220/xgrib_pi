@@ -10,7 +10,17 @@ UKV regridding, current calculation and ecCodes writing therefore do not run
 inside OpenCPN. Generated files open directly in xGRIB after strict GRIB
 validation.
 
-### New in 0.2.5.2
+### New in 0.2.6
+
+Global ECMWF IFS/AIFS weather can now be combined with regional currents near
+Tonga and elsewhere across the longitude seam. The shared GRIB coverage check
+uses the grid width and scanning direction, so global fields and regional
+fields crossing 180 degrees retain their true coverage. This also applies to
+other providers and imported regular latitude/longitude GRIBs, with or without
+waves. Truly disjoint weather/current areas are still rejected. Request boxes
+which themselves cross the antimeridian remain unsupported.
+
+### Added in 0.2.5.2
 
 The generator shows automatically refreshed GRIB file and decoded-data size
 estimates where supported, then measured totals after generation. Estimates

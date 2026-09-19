@@ -73,9 +73,9 @@ set(LONG_DESCRIPTION
 
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "2")
-set(VERSION_PATCH "5")
-set(VERSION_TWEAK "2")
-set(VERSION_DATE "12/09/2026") # DD/MM/YYYY format
+set(VERSION_PATCH "6")
+set(VERSION_TWEAK "0")
+set(VERSION_DATE "19/09/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -730,6 +730,12 @@ if (NOT OCPN_FLATPAK_CONFIG)
           "${CMAKE_BINARY_DIR}/functional-fixtures/combined-all-known.grb2"
           --combined-all)
       set_tests_properties(xgrib_combined_all_data_reader_tests PROPERTIES
+        FIXTURES_REQUIRED environmental_grib_combined_fixture)
+      add_test(NAME xgrib_tonga_reader_tests
+        COMMAND xgrib_reader_integration_tests
+          "${CMAKE_BINARY_DIR}/functional-fixtures/tonga-combined.grb"
+          --tonga)
+      set_tests_properties(xgrib_tonga_reader_tests PROPERTIES
         FIXTURES_REQUIRED environmental_grib_combined_fixture)
     endif()
   endif()
