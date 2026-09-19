@@ -74,7 +74,7 @@ set(LONG_DESCRIPTION
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "2")
 set(VERSION_PATCH "5")
-set(VERSION_TWEAK "6")
+set(VERSION_TWEAK "7")
 set(VERSION_DATE "19/09/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
@@ -307,7 +307,7 @@ endif (OD_JSON_SCHEMA_VALIDATOR)
 # ----- If using JSON validation in plugin section above is needed
 
 if (QT_ANDROID)
-  list(APPEND SRCS src/AndroidGribGenerator.cpp)
+  list(APPEND SRCS src/AndroidGribGenerator.cpp src/AndroidGribSettings.cpp)
 endif (QT_ANDROID)
 
 # =============================================================
@@ -545,6 +545,17 @@ if (NOT OCPN_FLATPAK_CONFIG)
   endif (WIN32)
 
   add_subdirectory(opencpn-libs/api-${OCPN_API_VERSION_MINOR})
+  if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(XGRIB_OPENCPN_IMPORT_LIBRARY "" CACHE FILEPATH
+        "Native Windows x64 Preview host import library")
+    if(NOT EXISTS "${XGRIB_OPENCPN_IMPORT_LIBRARY}")
+      message(FATAL_ERROR "Windows x64 requires its native OpenCPN import library; the bundled SDK is x86")
+    endif()
+    set_property(TARGET OCPN_API_WX32 PROPERTY INTERFACE_LINK_LIBRARIES
+                 "${XGRIB_OPENCPN_IMPORT_LIBRARY}")
+    # Pointer truncation must not silently turn an x86 build into an unsafe x64 one.
+    target_compile_options(${PACKAGE_NAME} PRIVATE /we4302 /we4311 /we4312)
+  endif()
   target_link_libraries(${PACKAGE_NAME} ocpn::api)
 
   add_subdirectory(opencpn-libs/wxJSON)
@@ -625,6 +636,20 @@ if (NOT OCPN_FLATPAK_CONFIG)
     target_link_libraries(xgrib_area_preset_tests PRIVATE
       ${wxWidgets_LIBRARIES})
     add_test(NAME xgrib_area_preset_tests COMMAND xgrib_area_preset_tests)
+    add_test(NAME xgrib_android_navigation_contract
+      COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -P ${PROJECT_SOURCE_DIR}/test/AndroidNavigationContract.cmake)
+    add_test(NAME xgrib_platform_matrix_contract
+      COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -P ${PROJECT_SOURCE_DIR}/test/PlatformMatrixContract.cmake)
+
+    if(UNIX AND TARGET environmental_grib_engine)
+      add_executable(xgrib_android_server_tests test/AndroidServerDownloadTests.cpp)
+      target_include_directories(xgrib_android_server_tests PRIVATE ${PROJECT_SOURCE_DIR}/src)
+      target_link_libraries(xgrib_android_server_tests PRIVATE environmental_grib_engine)
+      add_test(NAME xgrib_android_server_tests COMMAND xgrib_android_server_tests)
+      add_dependencies(${PACKAGE_NAME} xgrib_android_server_tests)
+    endif()
 
     add_executable(xgrib_display_geometry_tests
       test/GribDisplayGeometryTests.cpp)

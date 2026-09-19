@@ -214,8 +214,7 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
   m_actionSettingsButton = CreateActionButton(
       _("Settings"), _("Configure GRIB display and behaviour."));
 #ifdef __OCPN__ANDROID__
-  m_actionSettingsButton->Bind(wxEVT_BUTTON,
-                               &GRIBUICtrlBar::OnCompositeDialog, this);
+  m_actionSettingsButton->Bind(wxEVT_BUTTON, &GRIBUICtrlBar::OnSettings, this);
 #else
   m_actionSettingsButton->Bind(wxEVT_BUTTON, &GRIBUICtrlBar::OnSettings, this);
 #endif
@@ -225,7 +224,7 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
       CreateActionButton(_("Download GRIB"), _("Download a forecast GRIB."));
 #ifdef __OCPN__ANDROID__
   m_actionDownloadButton->Bind(wxEVT_BUTTON,
-                               &GRIBUICtrlBar::OnCompositeDialog, this);
+                               &GRIBUICtrlBar::OnRequestForecastData, this);
 #else
   m_actionDownloadButton->Bind(wxEVT_BUTTON,
                                &GRIBUICtrlBar::OnRequestForecastData, this);
@@ -264,13 +263,11 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
   auto actions = new wxBoxSizer(wxHORIZONTAL);
   m_actionOpenButton->SetLabel(_("Open"));
   m_actionGenerateButton->SetLabel(_("Generate"));
-  for (auto* action : {m_actionOpenButton, m_actionGenerateButton, m_actionSettingsButton}) {
+  m_actionDownloadButton->SetLabel(_("Download"));
+  for (auto* action : {m_actionOpenButton, m_actionDownloadButton, m_actionGenerateButton, m_actionSettingsButton}) {
     action->SetMinSize(wxSize(120, 52));
     actions->Add(action, 1, wxEXPAND | wxALL, 4);
   }
-  // Settings opens OpenCPN's native GRIB settings/download activity. The
-  // generator now provides the independent multi-provider download workflow.
-  m_actionDownloadButton->Hide();
   androidContent->Insert(2, actions, 0, wxEXPAND | wxLEFT | wxRIGHT, 4);
   androidContent->Insert(3,
                          new wxStaticText(this, wxID_ANY, _("Forecast time")),
@@ -918,8 +915,7 @@ void GRIBUICtrlBar::SetDialogsStyleSizePosition(bool force_recompute) {
   // not send refreshes to a separate cursor window that does not exist.
   m_DialogStyle = ATTACHED_NO_CAPTION;
   m_gGrabber->Hide();
-  m_actionDownloadButton->Hide();
-  for (auto* action : {m_actionOpenButton, m_actionGenerateButton, m_actionSettingsButton}) {
+  for (auto* action : {m_actionOpenButton, m_actionDownloadButton, m_actionGenerateButton, m_actionSettingsButton}) {
     // wxQt 3.1 dereferences wxNullBitmap; clear the native icon safely instead.
     static_cast<QPushButton*>(action->GetHandle())->setIcon(QIcon());
     action->SetMinSize(wxSize(120, 52));
@@ -1390,6 +1386,17 @@ void GRIBUICtrlBar::OnRequestForecastData(wxCommandEvent& event) {
   if (m_tPlayStop.IsRunning())
     return;  // do nothing when play back is running !
 
+#ifdef __OCPN__ANDROID__
+  if (!m_androidGribGeneratorDialog)
+    m_androidGribGeneratorDialog = new AndroidGribGeneratorDialog(
+        GetParent(), [this](const wxString& path) { OpenGeneratedGrib(path); });
+  Hide();
+  m_androidGribGeneratorDialog->ShowMobile(pPlugIn->GetCurrentViewPort(), true);
+  Show();
+  SetDialogsStyleSizePosition(true);
+  return;
+#endif
+
   /*if there is one instance of the dialog already visible, do nothing*/
   if (pReq_Dialog && pReq_Dialog->IsShown()) return;
 
@@ -1450,6 +1457,21 @@ void GRIBUICtrlBar::ShowEnvironmentalGenerator() {
 void GRIBUICtrlBar::OnSettings(wxCommandEvent& event) {
   if (m_tPlayStop.IsRunning())
     return;  // do nothing when play back is running !
+
+#ifdef __OCPN__ANDROID__
+  Hide();
+  if (AndroidGribSettings(GetParent(), m_OverlaySettings)) {
+    m_OverlaySettings.Write();
+    if (!m_OverlaySettings.m_bInterpolate) m_InterpolateMode = false;
+    SetTimeLineMax(true);
+    SetFactoryOptions();
+    RefreshTimeZoneDisplay();
+  }
+  Show();
+  SetDialogsStyleSizePosition(true);
+  RequestRefresh(GetGRIBCanvas());
+  return;
+#endif
 
   ::wxBeginBusyCursor();
 

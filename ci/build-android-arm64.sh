@@ -149,7 +149,7 @@ metadata=("$plugin_build"/xgrib_pi-*-android-arm64.xml)
 test "${#packages[@]}" -eq 1
 test "${#metadata[@]}" -eq 1
 python3 "$source_dir/ci/package-android-import.py" \
-  "${packages[0]}" "${metadata[0]}" "$artifacts/package"
+  "${packages[0]}" "${metadata[0]}" "$artifacts/manual-import"
 "$tool_base/bin/llvm-readelf" -h "$plugin_build/libxgrib_pi.so" \
   | grep -E 'Machine:.*AArch64'
 "$tool_base/bin/llvm-readelf" -d "$plugin_build/libxgrib_pi.so" \
