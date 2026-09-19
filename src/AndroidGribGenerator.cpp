@@ -12,6 +12,7 @@
 #include <QDateTime>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QGuiApplication>
 #include <QInputMethod>
 #include <QPlainTextEdit>
@@ -159,6 +160,7 @@ struct AndroidGribGeneratorDialog::Impl {
       fields["north"]->setText(QString::number(viewport.lat_max, 'f', 3));
     });
     Field(area, "start", "Start (UTC, YYYY-MM-DDTHH:MM:SSZ)", QDateTime::currentDateTimeUtc().toString("yyyy-MM-ddTHH:00:00Z"));
+    Note(area, "For ordinary forecast downloads, duration starts at the model cycle. Start is used for tidal/current predictions and forecast extension. Check the generated coverage below.");
     Field(area, "hours", "Duration (hours)", "24")->setInputMethodHints(Qt::ImhDigitsOnly);
     Choice(area, "step", "Forecast interval (hours)", {{"1","1"},{"3","3"},{"6","6"},{"12","12"}})->setCurrentIndex(1);
     auto* weather = Page("Weather / waves");
@@ -323,6 +325,12 @@ struct AndroidGribGeneratorDialog::Impl {
       status->setText(QString("Ready: %1 messages, %2 MiB. %3").arg(static_cast<qulonglong>(result.message_count))
           .arg(result.byte_count / 1048576.0, 0, 'f', 2).arg(Text(result.output.filename().string())));
       log->appendPlainText(Text(result.output.string()));
+      if (result.inspection.isMember("first_valid_time") &&
+          result.inspection.isMember("last_valid_time"))
+        log->appendPlainText(Text("File coverage (UTC): " +
+            result.inspection["first_valid_time"].asString() + " to " +
+            result.inspection["last_valid_time"].asString() +
+            ". Individual fields can have shorter coverage."));
       if (open->isChecked() && ready) ready(wxString::FromUTF8(result.output.string().c_str()));
       // Keep repeated jobs convenient without ever overwriting a previous GRIB.
       fields["filename"]->setText("xgrib_" + QDateTime::currentDateTimeUtc().toString("yyyyMMdd_HHmmss") + ".grb2");
@@ -338,4 +346,34 @@ AndroidGribGeneratorDialog::AndroidGribGeneratorDialog(wxWindow* parent, GribRea
 AndroidGribGeneratorDialog::~AndroidGribGeneratorDialog() = default;
 void AndroidGribGeneratorDialog::ShowMobile(const PlugIn_ViewPort& viewport) {
   impl_->viewport = viewport; impl_->resize->Fit(); ShowModal();
+}
+
+int AndroidChooseForecast(wxWindow* parent, const wxArrayString& times, int selected) {
+  if (times.empty()) return wxNOT_FOUND;
+  wxDialog dialog(parent, wxID_ANY, "Forecast time", wxDefaultPosition,
+      wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+  auto* root = static_cast<QWidget*>(dialog.GetHandle());
+  root->setStyleSheet("QWidget {font-size: 22px;} QPushButton {min-height: 52px;}");
+  auto* layout = new QVBoxLayout(root);
+  layout->addWidget(new QLabel("Select forecast time"));
+  auto* list = new QListWidget(root);
+  for (const auto& time : times) {
+    auto* item = new QListWidgetItem(QtText(time), list);
+    item->setSizeHint(QSize(0, 56));
+  }
+  list->setCurrentRow(selected);
+  QScroller::grabGesture(list->viewport(), QScroller::TouchGesture);
+  layout->addWidget(list, 1);
+  auto* actions = new QHBoxLayout;
+  auto* use = new QPushButton("Use selected time");
+  auto* cancel = new QPushButton("Cancel");
+  actions->addWidget(use); actions->addWidget(cancel); layout->addLayout(actions);
+  QObject::connect(use, &QPushButton::clicked, root, [&] {
+    if (list->currentRow() >= 0) dialog.EndModal(wxID_OK);
+  });
+  QObject::connect(cancel, &QPushButton::clicked, root, [&] { dialog.EndModal(wxID_CANCEL); });
+  dialog.Bind(wxEVT_CLOSE_WINDOW, [&](wxCloseEvent&) { dialog.EndModal(wxID_CANCEL); });
+  auto* resize = new ResizeFollower(static_cast<QWidget*>(parent->GetHandle()), root);
+  resize->Fit();
+  return dialog.ShowModal() == wxID_OK ? list->currentRow() : wxNOT_FOUND;
 }

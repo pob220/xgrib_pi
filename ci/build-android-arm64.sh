@@ -131,6 +131,13 @@ cmake --build "$plugin_build" \
   --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-3}"
 python3 "$source_dir/ci/verify-android-runtime.py" \
   "$tool_base/bin/llvm-readelf" "$plugin_build/libxgrib_pi.so"
+# Build the device-side UI runtime checks; these are not plugin payload files.
+mkdir -p "$artifacts/tests"
+qt_base="$support_root/qt5/build_arm64_O3/qtbase"
+"$tool_base/bin/aarch64-linux-android21-clang++" -std=c++17 -fPIC \
+  -I "$source_dir/src" -I "$qt_base/include" -I "$qt_base/include/QtCore" \
+  "$source_dir/test/AndroidTimeFormatTests.cpp" -L "$qt_base/lib" -lQt5Core \
+  -o "$artifacts/tests/xgrib-android-ui-tests"
 rm -f "$plugin_build"/xgrib_pi-*-android-arm64.tar.gz \
       "$plugin_build"/xgrib_pi-*-android-arm64.xml \
       "$artifacts/package"/xgrib_pi-* "$artifacts/package/SHA256SUMS"

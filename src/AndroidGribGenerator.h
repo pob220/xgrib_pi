@@ -4,6 +4,8 @@
 #include <wx/dialog.h>
 #include "ocpn_plugin.h"
 
+int AndroidChooseForecast(wxWindow* parent, const wxArrayString& times, int selected);
+
 class AndroidGribGeneratorDialog : public wxDialog {
  public:
   using GribReadyCallback = std::function<void(const wxString&)>;

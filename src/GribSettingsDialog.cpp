@@ -589,9 +589,9 @@ wxString GribOverlaySettings::GetUnitSymbol(int settings) {
     case 3:
       switch (Settings[settings].m_Units) {
         case CELCIUS:
-          return "\u00B0C";
+          return wxString(wxUniChar(0x00B0)) + "C";
         case FAHRENHEIT:
-          return "\u00B0F";
+          return wxString(wxUniChar(0x00B0)) + "F";
       }
       break;
     case 4:

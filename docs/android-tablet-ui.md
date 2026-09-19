@@ -9,6 +9,8 @@ from writable Android storage. Desktop dialogue layouts are unchanged.
 
 - The chart panel has Open, Generate, Settings and Close actions, forecast
   selection, timeline, layer toggles and an embedded cursor readout.
+- Tap the displayed forecast time to open a touch-sized selection list, then
+  choose **Use selected time** or **Cancel**. Previous/next remain available.
 - Generate opens a separate touch-sized form. The chart panel is hidden until
   the form closes, avoiding overlapping controls.
 - Area/time, Weather/waves, Currents and Options are independently scrollable.
@@ -38,15 +40,21 @@ Device: Samsung SM-X210, Android 15, arm64 OpenCPN 5.14.0 development app.
 
 | Check | Result |
 | --- | --- |
-| Seven Linux generator regression suites | Passed |
+| Full local Linux regression run | All 28 tests passed, including seven generator suites |
 | Native Android cancellation/context test | Passed |
 | Native Android size-estimate tests | Passed |
 | Native Android engine tests | Zero failures |
 | Native Android offline tidal-package tests | Zero failures |
 | Native Android deterministic GRIB merge | Passed |
 | Native Android concurrency tests | Zero failures |
-| Live GFS generation in OpenCPN | 27 messages generated, merged and opened |
+| Live GFS weather + waves in OpenCPN | 63 messages generated, merged and opened; pressure verified with ecCodes |
 | Chart rendering and forecast step | Wind rendered over Irish Sea; time advanced |
+| Touch readout | Wind, pressure, waves and temperature values displayed |
+| Forecast-time selection | Dedicated touch list opened; choosing 18:00 updated the chart/time |
+| Playback | Advanced automatically to the last forecast and stopped |
+| Existing GRIB | Opened through Android file picker |
+| Native Android UTC display test | Summer, winter, leap day and table format passed under three timezone settings |
+| Android CircleCI build | Job 820 built the shared-engine package successfully; subsequent UI fixes require a new run |
 | Cancel active download | Returned to usable form, “Generation cancelled” |
 | Portrait/landscape generator | Fits available display; long pages scroll |
 | Landscape keyboard | Form resizes; editing field and action buttons remain visible |
@@ -56,6 +64,28 @@ Remaining release validation includes a production OpenCPN APK, additional
 screen sizes, credentialed providers and extended low-memory/large-job testing.
 The connected development app is not a substitute for testing the Play Store
 build. Do not describe unchecked combinations as fully supported yet.
+
+### Additional findings from live testing
+
+- NOAA's GFS sea-level pressure field is `PRMSL`, not `PRES`; the shared
+  request and its regression test now use the correct variable. The final
+  test file contains nine forecast times with seven fields per time.
+- The old wxQt readout/playback timer path did not operate in the plugin.
+  Android uses direct touch readout updates and native Qt playback timers.
+- On this BST tablet, wxQt formatted a 15:00 UTC epoch as 16:00 even with an
+  explicit UTC request. Qt's explicit UTC formatter matched the actual GRIB
+  timestamps; Android now uses it. No time values in the GRIB are shifted.
+- Temperature degree symbols are constructed as Unicode, avoiding an
+  extra `\u00c2` character from legacy narrow-string decoding.
+- Ordinary forecast duration is measured from the chosen model cycle, as
+  in the shared desktop engine. The form explains this distinction from
+  tidal/current start time and reports the generated file's actual time range.
+
+`test/AndroidTimeFormatTests.cpp` is built by Android CI as a separate device
+test artifact, not included in the plugin payload. It runs with the matching
+Qt5Core and libc++ shared libraries on `LD_LIBRARY_PATH`. Playback must be
+tested inside OpenCPN: this Android Qt build requires a Java application context
+to create its event loop, so a plain adb shell process cannot test GUI timers.
 
 ## Reproducible build and runtime isolation
 
