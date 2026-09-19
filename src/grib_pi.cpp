@@ -75,7 +75,7 @@ bool g_bpause;
 //
 //---------------------------------------------------------------------------------------------------------
 
-grib_pi::grib_pi(void* ppimgr) : opencpn_plugin_116(ppimgr) {
+grib_pi::grib_pi(void* ppimgr) : opencpn_plugin_117(ppimgr) {
   // Create the PlugIn icons
   initialize_images();
 
@@ -240,6 +240,10 @@ int grib_pi::GetAPIVersionMinor() { return MY_API_VERSION_MINOR; }
 int grib_pi::GetPlugInVersionMajor() { return PLUGIN_VERSION_MAJOR; }
 
 int grib_pi::GetPlugInVersionMinor() { return PLUGIN_VERSION_MINOR; }
+
+int grib_pi::GetPlugInVersionPatch() { return PLUGIN_VERSION_PATCH; }
+
+int grib_pi::GetPlugInVersionPost() { return PLUGIN_VERSION_TWEAK; }
 
 wxBitmap* grib_pi::GetPlugInBitmap() { return &m_panelBitmap; }
 

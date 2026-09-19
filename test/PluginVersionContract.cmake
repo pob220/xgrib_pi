@@ -1,5 +1,15 @@
 file(READ "${PLUGIN_HEADER}" plugin_header)
 
+if(NOT plugin_header MATCHES
+    "class[ \t]+grib_pi[ \t]*:[ \t]*public[ \t]+opencpn_plugin_117")
+  message(FATAL_ERROR
+    "The plugin must use API 1.17 so OpenCPN can read its full version")
+endif()
+if(NOT plugin_header MATCHES
+    "MY_API_VERSION_MINOR[ \t]+17([^0-9]|$)")
+  message(FATAL_ERROR "The plugin must advertise API version 1.17")
+endif()
+
 if(NOT plugin_header MATCHES "#include[ \t]+\"version\\.h\"")
   message(FATAL_ERROR
     "The plugin interface must use the generated package version header")
@@ -31,6 +41,14 @@ if(NOT protocol_header MATCHES
 endif()
 
 file(READ "${PLUGIN_SOURCE}" plugin_source)
+if(NOT plugin_source MATCHES
+    "GetPlugInVersionPatch\\(\\)[^{]*\\{[^}]*PLUGIN_VERSION_PATCH")
+  message(FATAL_ERROR "The plugin must report its generated patch version")
+endif()
+if(NOT plugin_source MATCHES
+    "GetPlugInVersionPost\\(\\)[^{]*\\{[^}]*PLUGIN_VERSION_TWEAK")
+  message(FATAL_ERROR "The plugin must report its generated tweak version")
+endif()
 if(NOT plugin_source MATCHES
     "GribVersionMajor[^\n]*kGribProtocolVersionMajor")
   message(FATAL_ERROR

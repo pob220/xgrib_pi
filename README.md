@@ -10,7 +10,14 @@ UKV regridding, current calculation and ecCodes writing therefore do not run
 inside OpenCPN. Generated files open directly in xGRIB after strict GRIB
 validation.
 
-### New in 0.2.6
+### New in 0.3
+
+OpenCPN now receives xGRIB's complete semantic version through plugin API 1.17
+instead of displaying only the major and minor components. The global and
+wrapped-grid regression fixtures also build with the older ecCodes API supplied
+by Ubuntu 22.04.
+
+### Added in 0.2.6
 
 Global ECMWF IFS/AIFS weather can now be combined with regional currents near
 Tonga and elsewhere across the longitude seam. The shared GRIB coverage check

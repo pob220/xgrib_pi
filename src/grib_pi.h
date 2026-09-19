@@ -46,7 +46,7 @@
 #include "version.h"
 
 #define MY_API_VERSION_MAJOR 1
-#define MY_API_VERSION_MINOR 16
+#define MY_API_VERSION_MINOR 17
 
 #include "ocpn_plugin.h"
 
@@ -84,7 +84,7 @@ enum SettingsDisplay {
   PARTICLES
 };
 
-class grib_pi : public opencpn_plugin_116 {
+class grib_pi : public opencpn_plugin_117 {
 public:
   grib_pi(void *ppimgr);
   ~grib_pi(void);
@@ -93,10 +93,12 @@ public:
   int Init(void);
   bool DeInit(void);
 
-  int GetAPIVersionMajor();
-  int GetAPIVersionMinor();
-  int GetPlugInVersionMajor();
-  int GetPlugInVersionMinor();
+  int GetAPIVersionMajor() override;
+  int GetAPIVersionMinor() override;
+  int GetPlugInVersionMajor() override;
+  int GetPlugInVersionMinor() override;
+  int GetPlugInVersionPatch() override;
+  int GetPlugInVersionPost() override;
   wxBitmap *GetPlugInBitmap();
   wxString GetCommonName();
   wxString GetShortDescription();
