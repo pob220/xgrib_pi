@@ -52,6 +52,8 @@
 #include "EnvironmentalGribDialog.h"
 #ifdef __OCPN__ANDROID__
 #include "AndroidGribGenerator.h"
+#include <QPushButton>
+#include <QIcon>
 #endif
 #include <wx/arrimpl.cpp>
 
@@ -258,23 +260,22 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
   m_fgCtrlGrabberSize->Detach(m_actionSettingsButton);
   m_fgCtrlGrabberSize->Detach(m_actionDownloadButton);
   m_fgCtrlGrabberSize->Detach(m_actionGenerateButton);
-  auto actions = new wxBoxSizer(wxVERTICAL);
-  m_actionOpenButton->SetMinSize(wxSize(580, 56));
-  actions->Add(m_actionOpenButton, 0, wxEXPAND | wxALL, 4);
-  auto secondary = new wxBoxSizer(wxHORIZONTAL);
-  m_actionSettingsButton->SetMinSize(wxSize(275, 56));
-  m_actionDownloadButton->SetMinSize(wxSize(275, 56));
-  secondary->Add(m_actionSettingsButton, 1, wxEXPAND | wxALL, 4);
-  secondary->Add(m_actionDownloadButton, 1, wxEXPAND | wxALL, 4);
-  actions->Add(secondary, 0, wxEXPAND);
-  m_actionGenerateButton->SetMinSize(wxSize(580, 56));
-  actions->Add(m_actionGenerateButton, 0, wxEXPAND | wxALL, 4);
+  auto actions = new wxBoxSizer(wxHORIZONTAL);
+  m_actionOpenButton->SetLabel(_("Open"));
+  m_actionGenerateButton->SetLabel(_("Generate"));
+  for (auto* action : {m_actionOpenButton, m_actionGenerateButton, m_actionSettingsButton}) {
+    action->SetMinSize(wxSize(120, 52));
+    actions->Add(action, 1, wxEXPAND | wxALL, 4);
+  }
+  // Settings opens OpenCPN's native GRIB settings/download activity. The
+  // generator now provides the independent multi-provider download workflow.
+  m_actionDownloadButton->Hide();
   androidContent->Insert(2, actions, 0, wxEXPAND | wxLEFT | wxRIGHT, 4);
   androidContent->Insert(3,
                          new wxStaticText(this, wxID_ANY, _("Forecast time")),
                          0, wxLEFT | wxTOP, 8);
-  m_cRecordForecast->SetMinSize(wxSize(445, 50));
-  androidContent->SetMinSize(wxSize(650, -1));
+  m_cRecordForecast->SetMinSize(wxSize(240, 50));
+  androidContent->SetMinSize(wxSize(0, -1));
 #endif
 
   this->SetSizer(m_fgCtrlBarSizer);
@@ -568,8 +569,7 @@ void GRIBUICtrlBar::SetScaledBitmap(double factor) {
   // Careful here, this MinSize() sets the final width of the control bar,
   // overriding the width of the wxChoice above it.
 #ifdef __OCPN__ANDROID__
-  m_sTimeline->SetSize(wxSize(220 * m_ScaledFactor, -1));
-  m_sTimeline->SetMinSize(wxSize(220 * m_ScaledFactor, -1));
+  m_sTimeline->SetMinSize(wxSize(100, 48));
 #else
   m_sTimeline->SetSize(wxSize(90 * m_ScaledFactor, -1));
   m_sTimeline->SetMinSize(wxSize(90 * m_ScaledFactor, -1));
@@ -622,7 +622,11 @@ void GRIBUICtrlBar::OpenFile(bool newestFile) {
   if (m_bGRIBActiveFile->IsOK()) {
     wxFileName fn(m_bGRIBActiveFile->GetFileNames()[0]);
     title = (_("File: "));
+#ifdef __OCPN__ANDROID__
+    title.Append(fn.GetFullName());
+#else
     title.Append(fn.GetFullPath());
+#endif
     if (rsa->GetCount() == 0) {  // valid but empty file
       delete m_bGRIBActiveFile;
       m_bGRIBActiveFile = nullptr;
@@ -858,6 +862,38 @@ void GRIBUICtrlBar::OnShowCursorData(wxCommandEvent& event) {
 }
 
 void GRIBUICtrlBar::SetDialogsStyleSizePosition(bool force_recompute) {
+#ifdef __OCPN__ANDROID__
+  // Android always embeds the readout; a saved desktop-style preference must
+  // not send refreshes to a separate cursor window that does not exist.
+  m_DialogStyle = ATTACHED_NO_CAPTION;
+  m_gGrabber->Hide();
+  m_actionDownloadButton->Hide();
+  for (auto* action : {m_actionOpenButton, m_actionGenerateButton, m_actionSettingsButton}) {
+    // wxQt 3.1 dereferences wxNullBitmap; clear the native icon safely instead.
+    static_cast<QPushButton*>(action->GetHandle())->setIcon(QIcon());
+    action->SetMinSize(wxSize(120, 52));
+    action->Show();
+  }
+  m_bpAltitude->Show(m_HasAltitude);
+  if (!m_gCursorData) {
+    m_gCursorData = new CursorData(this, *this);
+    m_fgCDataSizer->Add(m_gCursorData, 1, wxEXPAND);
+  }
+  m_gCursorData->PopulateTrackingControls(false);
+  m_gCursorData->Show(m_CDataIsShown);
+  m_bpShowCursorData->SetToolTip(m_CDataIsShown ? _("Hide data at cursor") : _("Show data at cursor"));
+  const wxRect toolbar = GetMasterToolbarRect();
+  const int available = std::max(280, GetParent()->GetClientSize().x - toolbar.GetRight() - 12);
+  const int width = std::min(720, available);
+  SetMinSize(wxSize(0, 0));
+  Layout();
+  SetSize(width, GetSizer()->GetMinSize().y);
+  const wxPoint position(toolbar.GetRight() + 4, 0);
+  pPlugIn->SetCtrlBarXY(position);
+  pPlugIn->MoveDialog(this, position);
+  m_old_DialogStyle = m_DialogStyle;
+  return;
+#endif
   /*Not all plateforms accept the dynamic window style changes.
   So these changes are applied only after exit from the plugin and re-opening
   it*/
@@ -1315,19 +1351,11 @@ void GRIBUICtrlBar::OnEnvironmentalGrib(wxCommandEvent& event) {
   if (!m_androidGribGeneratorDialog) {
     m_androidGribGeneratorDialog = new AndroidGribGeneratorDialog(
         GetParent(), [this](const wxString& path) { OpenGeneratedGrib(path); });
-    pPlugIn->SetDialogFont(m_androidGribGeneratorDialog);
   }
-  m_androidGribGeneratorDialog->Show();
-  m_androidGribGeneratorDialog->Raise();
-  const wxRect screen = wxGetClientDisplayRect();
-  const wxSize size = m_androidGribGeneratorDialog->GetSize();
-  const int centeredY = screen.y + std::max(0, (screen.height - size.y) / 2);
-  const int belowToolbarY = GetScreenRect().GetBottom() + 8;
-  const int bottomLimitY = screen.y + screen.height - size.y;
-  m_androidGribGeneratorDialog->Move(wxPoint(
-      screen.x + std::max(0, (screen.width - size.x) / 2),
-      belowToolbarY <= bottomLimitY ? std::max(centeredY, belowToolbarY)
-                                    : centeredY));
+  Hide();
+  m_androidGribGeneratorDialog->ShowMobile(pPlugIn->GetCurrentViewPort());
+  Show();
+  SetDialogsStyleSizePosition(true);
 #else
   if (!m_environmentalGribDialog) {
     m_environmentalGribDialog = new EnvironmentalGribDialog(

@@ -74,8 +74,8 @@ set(LONG_DESCRIPTION
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "2")
 set(VERSION_PATCH "5")
-set(VERSION_TWEAK "5")
-set(VERSION_DATE "18/09/2026") # DD/MM/YYYY format
+set(VERSION_TWEAK "6")
+set(VERSION_DATE "19/09/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -336,6 +336,15 @@ include_directories(BEFORE ${PROJECT_SOURCE_DIR}/libs/manual/include)
 # ==============================================================
 
 target_sources(${PACKAGE_NAME} PUBLIC ${SRC})
+
+if(QT_ANDROID)
+  # Android cannot execute a helper installed into writable plugin storage.
+  # Use the same engine in a worker inside the plugin, with static dependencies.
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+  add_subdirectory(generator)
+  target_link_libraries(${PACKAGE_NAME} environmental_grib_engine)
+  target_link_options(${PACKAGE_NAME} PRIVATE "-Wl,--exclude-libs,ALL")
+endif()
 
 # The generator is a separate native process.  Keeping it out of the plugin
 # address space isolates network/model parsing failures from OpenCPN while
@@ -820,6 +829,16 @@ endif (QT_ANDROID)
 # ===============================================================
 
 include("PluginInstall")
+if(QT_ANDROID)
+  file(GLOB android_dependency_licenses
+    "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/*/copyright")
+  foreach(license IN LISTS android_dependency_licenses)
+    get_filename_component(dependency_dir "${license}" DIRECTORY)
+    get_filename_component(dependency "${dependency_dir}" NAME)
+    install(FILES "${license}" DESTINATION
+      "${PREFIX_PARENTDATA}/plugins/${PACKAGE_NAME}/data/android-licenses/${dependency}")
+  endforeach()
+endif()
 include("PluginLocalization")
 include("PluginPackage")
 

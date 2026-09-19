@@ -232,13 +232,20 @@ jobs:
           name: Install Android cross-build tools
           command: |
             sudo apt-get update
-            sudo apt-get install -y git cmake curl unzip gettext python3 openjdk-17-jdk-headless
+            sudo apt-get install -y git cmake curl unzip zip gettext python3 openjdk-17-jdk-headless ninja-build pkg-config autoconf autoconf-archive automake libtool linux-libc-dev
+      - restore_cache:
+          keys:
+            - android-generator-v1-{{ checksum "ci/android-generator/vcpkg.json" }}-{{ checksum "ci/android-generator/arm64-android-release.cmake" }}-{{ checksum "ci/android-generator/ports/eccodes/portfile.cmake" }}-{{ checksum "ci/android-generator/ports/libsodium/portfile.cmake" }}
       - run:
           name: Build OpenCPN 5.14 core and xGRIB for Android arm64
           command: bash ci/build-android-arm64.sh
           no_output_timeout: 60m
       - store_artifacts:
           path: artifacts/android-arm64
+      - save_cache:
+          key: android-generator-v1-{{ checksum "ci/android-generator/vcpkg.json" }}-{{ checksum "ci/android-generator/arm64-android-release.cmake" }}-{{ checksum "ci/android-generator/ports/eccodes/portfile.cmake" }}-{{ checksum "ci/android-generator/ports/libsodium/portfile.cmake" }}
+          paths:
+            - ~/.cache/vcpkg/archives
 
   deploy-alpha:
     docker:
