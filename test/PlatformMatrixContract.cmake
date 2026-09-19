@@ -25,12 +25,17 @@ foreach(platform IN ITEMS windows-x64 android-arm64)
 endforeach()
 foreach(text IN ITEMS
     "-PluginArchitecture x64" "paths: [artifacts/android-arm64]"
-    "paths: [artifacts/windows-x64]" "default: false" "type: approval")
+    "paths: [artifacts/windows-x64]" "type: approval")
   string(FIND "${config}" "${text}" found)
   if(found EQUAL -1)
     message(FATAL_ERROR "Missing CI platform/publication guard: ${text}")
   endif()
 endforeach()
+if(NOT config MATCHES
+   "run_workflow_deploy:[ \t\r\n]+type: boolean[ \t\r\n]+default: (false|true)")
+  message(FATAL_ERROR
+    "Deployment parameter must have an explicit Boolean default")
+endif()
 foreach(text IN ITEMS
     "[ValidateSet(\"x86\", \"x64\")][string] $PluginArchitecture = \"x86\""
     "Native host import library is not exclusively AMD64"
