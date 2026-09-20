@@ -55,6 +55,9 @@
 #include "GribRecordSet.h"
 #include "IsoLine.h"
 #include "GrabberWin.h"
+#ifdef __OCPN__ANDROID__
+#include "AndroidUiTimer.h"
+#endif
 
 #ifndef PI
 #define PI 3.1415926535897931160E0 /* pi */
@@ -64,6 +67,7 @@ class GRIBUICtrlBar;
 class GRIBUICData;
 class GRIBFile;
 class EnvironmentalGribDialog;
+class AndroidGribGeneratorDialog;
 class GRIBRecord;
 class GribRecordTree;
 class GRIBOverlayFactory;
@@ -277,7 +281,11 @@ public:
   GribTimelineRecordSet *m_pTimelineSet;
 
   /** Timer for controlling GRIB animation playback. */
+#ifdef __OCPN__ANDROID__
+  AndroidUiTimer m_tPlayStop;
+#else
   wxTimer m_tPlayStop;
+#endif
   /** Plugin instance that owns this control bar. */
   grib_pi *pPlugIn;
   GribRequestSetting *pReq_Dialog;
@@ -423,9 +431,19 @@ private:
   wxButton *m_actionSettingsButton;
   wxButton *m_actionDownloadButton;
   wxButton *m_actionGenerateButton;
+#ifdef __OCPN__ANDROID__
+  wxButton *m_androidForecast = nullptr;
+#endif
   EnvironmentalGribDialog *m_environmentalGribDialog{nullptr};
+#ifdef __OCPN__ANDROID__
+  AndroidGribGeneratorDialog *m_androidGribGeneratorDialog{nullptr};
+#endif
 
+#ifdef __OCPN__ANDROID__
+  AndroidUiTimer m_tFormatRefresh;
+#else
   wxTimer m_tFormatRefresh;
+#endif
   wxString m_sLastTimeFormat;  // Used to detect time format changes
 
   void OnFormatRefreshTimer(wxTimerEvent &event);

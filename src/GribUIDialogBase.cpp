@@ -58,7 +58,7 @@ GRIBUICtrlBarBase::GRIBUICtrlBarBase(wxWindow* parent, wxWindowID id,
         new wxChoice(this, ID_CTRLTIME, wxDefaultPosition, wxDefaultSize,
                      m_cRecordForecastChoices, 0);
     m_cRecordForecast->SetSelection(0);
-    fgSizer50->Add(m_cRecordForecast, 0, wxALIGN_CENTER_VERTICAL | wxALL, 1);
+    fgSizer50->Add(m_cRecordForecast, 1, wxALIGN_CENTER_VERTICAL | wxALL, 1);
 
     m_bpNext =
         new wxBitmapButton(this, ID_BTNNEXT, wxNullBitmap, wxDefaultPosition,
@@ -104,7 +104,7 @@ GRIBUICtrlBarBase::GRIBUICtrlBarBase(wxWindow* parent, wxWindowID id,
 
     m_sTimeline = new wxSlider(this, ID_TIMELINE, 1, 0, 10, wxDefaultPosition,
                                wxSize(90, -1), wxSL_HORIZONTAL);
-    fgSizer51->Add(m_sTimeline, 0, wxEXPAND, 1);
+    fgSizer51->Add(m_sTimeline, 1, wxEXPAND, 1);
 
     fgSizer51->Add(0, 0, 1, wxEXPAND | wxLEFT | wxRIGHT, 1);
 
@@ -138,6 +138,7 @@ GRIBUICtrlBarBase::GRIBUICtrlBarBase(wxWindow* parent, wxWindowID id,
     m_fgCtrlGrabberSize = new wxFlexGridSizer(0, 1, 0, 0);
     m_fgCtrlGrabberSize->SetFlexibleDirection(wxBOTH);
     m_fgCtrlGrabberSize->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
+    mainBox->Insert(0, m_fgCtrlGrabberSize, 0, wxEXPAND | wxALL, 2);
 
     this->SetSizer(m_fgCtrlBarSizer);
     this->Layout();

@@ -48,6 +48,48 @@ UTC start; model-cycle age is allowed for and the final file is capped at the
 requested end so weather, waves and currents cannot silently leave a
 current-only tail.
 
+### Android in 0.2.5.5
+
+The `android-arm64` CircleCI job builds against OpenCPN 5.14 and retains an
+`-import.tar.gz` archive for Android's plugin manager. Run
+`bash ci/build-android-arm64.sh` locally with an Android NDK to produce the
+same artifacts in `artifacts/android-arm64/package/`.
+
+The Android build includes the GRIB viewer, local-file opening, the native
+download settings screen and a touch-sized **Generate GRIB** workflow. Its
+**On-tablet forecast** tab downloads NOAA GFS weather and GFS Wave for a
+selected area and time span. RTOFS ocean currents can be added for one of
+NOAA's published GRIB regions. The generated forecast begins at the next
+three-hour UTC step; the plugin chooses a published model cycle, downloads
+each component, checks the GRIB stream and keeps only current vectors within
+the selected forecast window. It pauses between NOAA GRIB Filter requests in
+line with [NOAA's service guidance](https://nomads.ncep.noaa.gov/info.php?page=gribfilter), so a longer forecast can take several
+minutes. Forecasts are saved in xGRIB's `generated`
+folder and opened immediately. **Combine local files** still merges up to
+three complete, uncompressed GRIB files already on the tablet.
+
+RTOFS GRIB currents are regional: NOAA's published regions do not cover every
+route, including the UK coastal waters. Select a current region that covers
+the intended route and tap **Use area** for an editable starting area. The
+dialog checks the area against the selected region before downloading. Outside
+these regions, use weather and waves without
+currents or combine a suitable local current GRIB. The Android provider tab
+does not yet expose the desktop generator's other weather, wave and current
+providers. Android downloads use OpenCPN's foreground download API because
+its background completion callback did not advance reliably in the tested
+OpenCPN 5.14 Android build.
+
+On a Galaxy Tab A9+ with Android 15, xGRIB opened a GRIB2 file and supplied
+seven forecast frames to a completed Weather Routing 1.17.12 route. The
+Android generator combined two selected local files into a 294-message GRIB2
+stream and opened it in xGRIB. It also downloaded a live 24-hour GFS weather
+and wave forecast (54 messages) and a six-hour forecast with RTOFS Gulf of
+Alaska currents. The latter opened in xGRIB with 32 messages: three weather
+and wave steps plus seven hourly ocean-current U/V pairs. The stock OpenCPN
+5.14 Android file
+chooser returns an empty filename to plugins; these tests used the fix on the
+`fix/android-5.14-plugin-support` core branch.
+
 ## Important installation rule
 
 xGRIB replaces the bundled GRIB plugin; the two must not be active together.

@@ -152,6 +152,14 @@ message(STATUS "${CMLOC}Build type: ${CMAKE_BUILD_TYPE}")
 
 project(${PACKAGE})
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+  set(SHORT_DESCRIPTION "Display, download and combine GRIB files on Android.")
+  set(LONG_DESCRIPTION
+      "An Android GRIB viewer with local file selection, forecast downloads and on-tablet combination of weather, wave and current GRIB files. Provider-based environmental generation is available on desktop platforms only.")
+  set(XML_SUMMARY ${SHORT_DESCRIPTION})
+  set(XML_DESCRIPTION ${LONG_DESCRIPTION})
+endif()
+
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # ========================================================
@@ -299,7 +307,7 @@ endif (OD_JSON_SCHEMA_VALIDATOR)
 # ----- If using JSON validation in plugin section above is needed
 
 if (QT_ANDROID)
-
+  list(APPEND SRCS src/AndroidGribGenerator.cpp src/AndroidGribSettings.cpp)
 endif (QT_ANDROID)
 
 # =============================================================
@@ -316,16 +324,32 @@ set(SRC ${SRCS} ${HDRS})
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/include)
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/ocpninclude)
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/src)
+if(QT_ANDROID)
+  include_directories(BEFORE ${PROJECT_SOURCE_DIR}/opencpn-libs/plugin_dc/glu/include)
+  if(NOT EXISTS "${OCPN_ANDROID_CORE_SOURCE}/libs/android_jvm/include/android_jvm.h")
+    message(FATAL_ERROR "Set OCPN_ANDROID_CORE_SOURCE to the OpenCPN 5.14 source tree")
+  endif()
+  include_directories(BEFORE ${OCPN_ANDROID_CORE_SOURCE}/libs/android_jvm/include)
+endif()
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/libs/manual/include)
 # Change target_sources to match your project needs.
 # ==============================================================
 
 target_sources(${PACKAGE_NAME} PUBLIC ${SRC})
 
+if(QT_ANDROID)
+  # Android cannot execute a helper installed into writable plugin storage.
+  # Use the same engine in a worker inside the plugin, with static dependencies.
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+  add_subdirectory(generator)
+  target_link_libraries(${PACKAGE_NAME} environmental_grib_engine)
+  target_link_options(${PACKAGE_NAME} PRIVATE "-Wl,--exclude-libs,ALL")
+endif()
+
 # The generator is a separate native process.  Keeping it out of the plugin
 # address space isolates network/model parsing failures from OpenCPN while
 # sharing one pinned implementation across development and catalogue builds.
-if(NOT OCPN_FLATPAK_CONFIG)
+if(NOT OCPN_FLATPAK_CONFIG AND NOT QT_ANDROID)
 include(CTest)
 
 if(XGRIB_EXTERNAL_GENERATOR_DIR)
@@ -399,6 +423,7 @@ if(NOT XGRIB_EXTERNAL_GENERATOR_DIR)
   add_dependencies(${PACKAGE_NAME} environmental-grib)
 endif()
 if(BUILD_TESTING AND TARGET environmental_grib_tests)
+  add_dependencies(${PACKAGE_NAME} environmental_grib_cancellation_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_estimate_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_tests)
 endif()
@@ -520,20 +545,46 @@ if (NOT OCPN_FLATPAK_CONFIG)
   endif (WIN32)
 
   add_subdirectory(opencpn-libs/api-${OCPN_API_VERSION_MINOR})
+  if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(XGRIB_OPENCPN_IMPORT_LIBRARY "" CACHE FILEPATH
+        "Native Windows x64 Preview host import library")
+    if(NOT EXISTS "${XGRIB_OPENCPN_IMPORT_LIBRARY}")
+      message(FATAL_ERROR "Windows x64 requires its native OpenCPN import library; the bundled SDK is x86")
+    endif()
+    set_property(TARGET OCPN_API_WX32 PROPERTY INTERFACE_LINK_LIBRARIES
+                 "${XGRIB_OPENCPN_IMPORT_LIBRARY}")
+    # Pointer truncation must not silently turn an x86 build into an unsafe x64 one.
+    target_compile_options(${PACKAGE_NAME} PRIVATE /we4302 /we4311 /we4312)
+  endif()
   target_link_libraries(${PACKAGE_NAME} ocpn::api)
 
   add_subdirectory(opencpn-libs/wxJSON)
   target_link_libraries(${PACKAGE_NAME} ocpn::wxjson)
 
   if(XGRIB_USE_BUNDLED_JASPER)
+    if(QT_ANDROID)
+      # Clang in the pinned NDK uses C11 for Jasper's C sources. Jasper's
+      # configure step cannot run a target binary to discover this value.
+      set(JAS_STDC_VERSION "201112L")
+    endif()
     include(BundledJasper)
   else()
     find_package(Jasper REQUIRED)
     set(XGRIB_JASPER_TARGET Jasper::Jasper)
   endif()
-  find_package(BZip2 REQUIRED)
+  if(QT_ANDROID)
+    add_library(xgrib_bzip2 STATIC
+      src/bzip2/blocksort.c src/bzip2/bzlib.c src/bzip2/compress.c
+      src/bzip2/crctable.c src/bzip2/decompress.c src/bzip2/huffman.c
+      src/bzip2/randtable.c)
+    target_include_directories(xgrib_bzip2 PUBLIC src/bzip2)
+    set(XGRIB_BZIP2_TARGET xgrib_bzip2)
+  else()
+    find_package(BZip2 REQUIRED)
+    set(XGRIB_BZIP2_TARGET BZip2::BZip2)
+  endif()
   find_package(ZLIB REQUIRED)
-  target_link_libraries(${PACKAGE_NAME} ${XGRIB_JASPER_TARGET} BZip2::BZip2
+  target_link_libraries(${PACKAGE_NAME} ${XGRIB_JASPER_TARGET} ${XGRIB_BZIP2_TARGET}
                         ZLIB::ZLIB)
 
   if(XGRIB_USE_BUNDLED_JASPER AND EXISTS "${XGRIB_JASPER_LICENSE}")
@@ -585,6 +636,20 @@ if (NOT OCPN_FLATPAK_CONFIG)
     target_link_libraries(xgrib_area_preset_tests PRIVATE
       ${wxWidgets_LIBRARIES})
     add_test(NAME xgrib_area_preset_tests COMMAND xgrib_area_preset_tests)
+    add_test(NAME xgrib_android_navigation_contract
+      COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -P ${PROJECT_SOURCE_DIR}/test/AndroidNavigationContract.cmake)
+    add_test(NAME xgrib_platform_matrix_contract
+      COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -P ${PROJECT_SOURCE_DIR}/test/PlatformMatrixContract.cmake)
+
+    if(UNIX AND TARGET environmental_grib_engine)
+      add_executable(xgrib_android_server_tests test/AndroidServerDownloadTests.cpp)
+      target_include_directories(xgrib_android_server_tests PRIVATE ${PROJECT_SOURCE_DIR}/src)
+      target_link_libraries(xgrib_android_server_tests PRIVATE environmental_grib_engine)
+      add_test(NAME xgrib_android_server_tests COMMAND xgrib_android_server_tests)
+      add_dependencies(${PACKAGE_NAME} xgrib_android_server_tests)
+    endif()
 
     add_executable(xgrib_display_geometry_tests
       test/GribDisplayGeometryTests.cpp)
@@ -796,6 +861,16 @@ endif (QT_ANDROID)
 # ===============================================================
 
 include("PluginInstall")
+if(QT_ANDROID)
+  file(GLOB android_dependency_licenses
+    "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/*/copyright")
+  foreach(license IN LISTS android_dependency_licenses)
+    get_filename_component(dependency_dir "${license}" DIRECTORY)
+    get_filename_component(dependency "${dependency_dir}" NAME)
+    install(FILES "${license}" DESTINATION
+      "${PREFIX_PARENTDATA}/plugins/${PACKAGE_NAME}/data/android-licenses/${dependency}")
+  endforeach()
+endif()
 include("PluginLocalization")
 include("PluginPackage")
 

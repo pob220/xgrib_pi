@@ -1,3 +1,5 @@
+param([ValidateSet("x86", "x64")][string] $PluginArchitecture = "x86")
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -86,7 +88,7 @@ $build = Join-Path $repo "build"
 $generatorBuild = Join-Path $repo "build-generator-x64"
 $generatorStage = Join-Path $repo "stage-generator-x64"
 $stage = Join-Path $repo "stage"
-$artifact = Join-Path $repo "artifacts\windows-x86"
+$artifact = Join-Path $repo "artifacts\windows-$PluginArchitecture"
 $logDir = Join-Path $artifact "logs"
 $testDir = Join-Path $artifact "tests"
 $packageDir = Join-Path $artifact "package"
@@ -105,6 +107,13 @@ Assert-NativeSuccess "git submodule update"
 
 $generatorTriplet = "x64-windows-release"
 $pluginTriplet = "x86-windows-release"
+$pluginPlatform = "Win32"
+$pluginMachine = "14C machine \(x86\)"
+if ($PluginArchitecture -eq "x64") {
+    $pluginTriplet = "x64-windows-release"
+    $pluginPlatform = "x64"
+    $pluginMachine = "8664 machine \(x64\)"
+}
 $vcpkg = $env:VCPKG_ROOT
 if (-not $vcpkg) { $vcpkg = "C:\vcpkg" }
 if (-not (Test-Path (Join-Path $vcpkg "vcpkg.exe"))) {
@@ -181,11 +190,13 @@ function Install-VcpkgPackages(
     }
 }
 
-# OpenCPN's supported MSVC plugin ABI is x86, while ecCodes explicitly
-# supports only 64-bit platforms. The generator is an isolated process, so
-# build it and its dependencies for x64 and keep the in-process plugin x86.
+# The ordinary host is x86; the native Preview host is x64. ecCodes is always
+# in an isolated x64 helper, independent of the selected in-process plugin ABI.
 Install-VcpkgPackages $generatorTriplet $generatorPackages "generator-x64"
-Install-VcpkgPackages $pluginTriplet $pluginPackages "plugin-x86"
+Install-VcpkgPackages $pluginTriplet $pluginPackages "plugin-$PluginArchitecture"
+if ($env:XGRIB_WINDOWS_DEPS_ONLY -eq "1") {
+    Install-VcpkgPackages "x64-windows-release" $pluginPackages "plugin-x64"
+}
 $vcpkgAttemptLogs = Get-ChildItem $logDir -Filter "vcpkg-*-attempt-*.log" |
     Sort-Object Name | ForEach-Object { $_.FullName }
 Get-Content -Path $vcpkgAttemptLogs | Set-Content -Encoding utf8 `
@@ -294,18 +305,61 @@ $downloads = [ordered]@{
     "wxMSW-$($wxVersion)_vc14x_Dev.7z" = "65112a99d3e253796081d1ec80df294290403398"
     "wxMSW-$($wxVersion)_vc14x_ReleaseDLL.7z" = "44ceee6ddcbb6aa60de6b6fc26c57491c189477f"
 }
+$wxHashAlgorithm = "SHA1"
+$wxLibraryDirectory = "lib\vc14x_dll"
+$hostCmakeArgs = @()
+if ($PluginArchitecture -eq "x64") {
+    $sdkPin = Get-Content (Join-Path $repo "ci\windows64-sdk.json") -Raw | ConvertFrom-Json
+    $sdkArchive = Join-Path $repo $sdkPin.archive
+    if ((Get-FileHash -Algorithm SHA256 $sdkArchive).Hash.ToLowerInvariant() -ne $sdkPin.sha256) {
+        throw "Native OpenCPN SDK archive checksum mismatch"
+    }
+    $sdk = Join-Path $repo "cache\opencpn-x64-sdk"
+    Expand-Archive -Path $sdkArchive -DestinationPath $sdk -Force
+    $sdkManifest = Get-Content (Join-Path $sdk "manifest.json") -Raw | ConvertFrom-Json
+    if ($sdkManifest.architecture -ne "AMD64" -or
+        $sdkManifest.core_revision -ne $sdkPin.core_revision -or
+        $sdkManifest.wx_version -ne $wxVersion) {
+        throw "Native OpenCPN SDK provenance mismatch"
+    }
+    foreach ($file in $sdkManifest.files.PSObject.Properties) {
+        if ((Get-FileHash -Algorithm SHA256 (Join-Path $sdk $file.Name)).Hash.ToLowerInvariant() -ne $file.Value) {
+            throw "Native OpenCPN SDK file checksum mismatch: $($file.Name)"
+        }
+    }
+    $importLibrary = Join-Path $sdk "lib\opencpn.lib"
+    $importHeaders = & $dumpbin /headers $importLibrary 2>&1
+    Assert-NativeSuccess "Inspecting native host import library"
+    # dumpbin uses different header formats for COFF objects and short imports.
+    $machines = [regex]::Matches(($importHeaders -join "`n"),
+        '(?im)^\s*([0-9a-f]+) machine\b|Machine\s*:\s*([0-9a-f]+)')
+    $wrongMachines = @($machines | Where-Object {
+        ($_.Groups[1].Value + $_.Groups[2].Value) -ne "8664"
+    })
+    if ($machines.Count -eq 0 -or $wrongMachines.Count -ne 0) {
+        throw "Native host import library is not exclusively AMD64"
+    }
+    Copy-Item (Join-Path $sdk "manifest.json") (Join-Path $artifact "host-sdk-manifest.json")
+    $hostCmakeArgs = @("-DXGRIB_OPENCPN_IMPORT_LIBRARY=$importLibrary")
+    $downloads = [ordered]@{}
+    foreach ($entry in $sdkPin.wx_archives.PSObject.Properties) {
+        $downloads[$entry.Name] = $entry.Value
+    }
+    $wxHashAlgorithm = "SHA256"
+    $wxLibraryDirectory = "lib\vc14x_x64_dll"
+}
 foreach ($entry in $downloads.GetEnumerator()) {
     $archive = $entry.Key
     $path = Join-Path $env:TEMP $archive
     if (-not (Test-Path $path)) {
         Invoke-WebRequest "$wxBase/$archive" -OutFile $path
     }
-    $actualHash = (Get-FileHash -Algorithm SHA1 $path).Hash.ToLowerInvariant()
+    $actualHash = (Get-FileHash -Algorithm $wxHashAlgorithm $path).Hash.ToLowerInvariant()
     if ($actualHash -ne $entry.Value) { throw "Checksum mismatch for $archive" }
     & 7z x -y "-o$wxRoot" $path | Out-Null
     Assert-NativeSuccess "Extracting $archive"
 }
-$wxLib = Join-Path $wxRoot "lib\vc14x_dll"
+$wxLib = Join-Path $wxRoot $wxLibraryDirectory
 $wxRuntimeDlls = @(Get-ChildItem $wxLib -Filter "wxbase32u_*.dll" -File)
 if ($wxRuntimeDlls.Count -eq 0) {
     throw "The wxWidgets release archive did not provide runtime DLLs"
@@ -337,13 +391,14 @@ foreach ($package in $generatorPackages) {
 }
 
 Invoke-NativeLogged {
-    cmake -S $repo -B $build -G "Visual Studio 17 2022" -A Win32 `
+    cmake -S $repo -B $build -G "Visual Studio 17 2022" -A $pluginPlatform `
         "-DCMAKE_TOOLCHAIN_FILE=$toolchain" `
         "-DVCPKG_TARGET_TRIPLET=$pluginTriplet" `
         "-DVCPKG_OVERLAY_TRIPLETS=$overlayTriplets" `
         "-DwxWidgets_ROOT_DIR=$wxRoot" `
         "-DwxWidgets_LIB_DIR=$wxLib" `
         "-DXGRIB_EXTERNAL_GENERATOR_DIR=$generatorStage" `
+        @hostCmakeArgs `
         -DCMAKE_BUILD_TYPE=Release `
         -DBUNDLE_GENERATOR_RUNTIME=ON
 } (Join-Path $logDir "configure.log") "CMake configure"
@@ -414,8 +469,8 @@ $helperHeaders = & $dumpbin /headers $packagedHelper 2>&1
 Assert-NativeSuccess "Inspecting environmental helper architecture"
 $helperHeaders | Set-Content -Encoding utf8 `
     (Join-Path $logDir "helper-headers.log")
-if (-not ($pluginHeaders -match "14C machine \(x86\)")) {
-    throw "Packaged xGRIB plugin is not an x86 PE binary"
+if (-not ($pluginHeaders -match $pluginMachine)) {
+    throw "Packaged xGRIB plugin is not a $PluginArchitecture PE binary"
 }
 if (-not ($helperHeaders -match "8664 machine \(x64\)")) {
     throw "Packaged environmental helper is not an x64 PE binary"
@@ -475,6 +530,12 @@ if ($packageVersion -notmatch '^\d+\.\d+\.\d+\.\d+$') {
 if (-not (Select-String -Quiet -Path $metadata.FullName -Pattern "<target>msvc")) {
     throw "Windows metadata target is invalid"
 }
+if ($PluginArchitecture -eq "x64" -and (
+    $metadataXml.plugin.target.Trim() -ne "msvc-wx32-x64" -or
+    $metadataXml.plugin.'target-version'.Trim() -ne "10" -or
+    $metadataXml.plugin.'target-arch'.Trim() -ne "x86_64")) {
+    throw "Native x64 package metadata does not match the Preview host ABI"
+}
 if (-not (Select-String -Quiet -Path $metadata.FullName `
         -SimpleMatch "<source> https://github.com/pob220/xgrib_pi </source>")) {
     throw "Windows metadata source repository is invalid"
@@ -496,13 +557,13 @@ $packageChecksums | Set-Content -Encoding ascii `
 
 $result = [ordered]@{
     schema = "xgrib-target-result-v1"
-    target = "windows-x86"
+    target = "windows-$PluginArchitecture"
     xgrib_repository_commit = (git rev-parse HEAD)
     xgrib_version = $packageVersion
     opencpn_version = "not-run"
     operating_system = "Windows Server 2022"
     operating_system_version = [Environment]::OSVersion.VersionString
-    architecture = "x86"
+    architecture = $PluginArchitecture
     helper_architecture = "x86_64"
     compiler = "Visual Studio 2022 MSVC"
     cmake_version = (cmake --version | Select-Object -First 1)

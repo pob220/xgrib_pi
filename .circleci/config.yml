@@ -89,14 +89,14 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - windows-vcpkg-2026-06-24-mixed-release-v2-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
-            - windows-vcpkg-2026-06-24-mixed-release-v2-
+            - windows-vcpkg-2026-06-24-mixed-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
+            - windows-vcpkg-2026-06-24-mixed-release-v3-
       - run:
           name: Prepare cached Release-only Windows dependencies
           command: .\ci\circleci-build-windows.ps1
           no_output_timeout: 45m
       - save_cache:
-          key: windows-vcpkg-2026-06-24-mixed-release-v2-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
+          key: windows-vcpkg-2026-06-24-mixed-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
           paths:
             - cache/vcpkg-binary
       - store_artifacts:
@@ -115,7 +115,7 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - windows-vcpkg-2026-06-24-mixed-release-v2-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
+            - windows-vcpkg-2026-06-24-mixed-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
       - run:
           name: Native Windows build, tests and package
           command: .\ci\circleci-build-windows.ps1
@@ -137,6 +137,41 @@ jobs:
       - persist_to_workspace:
           root: .
           paths: [artifacts]
+
+  windows-x64:
+    machine:
+      image: windows-server-2022-gui:current
+      shell: powershell.exe -ExecutionPolicy Bypass
+    resource_class: windows.medium
+    environment:
+      OCPN_TARGET: MSVC-x64
+      WX_VER: "32"
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - windows-vcpkg-2026-06-24-mixed-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
+      - run:
+          name: Native Windows x64 Preview build, tests and package
+          command: .\ci\circleci-build-windows.ps1 -PluginArchitecture x64
+          no_output_timeout: 45m
+      - run:
+          name: Prepare x64 JUnit results
+          when: always
+          command: |
+            New-Item -ItemType Directory -Force test-results | Out-Null
+            if (Test-Path artifacts/windows-x64/tests) {
+              Get-ChildItem artifacts/windows-x64/tests -File -Filter "*ctest.xml" |
+                ForEach-Object { Copy-Item $_.FullName -Destination test-results }
+            }
+      - store_test_results:
+          path: test-results
+      - store_artifacts:
+          path: artifacts/windows-x64
+          destination: windows-x64
+      - persist_to_workspace:
+          root: .
+          paths: [artifacts/windows-x64]
 
   windows-opencpn-runtime:
     machine:
@@ -177,7 +212,7 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - windows-vcpkg-2026-06-24-mixed-release-v2-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
+            - windows-vcpkg-2026-06-24-mixed-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
       - run:
           name: Capture Windows generator crash dumps and stack traces
           command: .\ci\circleci-build-windows.ps1
@@ -219,6 +254,36 @@ jobs:
       - persist_to_workspace:
           root: .
           paths: [artifacts]
+
+  android-arm64:
+    machine:
+      image: ubuntu-2404:current
+    resource_class: large
+    environment:
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+    steps:
+      - checkout
+      - run:
+          name: Install Android cross-build tools
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y git cmake curl unzip zip gettext python3 openjdk-17-jdk-headless ninja-build pkg-config autoconf autoconf-archive automake libtool linux-libc-dev
+      - restore_cache:
+          keys:
+            - android-generator-v1-{{ checksum "ci/android-generator/vcpkg.json" }}-{{ checksum "ci/android-generator/arm64-android-release.cmake" }}-{{ checksum "ci/android-generator/ports/eccodes/portfile.cmake" }}-{{ checksum "ci/android-generator/ports/libsodium/portfile.cmake" }}
+      - run:
+          name: Build OpenCPN 5.14 core and xGRIB for Android arm64
+          command: bash ci/build-android-arm64.sh
+          no_output_timeout: 60m
+      - store_artifacts:
+          path: artifacts/android-arm64
+      - persist_to_workspace:
+          root: .
+          paths: [artifacts/android-arm64]
+      - save_cache:
+          key: android-generator-v1-{{ checksum "ci/android-generator/vcpkg.json" }}-{{ checksum "ci/android-generator/arm64-android-release.cmake" }}-{{ checksum "ci/android-generator/ports/eccodes/portfile.cmake" }}-{{ checksum "ci/android-generator/ports/libsodium/portfile.cmake" }}
+          paths:
+            - ~/.cache/vcpkg/archives
 
   deploy-alpha:
     docker:
@@ -290,10 +355,15 @@ workflows:
       - windows-x86:
           requires: [windows-vcpkg-dependencies]
           filters: *std-filters
+      - windows-x64:
+          requires: [windows-vcpkg-dependencies]
+          filters: *std-filters
       - windows-opencpn-runtime:
           requires: [windows-x86]
           filters: *std-filters
       - macos-arm64:
+          filters: *std-filters
+      - android-arm64:
           filters: *std-filters
 
   windows-focused:
@@ -352,11 +422,16 @@ workflows:
       - windows-x86:
           name: release-windows-x86
           requires: [release-windows-vcpkg-dependencies]
+      - windows-x64:
+          name: release-windows-x64
+          requires: [release-windows-vcpkg-dependencies]
       - windows-opencpn-runtime:
           name: release-windows-opencpn-runtime
           requires: [release-windows-x86]
       - macos-arm64:
           name: release-macos-arm64
+      - android-arm64:
+          name: release-android-arm64
       - hold-for-alpha-approval:
           type: approval
           requires:
@@ -369,6 +444,8 @@ workflows:
             - release-flatpak25.08-arm64
             - release-windows-opencpn-runtime
             - release-macos-arm64
+            - release-windows-x64
+            - release-android-arm64
       - deploy-alpha:
           context: xgrib-deployment
           requires: [hold-for-alpha-approval]

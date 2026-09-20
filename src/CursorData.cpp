@@ -34,6 +34,10 @@ extern int m_DialogStyle;
 //---------------------------------------------------------------------------------------
 CursorData::CursorData(wxWindow *window, GRIBUICtrlBar &parent)
     : CursorDataBase(window), m_gparent(parent) {
+#ifdef __OCPN__ANDROID__
+  // The attached readout must not collapse to the width of an empty value.
+  m_stTrackingText->SetMinSize(wxSize(260, 38));
+#endif
   // transform checkboxes ID to have a formal link to data type and set the
   // initial value
   wxWindowListNode *node = this->GetChildren().GetFirst();

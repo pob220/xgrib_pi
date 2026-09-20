@@ -36,6 +36,7 @@
 
 #include <wx/stdpaths.h>
 
+#include <algorithm>
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
@@ -49,6 +50,12 @@
 #include "TimeZoneDisplay.h"
 #include "GribVectorPolicy.h"
 #include "EnvironmentalGribDialog.h"
+#ifdef __OCPN__ANDROID__
+#include "AndroidGribGenerator.h"
+#include <QPushButton>
+#include <QIcon>
+#include "AndroidTimeFormat.h"
+#endif
 #include <wx/arrimpl.cpp>
 
 #ifdef __ANDROID__
@@ -206,16 +213,24 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
 
   m_actionSettingsButton = CreateActionButton(
       _("Settings"), _("Configure GRIB display and behaviour."));
+#ifdef __OCPN__ANDROID__
   m_actionSettingsButton->Bind(wxEVT_BUTTON, &GRIBUICtrlBar::OnSettings, this);
+#else
+  m_actionSettingsButton->Bind(wxEVT_BUTTON, &GRIBUICtrlBar::OnSettings, this);
+#endif
   m_fgCtrlGrabberSize->Add(m_actionSettingsButton, 0, wxALL | wxEXPAND, 1);
 
   m_actionDownloadButton =
       CreateActionButton(_("Download GRIB"), _("Download a forecast GRIB."));
+#ifdef __OCPN__ANDROID__
   m_actionDownloadButton->Bind(wxEVT_BUTTON,
                                &GRIBUICtrlBar::OnRequestForecastData, this);
+#else
+  m_actionDownloadButton->Bind(wxEVT_BUTTON,
+                               &GRIBUICtrlBar::OnRequestForecastData, this);
+#endif
   m_fgCtrlGrabberSize->Add(m_actionDownloadButton, 0, wxALL | wxEXPAND, 1);
 
-#ifndef __OCPN__ANDROID__
   m_actionGenerateButton = CreateActionButton(
       _("Generate GRIB"),
       _("Generate a combined weather, wave and current GRIB for OpenCPN and "
@@ -223,18 +238,79 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
   m_actionGenerateButton->Bind(wxEVT_BUTTON,
                                &GRIBUICtrlBar::OnEnvironmentalGrib, this);
   m_fgCtrlGrabberSize->Add(m_actionGenerateButton, 0, wxALL | wxEXPAND, 1);
-#endif
 
   SetActionButtonBitmaps();
+
+#ifdef __OCPN__ANDROID__
+  // Keep the forecast controls beside the chart, but give them a tablet
+  // layout instead of the narrow desktop toolbar layout.
+  wxBoxSizer* androidContent =
+      static_cast<wxBoxSizer*>(m_fgCtrlBarSizer->GetItem(size_t(0))->GetSizer());
+  auto header = new wxBoxSizer(wxHORIZONTAL);
+  header->Add(new wxStaticText(this, wxID_ANY, _("xGRIB weather")), 1,
+              wxALIGN_CENTER_VERTICAL | wxALL, 8);
+  auto closeButton = new wxButton(this, wxID_ANY, _("Close"));
+  closeButton->SetMinSize(wxSize(105, 50));
+  closeButton->Bind(wxEVT_BUTTON,
+                    [this](wxCommandEvent&) { Close(); });
+  header->Add(closeButton, 0, wxALL, 5);
+  androidContent->Insert(0, header, 0, wxEXPAND);
+
+  m_fgCtrlGrabberSize->Detach(m_actionOpenButton);
+  m_fgCtrlGrabberSize->Detach(m_actionSettingsButton);
+  m_fgCtrlGrabberSize->Detach(m_actionDownloadButton);
+  m_fgCtrlGrabberSize->Detach(m_actionGenerateButton);
+  auto actions = new wxBoxSizer(wxHORIZONTAL);
+  m_actionOpenButton->SetLabel(_("Open"));
+  m_actionGenerateButton->SetLabel(_("Generate"));
+  m_actionDownloadButton->SetLabel(_("Download"));
+  for (auto* action : {m_actionOpenButton, m_actionDownloadButton, m_actionGenerateButton, m_actionSettingsButton}) {
+    action->SetMinSize(wxSize(120, 52));
+    actions->Add(action, 1, wxEXPAND | wxALL, 4);
+  }
+  androidContent->Insert(2, actions, 0, wxEXPAND | wxLEFT | wxRIGHT, 4);
+  androidContent->Insert(3,
+                         new wxStaticText(this, wxID_ANY, _("Forecast time")),
+                         0, wxLEFT | wxTOP, 8);
+  m_cRecordForecast->SetMinSize(wxSize(240, 50));
+  m_androidForecast = new wxButton(this, wxID_ANY, _("Choose forecast time..."));
+  m_androidForecast->SetMinSize(wxSize(240, 50));
+  m_cRecordForecast->GetContainingSizer()->Replace(m_cRecordForecast, m_androidForecast);
+  m_cRecordForecast->Hide();
+  m_androidForecast->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+    StopPlayBack();
+    wxArrayString times;
+    for (unsigned i = 0; i < m_cRecordForecast->GetCount(); ++i)
+      times.Add(m_cRecordForecast->GetString(i));
+    Hide();
+    const int selected = AndroidChooseForecast(GetParent(), times,
+        m_cRecordForecast->GetSelection());
+    if (selected != wxNOT_FOUND) {
+      m_cRecordForecast->SetSelection(selected);
+      wxCommandEvent event;
+      OnRecordForecast(event);
+    }
+    Show();
+    RequestRefresh(GetGRIBCanvas());
+  });
+  androidContent->SetMinSize(wxSize(0, -1));
+#endif
 
   this->SetSizer(m_fgCtrlBarSizer);
   this->Layout();
   m_fgCtrlBarSizer->Fit(this);
 
   // Initialize the time format check timer
+#ifdef __OCPN__ANDROID__
+  m_tFormatRefresh.SetCallback([this] {
+    wxTimerEvent event;
+    OnFormatRefreshTimer(event);
+  });
+#else
   m_tFormatRefresh.Connect(
       wxEVT_TIMER, wxTimerEventHandler(GRIBUICtrlBar::OnFormatRefreshTimer),
       nullptr, this);
+#endif
 
   // Sample the current time format using a fixed reference date (January 1,
   // 2021 at noon)
@@ -317,9 +393,16 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
   m_ZoneSelMode = m_SavedZoneSelMode;
 
   // connect Timer
+#ifdef __OCPN__ANDROID__
+  m_tPlayStop.SetCallback([this] {
+    wxTimerEvent event;
+    OnPlayStopTimer(event);
+  });
+#else
   m_tPlayStop.Connect(wxEVT_TIMER,
                       wxTimerEventHandler(GRIBUICtrlBar::OnPlayStopTimer),
                       nullptr, this);
+#endif
   // connect functions
   Connect(wxEVT_MOVE, wxMoveEventHandler(GRIBUICtrlBar::OnMove));
 
@@ -349,6 +432,10 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
 }
 
 GRIBUICtrlBar::~GRIBUICtrlBar() {
+#ifdef __OCPN__ANDROID__
+  delete m_androidGribGeneratorDialog;
+  m_androidGribGeneratorDialog = nullptr;
+#endif
   if (m_environmentalGribDialog) {
     m_environmentalGribDialog->PrepareForParentShutdown();
     delete m_environmentalGribDialog;
@@ -514,8 +601,7 @@ void GRIBUICtrlBar::SetScaledBitmap(double factor) {
   // Careful here, this MinSize() sets the final width of the control bar,
   // overriding the width of the wxChoice above it.
 #ifdef __OCPN__ANDROID__
-  m_sTimeline->SetSize(wxSize(20 * m_ScaledFactor, -1));
-  m_sTimeline->SetMinSize(wxSize(20 * m_ScaledFactor, -1));
+  m_sTimeline->SetMinSize(wxSize(100, 48));
 #else
   m_sTimeline->SetSize(wxSize(90 * m_ScaledFactor, -1));
   m_sTimeline->SetMinSize(wxSize(90 * m_ScaledFactor, -1));
@@ -568,7 +654,11 @@ void GRIBUICtrlBar::OpenFile(bool newestFile) {
   if (m_bGRIBActiveFile->IsOK()) {
     wxFileName fn(m_bGRIBActiveFile->GetFileNames()[0]);
     title = (_("File: "));
+#ifdef __OCPN__ANDROID__
+    title.Append(fn.GetFullName());
+#else
     title.Append(fn.GetFullPath());
+#endif
     if (rsa->GetCount() == 0) {  // valid but empty file
       delete m_bGRIBActiveFile;
       m_bGRIBActiveFile = nullptr;
@@ -773,13 +863,29 @@ void GRIBUICtrlBar::SetCursorLatLon(double lat, double lon) {
   m_cursor_lon = lon;
   m_cursor_lat = lat;
 
+#ifdef __OCPN__ANDROID__
+  // Touch navigation does not maintain the desktop mouse-enter viewport.
+  UpdateTrackingControl();
+#else
   if (m_vpMouse && ((lat > m_vpMouse->lat_min) && (lat < m_vpMouse->lat_max)) &&
       ((lon > m_vpMouse->lon_min) && (lon < m_vpMouse->lon_max)))
     UpdateTrackingControl();
+#endif
 }
 
 void GRIBUICtrlBar::UpdateTrackingControl() {
+#ifdef __OCPN__ANDROID__
+  if (m_androidForecast && m_cRecordForecast->GetSelection() != wxNOT_FOUND)
+    m_androidForecast->SetLabel(m_cRecordForecast->GetStringSelection());
+#endif
   if (!m_CDataIsShown) return;
+
+#ifdef __OCPN__ANDROID__
+  // Host touch/timeline callbacks already run on the UI thread. The old wxQt
+  // timer forwarding leaves the embedded readout blank on Android.
+  if (m_gCursorData) m_gCursorData->UpdateTrackingControls();
+  return;
+#endif
 
   if (m_DialogStyle >> 1 == SEPARATED) {
     if (m_gGRIBUICData) {
@@ -804,6 +910,37 @@ void GRIBUICtrlBar::OnShowCursorData(wxCommandEvent& event) {
 }
 
 void GRIBUICtrlBar::SetDialogsStyleSizePosition(bool force_recompute) {
+#ifdef __OCPN__ANDROID__
+  // Android always embeds the readout; a saved desktop-style preference must
+  // not send refreshes to a separate cursor window that does not exist.
+  m_DialogStyle = ATTACHED_NO_CAPTION;
+  m_gGrabber->Hide();
+  for (auto* action : {m_actionOpenButton, m_actionDownloadButton, m_actionGenerateButton, m_actionSettingsButton}) {
+    // wxQt 3.1 dereferences wxNullBitmap; clear the native icon safely instead.
+    static_cast<QPushButton*>(action->GetHandle())->setIcon(QIcon());
+    action->SetMinSize(wxSize(120, 52));
+    action->Show();
+  }
+  m_bpAltitude->Show(m_HasAltitude);
+  if (!m_gCursorData) {
+    m_gCursorData = new CursorData(this, *this);
+    m_fgCDataSizer->Add(m_gCursorData, 1, wxEXPAND);
+  }
+  m_gCursorData->PopulateTrackingControls(false);
+  m_gCursorData->Show(m_CDataIsShown);
+  m_bpShowCursorData->SetToolTip(m_CDataIsShown ? _("Hide data at cursor") : _("Show data at cursor"));
+  const wxRect toolbar = GetMasterToolbarRect();
+  const int available = std::max(280, GetParent()->GetClientSize().x - toolbar.GetRight() - 12);
+  const int width = std::min(720, available);
+  SetMinSize(wxSize(0, 0));
+  Layout();
+  SetSize(width, GetSizer()->GetMinSize().y);
+  const wxPoint position(toolbar.GetRight() + 4, 0);
+  pPlugIn->SetCtrlBarXY(position);
+  pPlugIn->MoveDialog(this, position);
+  m_old_DialogStyle = m_DialogStyle;
+  return;
+#endif
   /*Not all plateforms accept the dynamic window style changes.
   So these changes are applied only after exit from the plugin and re-opening
   it*/
@@ -831,6 +968,9 @@ void GRIBUICtrlBar::SetDialogsStyleSizePosition(bool force_recompute) {
                  vis);
   }
   // initiate tooltips
+#ifdef __OCPN__ANDROID__
+  m_cRecordForecast->Hide();
+#endif
   m_bpShowCursorData->SetToolTip(m_CDataIsShown ? _("Hide data at cursor")
                                                 : _("Show data at cursor"));
   m_bpPlay->SetToolTip(_("Start play back"));
@@ -1060,6 +1200,14 @@ void GRIBUICtrlBar::MenuAppend(wxMenu* menu, int id, wxString label,
 }
 
 void GRIBUICtrlBar::OnMouseEvent(wxMouseEvent& event) {
+#ifdef __OCPN__ANDROID__
+  // Let Qt controls handle touch-generated mouse events (notably the forecast
+  // combo popup). The desktop dragging/hover path must not consume them.
+  if (!event.RightDown()) {
+    event.Skip();
+    return;
+  }
+#endif
   if (event.RightDown()) {
     // populate menu
     wxMenu* xmenu = new wxMenu();
@@ -1238,6 +1386,17 @@ void GRIBUICtrlBar::OnRequestForecastData(wxCommandEvent& event) {
   if (m_tPlayStop.IsRunning())
     return;  // do nothing when play back is running !
 
+#ifdef __OCPN__ANDROID__
+  if (!m_androidGribGeneratorDialog)
+    m_androidGribGeneratorDialog = new AndroidGribGeneratorDialog(
+        GetParent(), [this](const wxString& path) { OpenGeneratedGrib(path); });
+  Hide();
+  m_androidGribGeneratorDialog->ShowMobile(pPlugIn->GetCurrentViewPort(), true);
+  Show();
+  SetDialogsStyleSizePosition(true);
+  return;
+#endif
+
   /*if there is one instance of the dialog already visible, do nothing*/
   if (pReq_Dialog && pReq_Dialog->IsShown()) return;
 
@@ -1257,6 +1416,16 @@ void GRIBUICtrlBar::OnEnvironmentalGrib(wxCommandEvent& event) {
     return;
   }
 
+#ifdef __OCPN__ANDROID__
+  if (!m_androidGribGeneratorDialog) {
+    m_androidGribGeneratorDialog = new AndroidGribGeneratorDialog(
+        GetParent(), [this](const wxString& path) { OpenGeneratedGrib(path); });
+  }
+  Hide();
+  m_androidGribGeneratorDialog->ShowMobile(pPlugIn->GetCurrentViewPort());
+  Show();
+  SetDialogsStyleSizePosition(true);
+#else
   if (!m_environmentalGribDialog) {
     m_environmentalGribDialog = new EnvironmentalGribDialog(
         this, [this](const wxString& path) { OpenGeneratedGrib(path); });
@@ -1268,6 +1437,7 @@ void GRIBUICtrlBar::OnEnvironmentalGrib(wxCommandEvent& event) {
   m_environmentalGribDialog->SetCurrentViewPort(pPlugIn->GetCurrentViewPort());
   m_environmentalGribDialog->Show();
   m_environmentalGribDialog->Raise();
+#endif
 }
 
 void GRIBUICtrlBar::ShowEnvironmentalGenerator() {
@@ -1287,6 +1457,21 @@ void GRIBUICtrlBar::ShowEnvironmentalGenerator() {
 void GRIBUICtrlBar::OnSettings(wxCommandEvent& event) {
   if (m_tPlayStop.IsRunning())
     return;  // do nothing when play back is running !
+
+#ifdef __OCPN__ANDROID__
+  Hide();
+  if (AndroidGribSettings(GetParent(), m_OverlaySettings)) {
+    m_OverlaySettings.Write();
+    if (!m_OverlaySettings.m_bInterpolate) m_InterpolateMode = false;
+    SetTimeLineMax(true);
+    SetFactoryOptions();
+    RefreshTimeZoneDisplay();
+  }
+  Show();
+  SetDialogsStyleSizePosition(true);
+  RequestRefresh(GetGRIBCanvas());
+  return;
+#endif
 
   ::wxBeginBusyCursor();
 
@@ -2188,10 +2373,17 @@ wxString GRIBUICtrlBar::FormatTime(const wxDateTime& utc,
                             : wxString("UTC");
   const wxDateTime wall = marine_time::ToWallClock(utc, zone);
   if (!wall.IsValid()) return wxEmptyString;
+#ifdef __OCPN__ANDROID__
+  // The bundled wxQt date formatter adds DST even for wxDateTime::UTC.
+  // Qt's explicit UTC epoch conversion agrees with the GRIB timestamps.
+  wxString result = wxString::FromUTF8(
+      XgribAndroidUtcText(wall.GetTicks(), !format.empty()).toUtf8().constData());
+#else
   DateTimeFormatOptions options;
   if (!format.empty()) options.SetFormatString(format);
   options.SetTimezone("UTC").SetShowTimezone(false);
   wxString result = toUsrDateTimeFormat_Plugin(wall, options);
+#endif
   const wxString abbreviation =
       marine_time::TimeZoneAbbreviation(utc, zone);
   if (!abbreviation.empty()) result += " " + abbreviation;

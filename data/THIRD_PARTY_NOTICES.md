@@ -26,3 +26,13 @@ https://github.com/pob220/environmental-grib-generator
 
 The Environmental GRIB Generator helper itself is MIT licensed. The OpenCPN
 plugin is GPL-3.0-or-later.
+
+Android builds link the generator in-process rather than executing a helper.
+The pinned Android dependencies (including OpenSSL, HDF5, SQLite, libaec,
+OpenJPEG, PNG, TIFF and their dependencies) have license files in
+`data/android-licenses`. The Mozilla CA bundle is obtained from
+https://curl.se/docs/caextract.html (Mozilla Public License 2.0).
+The Android build support uses Qt 5.12.2; the three missing public vector headers
+are unmodified copies from https://github.com/qt/qtbase/tree/v5.12.2/src/gui/math3d,
+retaining their upstream LGPL/GPL/commercial license notices. No Qt binaries
+are bundled in the plugin; OpenCPN supplies them.

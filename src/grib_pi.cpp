@@ -35,6 +35,7 @@
 #include <wx/fileconf.h>
 #include <wx/stdpaths.h>
 
+#include <algorithm>
 #include <limits>
 
 #include "GribProtocolVersion.h"
@@ -168,9 +169,17 @@ int grib_pi::Init(void) {
     wxCopyFile(shareLocn + local_grib_catalog, m_local_sources_catalog);
   }
   if (m_bGRIBShowIcon) {
+#ifdef __OCPN__ANDROID__
+    // The desktop SVG has a fixed 32px size and no viewBox, leaving a tiny
+    // drawing inside OpenCPN's touch-sized Android toolbar slot.
+    wxString normalIcon = shareLocn + "grib-android.svg";
+    wxString toggledIcon = normalIcon;
+    wxString rolloverIcon = normalIcon;
+#else
     wxString normalIcon = shareLocn + "grib.svg";
     wxString toggledIcon = shareLocn + "grib_toggled.svg";
     wxString rolloverIcon = shareLocn + "grib_rollover.svg";
+#endif
 
     wxLogMessage(normalIcon);
     m_leftclick_tool_id = InsertPlugInToolSVG(
@@ -453,19 +462,22 @@ bool grib_pi::QualifyCtrlBarPosition(
 
 void grib_pi::MoveDialog(wxDialog* dialog, wxPoint position) {
   //  Use the application frame to bound the control bar position.
-  wxApp* app = wxTheApp;
-
-  wxWindow* frame =
-      app->GetTopWindow();  // or GetOCPNCanvasWindow()->GetParent();
+#ifdef __OCPN__ANDROID__
+  // Android plugins have their own statically linked wxWidgets globals, so
+  // wxTheApp can be null even while the host application's canvas is live.
+  wxWindow* frame = m_parent_window ? m_parent_window->GetParent() : nullptr;
+#else
+  wxWindow* frame = wxTheApp ? wxTheApp->GetTopWindow() : nullptr;
+#endif
   if (!frame) return;
 
   wxPoint p = frame->ScreenToClient(position);
   // Check and ensure there is always a "grabb" zone always visible wathever the
   // dialoue size is.
   if (p.x + dialog->GetSize().GetX() > frame->GetClientSize().GetX())
-    p.x = frame->GetClientSize().GetX() - dialog->GetSize().GetX();
+    p.x = std::max(0, frame->GetClientSize().GetX() - dialog->GetSize().GetX());
   if (p.y + dialog->GetSize().GetY() > frame->GetClientSize().GetY())
-    p.y = frame->GetClientSize().GetY() - dialog->GetSize().GetY();
+    p.y = std::max(0, frame->GetClientSize().GetY() - dialog->GetSize().GetY());
 
 #ifdef __WXGTK__
   dialog->Move(0, 0);
