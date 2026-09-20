@@ -33,11 +33,14 @@ find "$artifact_root" -mindepth 3 -maxdepth 3 -type f -path '*/package/*.tar.gz'
     package_name="xgrib_pi-${plugin_version}-${target}-${target_version}-tarball"
     metadata_name="xgrib_pi-${plugin_version}-${target}-${target_version}-metadata"
     staged_xml="$stage/$(basename "$metadata")"
+    staged_archive="$stage/$filename"
     sed -e "s|--pkg_repo--|$repo|g" \
         -e "s|--name--|$package_name|g" \
         -e "s|--version--|$cloudsmith_version|g" \
         -e "s|--filename--|$filename|g" \
         "$metadata" >"$staged_xml"
+    python3 ci/embed-package-metadata.py \
+      "$archive" "$staged_xml" "$staged_archive"
 
     cloudsmith push raw --republish --no-wait-for-sync \
       --name "$metadata_name" --version "$cloudsmith_version" \
@@ -46,5 +49,5 @@ find "$artifact_root" -mindepth 3 -maxdepth 3 -type f -path '*/package/*.tar.gz'
     cloudsmith push raw --republish --no-wait-for-sync \
       --name "$package_name" --version "$cloudsmith_version" \
       --summary "xGRIB OpenCPN Alpha package for $target" \
-      "$repo" "$archive"
+      "$repo" "$staged_archive"
   done

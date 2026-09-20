@@ -22,7 +22,9 @@ foreach(pattern IN ITEMS
     "plugin_version=.*<version>"
     "target_version=.*<target-version>"
     "package_name=.*plugin_version.*target.*target_version.*tarball"
-    "metadata_name=.*plugin_version.*target.*target_version.*metadata")
+    "metadata_name=.*plugin_version.*target.*target_version.*metadata"
+    "embed-package-metadata.py"
+    "staged_archive")
   if(NOT deploy_script MATCHES "${pattern}")
     message(FATAL_ERROR "Alpha deployment contract is missing: ${pattern}")
   endif()

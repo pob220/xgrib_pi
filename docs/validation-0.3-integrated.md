@@ -7,6 +7,12 @@ Preview build with the global/wrapped-longitude correction and full four-part
 plugin version reporting. Every packaged platform is built from the same
 plugin revision and the same environmental generator 0.3.0 revision.
 
+The Cloudsmith archive for each platform embeds the same substituted catalogue
+XML as top-level `metadata.xml`. Consequently, one archive works both as the
+catalogue download payload and with OpenCPN's manual **Import plugin...** action.
+The packaging regression test rejects missing, duplicate and version-mismatched
+metadata.
+
 The shared generator therefore provides all of the following on applicable
 platforms:
 

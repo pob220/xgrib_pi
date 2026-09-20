@@ -742,6 +742,9 @@ if (NOT OCPN_FLATPAK_CONFIG)
       add_test(NAME xgrib_package_selection_tests
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/PackageSelectionTests.sh
           ${CMAKE_CURRENT_SOURCE_DIR}/scripts/resolve-package-pair.sh)
+      add_test(NAME xgrib_package_metadata_tests
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/PackageMetadataTests.sh
+          ${CMAKE_CURRENT_SOURCE_DIR}/ci/embed-package-metadata.py)
     endif()
 
     add_executable(xgrib_reader_integration_tests
