@@ -1,4 +1,4 @@
-# Android xGRIB — native generator rebuild (0.3.0.0)
+# Android xGRIB — native generator and touch interface
 
 This development branch targets **OpenCPN 5.14, Android arm64**. It replaces
 the limited Android-only NOAA assembler with the same C++ generator used by
@@ -20,7 +20,10 @@ from writable Android storage. Desktop dialogue layouts are unchanged.
   cancellation; an already-running operation must finish or time out first.
   The form prevents overlapping jobs and output-file overwrites.
 - Output is stored in the plugin's `generated` directory, with an option to
-  open the result on the chart. Passwords are not saved to configuration.
+  open the result on the chart. Plaintext passwords are never written to configuration.
+- Forecast start uses a calendar, touch hour/minute selectors and **Use current
+  UTC hour**. The form shows UTC explicitly; request timestamps are serialized
+  internally. Cancel leaves the previous start unchanged.
 - Settings is a plugin-owned touch form, with scrolling categories and visible
   **Save and close** / **Cancel** actions. Only explicit Save applies edits.
   Forecast-time selection likewise requires explicit acceptance (the bundled
@@ -34,8 +37,14 @@ from writable Android storage. Desktop dialogue layouts are unchanged.
 - The eight supplied desktop area presets (and any presets saved in this
   installation) apply bounds only on Android. They do not switch providers or
   unexpectedly require an account. Use chart area/manual entry remain.
-- Copernicus has a dedicated Account tab. Remembering the username is opt-in;
-  passwords are masked, never saved to configuration and cleared on Close.
+- Copernicus has a dedicated Account tab. Remembering credentials is opt-in.
+  **Remember password on this tablet** requires remembering the username and
+  stores only AES-GCM ciphertext, encrypted with an Android Keystore key.
+  The key is bound to this installation and cannot be exported. Restoring a
+  configuration backup to another installation requires entering the password
+  again. Uncheck Remember password and Close to delete the saved credential.
+  Changing the username clears an automatically restored password.
+  Password fields are masked and cleared from the form on Close.
   While typing, estimates/logs are hidden and the focused editor is scrolled
   into view. Show password is optional and resets on Close.
 - **Cancel and close** requests cancellation of an active job and closes the
@@ -137,3 +146,15 @@ the package includes a Mozilla CA bundle, also configured for NetCDF DAP.
 
 The original tablet plugin library and settings were backed up before testing.
 No other plugin or chart/user-data files are replaced by this build.
+
+## 0.3.2 Android usability follow-up
+
+The UTC start calendar/time selector and optional Keystore-encrypted password
+remembrance were built, installed and exercised on the same tablet. Cold restore
+of the user's real password followed by a 761-message, 48.95 MiB UKV/waves/
+Copernicus NWS generation passed without re-entry. Touch dropdown swipes and
+nested Android Back were corrected and validated. Details, scope and security
+behavior are recorded in [android-0.3.2-usability.md](android-0.3.2-usability.md).
+The common CircleCI version is 0.3.2.0; workflow changes are unnecessary. This
+new revision is local and has not been published. The previous 0.3.1.0 alpha
+matrix and publication completed separately.

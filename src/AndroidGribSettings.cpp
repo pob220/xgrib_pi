@@ -1,4 +1,5 @@
 #include "AndroidGribGenerator.h"
+#include "AndroidDialogBack.h"
 #include "GribSettingsDialog.h"
 #include "TimeZoneDisplay.h"
 
@@ -165,6 +166,7 @@ bool AndroidGribSettings(wxWindow* parent, GribOverlaySettings& settings) {
   QObject::connect(cancel, &QPushButton::clicked, root, [&] { dialog.EndModal(wxID_CANCEL); });
   dialog.Bind(wxEVT_CLOSE_WINDOW, [&](wxCloseEvent&) { dialog.EndModal(wxID_CANCEL); });
   AndroidFitDialog(parent, dialog);
+  XgribAndroidBackFilter back(&dialog, [&dialog] { dialog.EndModal(wxID_CANCEL); });
   // The bundled wxQt modal return code can report OK for a nonzero cancel
   // code. Trust the explicit action, never the wrapper's translated result.
   dialog.ShowModal();

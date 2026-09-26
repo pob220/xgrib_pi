@@ -1,4 +1,6 @@
 #include "AndroidGribGenerator.h"
+#include "AndroidSecureCredentials.h"
+#include "AndroidDialogBack.h"
 #include "OpenCPNAndroidFileSelector.h"
 
 #include <atomic>
@@ -10,8 +12,10 @@
 #include <mutex>
 #include <QCheckBox>
 #include <QApplication>
+#include <QAbstractItemView>
 #include <QComboBox>
 #include <QDateTime>
+#include <QCalendarWidget>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -21,6 +25,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScroller>
+#include <QStyledItemDelegate>
 #include <QTabWidget>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -38,6 +43,15 @@ std::string Text(const QString& value) { return value.toUtf8().toStdString(); }
 QString Text(const std::string& value) { return QString::fromUtf8(value.c_str()); }
 wxString Wx(const QString& value) { return wxString::FromUTF8(Text(value).c_str()); }
 QString QtText(const wxString& value) { return QString::fromUtf8(value.ToUTF8()); }
+
+class TouchTimeDelegate : public QStyledItemDelegate {
+ public:
+  explicit TouchTimeDelegate(QObject* parent) : QStyledItemDelegate(parent) {}
+  QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+    const auto size = QStyledItemDelegate::sizeHint(option, index);
+    return QSize(size.width(), std::max(72, size.height()));
+  }
+};
 
 class ResizeFollower : public QObject {
  public:
@@ -84,6 +98,7 @@ class ResizeFollower : public QObject {
 }
 
 struct AndroidGribGeneratorDialog::Impl {
+  std::unique_ptr<XgribAndroidBackFilter> backFilter;
   AndroidGribGeneratorDialog* owner;
   GribReadyCallback ready;
   QWidget* root;
@@ -96,7 +111,14 @@ struct AndroidGribGeneratorDialog::Impl {
   std::map<std::string, QLineEdit*> fields;
   std::map<std::string, QComboBox*> choices;
   std::map<std::string, QWidget*> rows;
-  QCheckBox *extend, *minor, *keep, *open, *rememberUsername;
+  QCheckBox *extend, *minor, *keep, *open, *rememberUsername, *rememberPassword;
+  QPushButton* startPicker;
+  QDateTime startUtc;
+  enum class CredentialAction { None, Load, Save, Forget };
+  CredentialAction credentialAction{CredentialAction::None};
+  std::future<QString> credentialJob;
+  QString credentialUsername;
+  bool restoredPassword{false};
   QLabel* accountNote;
   QLabel* timeNote;
   bool serverDownload{false};
@@ -164,6 +186,69 @@ struct AndroidGribGeneratorDialog::Impl {
     if (!ok || !std::isfinite(value)) throw std::runtime_error(std::string("Enter a number for ") + key);
     return value;
   }
+  void UpdateStartLabel() {
+    startPicker->setText(startUtc.toString("ddd d MMM yyyy  ·  HH:mm 'UTC'"));
+  }
+  void ChooseStart() {
+    QGuiApplication::inputMethod()->hide();
+    wxDialog picker(owner, wxID_ANY, "Forecast start (UTC)", wxDefaultPosition,
+        wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+    auto* panel = static_cast<QWidget*>(picker.GetHandle());
+    panel->setStyleSheet(root->styleSheet() +
+        "QPushButton, QComboBox {min-height: 72px;}"
+        "QCalendarWidget QToolButton {min-height: 48px; font-size: 20px;}"
+        "QCalendarWidget QAbstractItemView {font-size: 20px;}");
+    auto* layout = new QVBoxLayout(panel);
+    layout->addWidget(new QLabel("Choose forecast start — UTC"));
+    auto* calendar = new QCalendarWidget(panel);
+    calendar->setVerticalHeaderFormat(QCalendarWidget::NoVerticalHeader);
+    calendar->setSelectedDate(startUtc.date());
+    calendar->setMinimumHeight(300);
+    layout->addWidget(calendar, 1);
+    auto* time = new QHBoxLayout;
+    time->addWidget(new QLabel("Hour"));
+    auto* hour = new QComboBox(panel);
+    for (int i = 0; i < 24; ++i) hour->addItem(QString("%1").arg(i, 2, 10, QChar('0')));
+    hour->setCurrentIndex(startUtc.time().hour()); time->addWidget(hour, 1);
+    time->addWidget(new QLabel("Minute"));
+    auto* minute = new QComboBox(panel);
+    for (int i = 0; i < 60; ++i) minute->addItem(QString("%1").arg(i, 2, 10, QChar('0')));
+    minute->setCurrentIndex(startUtc.time().minute()); time->addWidget(minute, 1);
+    for (auto* choice : {hour, minute}) {
+      choice->setItemDelegate(new TouchTimeDelegate(choice));
+      choice->setMaxVisibleItems(10);
+      for (int i = 0; i < choice->count(); ++i)
+        choice->setItemData(i, QSize(0, 52), Qt::SizeHintRole);
+      choice->view()->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+      // This Qt Android build delivers synthesized mouse events to combo
+      // popups. Recognize their drag before the combo treats release as a tap.
+      QScroller::grabGesture(choice->view()->viewport(), QScroller::LeftMouseButtonGesture);
+    }
+    time->addWidget(new QLabel("UTC")); layout->addLayout(time);
+    auto* now = new QPushButton("Use current UTC hour", panel); layout->addWidget(now);
+    QObject::connect(now, &QPushButton::clicked, panel, [calendar, hour, minute] {
+      const auto utc = QDateTime::currentDateTimeUtc();
+      calendar->setSelectedDate(utc.date()); hour->setCurrentIndex(utc.time().hour());
+      minute->setCurrentIndex(0);
+    });
+    auto* actions = new QHBoxLayout;
+    auto* cancel = new QPushButton("Cancel", panel);
+    auto* use = new QPushButton("Use date and time", panel);
+    actions->addWidget(cancel, 1); actions->addWidget(use, 1); layout->addLayout(actions);
+    bool accepted = false;
+    QObject::connect(cancel, &QPushButton::clicked, panel, [&] { picker.EndModal(wxID_CANCEL); });
+    QObject::connect(use, &QPushButton::clicked, panel, [&] {
+      accepted = true; picker.EndModal(wxID_OK);
+    });
+    picker.Bind(wxEVT_CLOSE_WINDOW, [&](wxCloseEvent&) { picker.EndModal(wxID_CANCEL); });
+    XgribAndroidBackFilter back(&picker, [&] { picker.EndModal(wxID_CANCEL); });
+    ResizeFollower resize(static_cast<QWidget*>(owner->GetParent()->GetHandle()), panel);
+    resize.Fit(); picker.ShowModal();
+    if (accepted) {
+      startUtc = QDateTime(calendar->selectedDate(), QTime(hour->currentIndex(), minute->currentIndex()), Qt::UTC);
+      UpdateStartLabel(); UpdateOptions();
+    }
+  }
   Impl(AndroidGribGeneratorDialog* dialog, GribReadyCallback callback)
       : owner(dialog), ready(std::move(callback)), root(static_cast<QWidget*>(dialog->GetHandle())) {
     root->setStyleSheet("QWidget {font-size: 20px;}"
@@ -201,7 +286,14 @@ struct AndroidGribGeneratorDialog::Impl {
       fields["south"]->setText(QString::number(viewport.lat_min, 'f', 3));
       fields["north"]->setText(QString::number(viewport.lat_max, 'f', 3));
     });
-    Field(area, "start", "Start (UTC, YYYY-MM-DDTHH:MM:SSZ)", QDateTime::currentDateTimeUtc().toString("yyyy-MM-ddTHH:00:00Z"));
+    auto* startRow = new QWidget; rows["start"] = startRow;
+    auto* startLayout = new QVBoxLayout(startRow); startLayout->setContentsMargins(0, 0, 0, 6);
+    startLayout->addWidget(new QLabel("Start date and time (UTC)"));
+    startUtc = QDateTime::currentDateTimeUtc();
+    startUtc.setTime(QTime(startUtc.time().hour(), 0));
+    startPicker = new QPushButton(startRow); UpdateStartLabel();
+    startLayout->addWidget(startPicker); area->addWidget(startRow);
+    QObject::connect(startPicker, &QPushButton::clicked, root, [this] { ChooseStart(); });
     timeNote = new QLabel("For ordinary forecast downloads, duration starts at the model cycle. Start is used for tidal/current predictions and forecast extension. Check the generated coverage below.");
     timeNote->setWordWrap(true); area->addWidget(timeNote);
     Field(area, "hours", "Duration (hours)", "24")->setInputMethodHints(Qt::ImhDigitsOnly);
@@ -245,10 +337,17 @@ struct AndroidGribGeneratorDialog::Impl {
     fields["username"]->setInputMethodHints(Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText);
     fields["password"]->setInputMethodHints(Qt::ImhSensitiveData | Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText);
     rememberUsername = new QCheckBox("Remember username on this tablet"); credentials->addWidget(rememberUsername);
+    rememberPassword = new QCheckBox("Remember password on this tablet"); credentials->addWidget(rememberPassword);
+    QObject::connect(rememberPassword, &QCheckBox::toggled, root, [this](bool remember) {
+      if (remember) rememberUsername->setChecked(true);
+    });
+    QObject::connect(rememberUsername, &QCheckBox::toggled, root, [this](bool remember) {
+      if (!remember) rememberPassword->setChecked(false);
+    });
     showPassword = new QCheckBox("Show password"); credentials->addWidget(showPassword);
     QObject::connect(showPassword, &QCheckBox::toggled, root, [this](bool show) { fields["password"]->setEchoMode(show ? QLineEdit::Normal : QLineEdit::Password); });
     Note(credentials, "Copernicus Marine account — for selected ocean-current and wave products. Other providers and offline .xtd tides do not need this login.");
-    Note(credentials, "Password is never saved in settings. It is kept only while this dialog is open, sent over HTTPS to Copernicus, and cleared when you close. A valid Copernicus Marine account and acceptance of the provider's terms are required.");
+    Note(credentials, "Remember password is optional. It saves an encrypted password protected by Android Keystore for this OpenCPN installation. Uncheck it and Close to forget the saved password. Passwords are sent over HTTPS to Copernicus; Show password resets on Close. A valid Copernicus Marine account and acceptance of the provider's terms are required.");
     estimate = new QLabel; estimate->setWordWrap(true); layout->addWidget(estimate);
     Note(options, "Output is stored in OpenCPN’s xGRIB generated folder. Processing runs on the tablet; online providers need an internet connection.");
     status = new QLabel("Ready. Choose an area and sources, then use the action below."); status->setWordWrap(true); layout->addWidget(status);
@@ -261,6 +360,7 @@ struct AndroidGribGeneratorDialog::Impl {
     QObject::connect(close, &QPushButton::clicked, root, [this] { Close(); });
     timer = new QTimer(root); QObject::connect(timer, &QTimer::timeout, root, [this] { Poll(); });
     resize = new ResizeFollower(static_cast<QWidget*>(owner->GetParent()->GetHandle()), root);
+    backFilter = std::make_unique<XgribAndroidBackFilter>(owner, [this] { Close(); });
     QObject::connect(QGuiApplication::inputMethod(), &QInputMethod::visibleChanged, root, [this] {
       const bool editing = QGuiApplication::inputMethod()->isVisible();
       estimate->setVisible(!editing); status->setVisible(!editing);
@@ -277,6 +377,7 @@ struct AndroidGribGeneratorDialog::Impl {
       rememberUsername->setChecked(remember);
       wxString username;
       if (remember && config->Read("/Settings/xGRIB/AndroidGenerator/username", &username)) fields["username"]->setText(QtText(username));
+      rememberPassword->setChecked(config->ReadBool("/Settings/xGRIB/AndroidGenerator/rememberPassword", false));
     }
     for (auto& [key, choice] : choices) {
       wxString saved;
@@ -290,14 +391,48 @@ struct AndroidGribGeneratorDialog::Impl {
       QObject::connect(entry.second, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
                        root, [this] { UpdateOptions(); });
     QObject::connect(extend, &QCheckBox::toggled, root, [this] { UpdateOptions(); });
+    QObject::connect(fields["username"], &QLineEdit::textChanged, root, [this] {
+      if (restoredPassword && fields["username"]->text().trimmed() != credentialUsername) {
+        fields["password"]->clear(); restoredPassword = false;
+      }
+    });
     UpdateOptions();
   }
-  ~Impl() { if (cancelled) cancelled->store(true); if (job.valid()) job.wait(); }
+  ~Impl() { if (cancelled) cancelled->store(true); if (job.valid()) job.wait(); if (credentialJob.valid()) credentialJob.wait(); }
+  void CredentialTask(CredentialAction action, const QString& value = {}) {
+    credentialUsername = fields["username"]->text().trimmed();
+    const auto username = credentialUsername;
+    credentialJob = std::async(std::launch::async, [action, username, value] {
+      if (action == CredentialAction::Forget) return xgrib::android_credentials::Forget();
+      return xgrib::android_credentials::Transform(username, value, action == CredentialAction::Save);
+    });
+    credentialAction = action;
+    tabs->setEnabled(false); generate->setEnabled(false); close->setEnabled(false);
+    status->setText(action == CredentialAction::Load ? "Unlocking saved password…" : "Updating secure password storage…");
+    timer->start(150);
+  }
+  void LoadCredentials() {
+    if (credentialAction != CredentialAction::None || !rememberPassword->isChecked()) return;
+    wxString encrypted, username;
+    auto* config = GetOCPNConfigObject();
+    if (config && config->Read("/Settings/xGRIB/AndroidGenerator/passwordCiphertext", &encrypted) &&
+        config->Read("/Settings/xGRIB/AndroidGenerator/passwordAccount", &username) &&
+        QtText(username) == fields["username"]->text().trimmed())
+      CredentialTask(CredentialAction::Load, QtText(encrypted));
+  }
+  void FinishClose() {
+    fields["password"]->clear(); restoredPassword = false;
+    showPassword->setChecked(false);
+    if (!rememberUsername->isChecked()) fields["username"]->clear();
+    status->setText("Ready. Choose an area and sources, then use the action below.");
+    owner->EndModal(wxID_CLOSE);
+  }
   void Cancel() {
     if (cancelled) cancelled->store(true);
     status->setText("Cancelling… waiting for the current operation to stop."); cancel->setEnabled(false);
   }
   void Close() {
+    if (credentialAction != CredentialAction::None) return;
     if (running) { closeWhenFinished = true; Cancel(); return; }
     QGuiApplication::inputMethod()->hide();
     if (auto* config = GetOCPNConfigObject()) {
@@ -311,15 +446,21 @@ struct AndroidGribGeneratorDialog::Impl {
       // Make the closed generator's preferences durable now.
       config->Flush();
     }
-    fields["password"]->clear();
-    showPassword->setChecked(false);
-    if (!rememberUsername->isChecked()) fields["username"]->clear();
-    owner->EndModal(wxID_CLOSE);
+    if (rememberPassword->isChecked()) {
+      if (fields["username"]->text().trimmed().isEmpty() || fields["password"]->text().isEmpty()) {
+        tabs->setCurrentIndex(4);
+        status->setText("Enter a username and password to remember, or uncheck Remember password.");
+        return;
+      }
+      CredentialTask(CredentialAction::Save, fields["password"]->text());
+    } else {
+      CredentialTask(CredentialAction::Forget);
+    }
   }
   eg::EnvironmentRequest Request(bool preparing = true) {
     eg::EnvironmentRequest request;
     request.bbox = {Number("west"), Number("south"), Number("east"), Number("north")}; request.bbox.Validate();
-    request.start = eg::ParseUtcDateTime(serverDownload ? Text(QDateTime::currentDateTimeUtc().toString("yyyy-MM-ddTHH:mm:ssZ")) : Value("start"));
+    request.start = eg::ParseUtcDateTime(Text((serverDownload ? QDateTime::currentDateTimeUtc() : startUtc).toString("yyyy-MM-ddTHH:mm:ssZ")));
     const double hours = serverDownload ? 24 : Number("hours");
     if (hours < 1 || hours > 384 || hours != std::floor(hours)) throw std::runtime_error("Duration must be a whole number from 1 to 384 hours");
     request.hours = static_cast<int>(hours); request.step_hours = std::stoi(Selected("step")); request.wave_step_hours = request.step_hours;
@@ -384,7 +525,7 @@ struct AndroidGribGeneratorDialog::Impl {
     } catch (const std::exception&) { estimate->setText("Size estimate available when the area, time and source inputs are valid."); }
   }
   void Start() {
-    if (running) return;
+    if (running || credentialAction != CredentialAction::None) return;
     QGuiApplication::inputMethod()->hide();
     try {
       cancelled = std::make_shared<std::atomic<bool>>(false); auto request = Request();
@@ -415,6 +556,39 @@ struct AndroidGribGeneratorDialog::Impl {
     } catch (const std::exception& error) { status->setText(Text(std::string(error.what()))); }
   }
   void Poll() {
+    if (credentialAction != CredentialAction::None) {
+      if (credentialJob.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+      const auto action = credentialAction; credentialAction = CredentialAction::None;
+      timer->stop(); tabs->setEnabled(true); generate->setEnabled(true); close->setEnabled(true);
+      try {
+        const auto value = credentialJob.get();
+        if (action == CredentialAction::Load) {
+          fields["password"]->setText(value); restoredPassword = true;
+          status->setText("Saved password ready. Choose an area and sources, then Generate.");
+        } else {
+          auto* config = GetOCPNConfigObject();
+          if (!config) throw std::runtime_error("OpenCPN settings are unavailable. Please retry.");
+          {
+            config->Write("/Settings/xGRIB/AndroidGenerator/rememberPassword", action == CredentialAction::Save);
+            if (action == CredentialAction::Save) {
+              config->Write("/Settings/xGRIB/AndroidGenerator/passwordCiphertext", Wx(value));
+              config->Write("/Settings/xGRIB/AndroidGenerator/passwordAccount", Wx(credentialUsername));
+            } else {
+              config->DeleteEntry("/Settings/xGRIB/AndroidGenerator/passwordCiphertext");
+              config->DeleteEntry("/Settings/xGRIB/AndroidGenerator/passwordAccount");
+            }
+            config->Flush();
+          }
+          FinishClose();
+        }
+      } catch (const std::exception& error) {
+        if (action == CredentialAction::Load) {
+          rememberPassword->setChecked(false); fields["password"]->clear();
+          status->setText("Saved password could not be unlocked. Please enter it again on Account.");
+        } else status->setText(Text(std::string(error.what())) + " Retry Close to try again. No plaintext password was saved.");
+      }
+      return;
+    }
     if (!running) return;
     { std::lock_guard<std::mutex> lock(logMutex); if (!latestProgress.empty()) { log->appendPlainText(Text(latestProgress)); latestProgress.clear(); } }
     if (job.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
@@ -449,7 +623,7 @@ void AndroidGribGeneratorDialog::ShowMobile(const PlugIn_ViewPort& viewport, boo
   impl_->generate->setText(serverDownload ? "Download" : "Generate");
   impl_->heading->setText(serverDownload ? "xGRIB — Download from server" : "xGRIB — Generate forecast");
   impl_->tabs->setCurrentIndex(0); impl_->UpdateOptions();
-  impl_->resize->Fit(); ShowModal();
+  impl_->resize->Fit(); impl_->LoadCredentials(); ShowModal();
 }
 
 void AndroidFitDialog(wxWindow* parent, wxDialog& dialog) {
@@ -486,6 +660,7 @@ int AndroidChooseForecast(wxWindow* parent, const wxArrayString& times, int sele
   dialog.Bind(wxEVT_CLOSE_WINDOW, [&](wxCloseEvent&) { dialog.EndModal(wxID_CANCEL); });
   auto* resize = new ResizeFollower(static_cast<QWidget*>(parent->GetHandle()), root);
   resize->Fit();
+  XgribAndroidBackFilter back(&dialog, [&dialog] { dialog.EndModal(wxID_CANCEL); });
   dialog.ShowModal();
   return accepted ? list->currentRow() : wxNOT_FOUND;
 }
