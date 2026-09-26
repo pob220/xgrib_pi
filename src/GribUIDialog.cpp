@@ -52,6 +52,7 @@
 #include "EnvironmentalGribDialog.h"
 #ifdef __OCPN__ANDROID__
 #include "AndroidGribGenerator.h"
+#include "OpenCPNAndroidFileSelector.h"
 #include <QPushButton>
 #include <QIcon>
 #include "AndroidTimeFormat.h"
@@ -2048,7 +2049,7 @@ void GRIBUICtrlBar::OnOpenFile(wxCommandEvent& event) {
   }
 
   wxString file;
-  int response = PlatformFileSelectorDialog(
+  int response = OCPNAndroidFileSelector(
       nullptr, &file, _("Select a GRIB file"), m_grib_dir, "", "*.*");
 
   if (response == wxID_OK) {

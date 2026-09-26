@@ -620,7 +620,11 @@ void grib_pi::OnGribCtrlBarClose() {
   if (::wxIsBusy()) ::wxEndBusyCursor();
 
 #ifdef __OCPN__ANDROID__
-  m_DialogStyleChanged = true;  //  Force a delete of the control bar dialog
+  // Keep the selected forecast available to routing while its UI is hidden.
+  // Destroying this control on every Close recreated it with the newest file
+  // when a GRIB_VALUES/GRIB_TIMELINE_RECORD request arrived, silently changing
+  // the forecast used by the routing calculation. Genuine style changes still
+  // follow the normal rebuild path below.
 #endif
 
   if (m_DialogStyleChanged) {

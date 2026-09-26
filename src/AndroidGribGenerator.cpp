@@ -1,4 +1,5 @@
 #include "AndroidGribGenerator.h"
+#include "OpenCPNAndroidFileSelector.h"
 
 #include <atomic>
 #include <chrono>
@@ -151,7 +152,7 @@ struct AndroidGribGeneratorDialog::Impl {
     auto* button = new QPushButton(QString("Choose ") + label); rows[key]->layout()->addWidget(button);
     QObject::connect(button, &QPushButton::clicked, root, [this, field] {
       wxString path;
-      if (PlatformFileSelectorDialog(owner, &path, "Choose data file",
+      if (OCPNAndroidFileSelector(owner, &path, "Choose data file",
              "/storage/emulated/0/Download", "", "*.*") == wxID_OK)
         field->setText(QtText(path));
     });
@@ -306,6 +307,9 @@ struct AndroidGribGeneratorDialog::Impl {
       if (rememberUsername->isChecked()) config->Write("/Settings/xGRIB/AndroidGenerator/username", Wx(fields["username"]->text().trimmed()));
       else config->DeleteEntry("/Settings/xGRIB/AndroidGenerator/username");
       for (const auto& [key, choice] : choices) config->Write("/Settings/xGRIB/AndroidGenerator/" + wxString(key), Wx(choice->currentData().toString()));
+      // Android can terminate the host without a desktop-style clean exit.
+      // Make the closed generator's preferences durable now.
+      config->Flush();
     }
     fields["password"]->clear();
     showPassword->setChecked(false);
