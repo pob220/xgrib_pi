@@ -100,7 +100,7 @@ Assert-PowerShellSyntax (Join-Path $repo "ci\validate-before-push-windows.ps1")
 $dumpbin = Find-Dumpbin
 New-Item -ItemType Directory -Force `
     $build,$generatorBuild,$generatorStage,$stage,$logDir,$testDir,$packageDir,$fixtureDir,$diagnosticDir | Out-Null
-Copy-Item (Join-Path $repo "test\fixtures\*") $fixtureDir
+Copy-Item (Join-Path $repo "test\fixtures\*") $fixtureDir -Recurse -Force
 
 git submodule update --init --recursive
 Assert-NativeSuccess "git submodule update"

@@ -86,7 +86,7 @@ test_dir="${artifact_dir}/tests"
 package_dir="${artifact_dir}/package"
 fixture_dir="${artifact_dir}/fixtures"
 mkdir -p "$log_dir" "$test_dir" "$package_dir" "$fixture_dir"
-cp -f ../test/fixtures/* "$fixture_dir/"
+cp -a ../test/fixtures/. "$fixture_dir/"
 if [ -n "$WX_VER" ]; then
     SET_WX_VER="-DWX_VER=$WX_VER"
 else
