@@ -352,8 +352,8 @@ if (NOT "${PKG_TARGET_VERSION}" STREQUAL "")
   string(TOLOWER ${PKG_TARGET_VERSION} PKG_TARGET_VERSION)
 endif ()
 if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
-  # Native Preview ABI: never advertise this DLL to ordinary x86 OpenCPN.
-  set(PKG_TARGET "msvc-wx32-x64")
+  # Match the native OpenCPN x64 catalogue target, distinct from x86.
+  set(PKG_TARGET "msvc-64")
   set(PKG_TARGET_VERSION "10")
   unset(PKG_TARGET_WX_VER)
 endif()

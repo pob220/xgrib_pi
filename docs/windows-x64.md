@@ -1,30 +1,21 @@
-# Windows x64 Preview build
+# Windows x64 testing build
 
-xGRIB 0.3.0.0 adds a native Windows x64 CircleCI package alongside the existing
-Windows x86 package. It is for the **OpenCPN Windows x64 Preview**, not for the
-ordinary 32-bit OpenCPN installed on a 64-bit Windows machine.
+xGRIB 0.3.3.0 builds a native Windows x64 package for the OpenCPN 5.14.2 x64
+testing host. It is distinct from the Windows x86 package. The x64 OpenCPN
+installer is currently distributed from the OpenCPN unstable repository; its
+presence does not establish a stable x64 host release.
 
-The `windows-x64` job uses the same build/test script as x86, with an explicit
-architecture selection. Both retain the isolated x64 environmental GRIB helper.
-The x64 plugin uses wxWidgets 3.2.8 x64 and the native host import SDK recorded
-in `ci/windows64-sdk.json`. The small SDK archive under `msvc/x64` includes its
-source revision, licences and per-file checksums. CI checks archive and file
-SHA256 values and AMD64 import-library headers before using it. The official
-wxWidgets x64 downloads are also pinned by SHA256.
+The CircleCI job downloads the pinned 5.14.2 installer and wxWidgets 3.2.9 x64
+archives listed in `ci/windows64-sdk.json` and verifies their SHA256 hashes. It
+extracts the host without installing it, generates an AMD64 import library from
+the actual `opencpn.exe` export table, then verifies every OpenCPN import in
+the built plugin against that same host. The environmental GRIB helper remains
+x64 and is exercised in the standalone tests.
 
-Package metadata uses the distinct `msvc-wx32-x64` target, Windows target version
-`10`, and `x86_64` architecture. CI rejects incorrect architecture/metadata and
-treats plugin pointer-truncation warnings as errors. Linux, macOS, Android and
-the ordinary Windows x86 SDK selection are unaffected.
+Package metadata uses the host's `msvc-64` target, Windows target version `10`,
+`x86_64` architecture, and API 1.21 catalogue baseline. CI also compiles the
+plugin against API 1.22 headers. Those compatibility jobs retain test artifacts
+but only the API 1.21 packages enter the alpha publication workspace.
 
-Both Android arm64 and Windows x64 run in the normal validation matrix and the
-separately approval-gated release workflow. A normal push does **not** publish
-packages. Android manual-import archives are retained separately from catalogue
-archive/XML pairs to avoid duplicate or mismatched publication.
-
-Build success and standalone tests are not an OpenCPN GUI test. The existing
-Windows runtime job exercises only the x86 host; a native x64 host GUI test is
-still needed before treating the new package as runtime-qualified.
-
-Host SDK provenance:
-https://github.com/pob220/OpenCPN-Chart-Aware/actions/runs/35443540536
+The x64 build, tests and host import check do not exercise the OpenCPN GUI.
+The separate Windows GUI runtime job currently tests the x86 host and package.

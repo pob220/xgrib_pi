@@ -190,7 +190,7 @@ function Install-VcpkgPackages(
     }
 }
 
-# The ordinary host is x86; the native Preview host is x64. ecCodes is always
+# The ordinary host is x86; the pinned testing host is x64. ecCodes is always
 # in an isolated x64 helper, independent of the selected in-process plugin ABI.
 Install-VcpkgPackages $generatorTriplet $generatorPackages "generator-x64"
 Install-VcpkgPackages $pluginTriplet $pluginPackages "plugin-$PluginArchitecture"
@@ -296,7 +296,7 @@ Invoke-NativeLogged `
     (Join-Path $logDir "install-generator-x64.log") `
     "x64 generator staged installation"
 
-$wxVersion = "3.2.8"
+$wxVersion = $(if ($PluginArchitecture -eq "x64") { "3.2.9" } else { "3.2.8" })
 $wxRoot = Join-Path $repo "cache\wxWidgets-$wxVersion"
 New-Item -ItemType Directory -Force $wxRoot | Out-Null
 $wxBase = "https://github.com/wxWidgets/wxWidgets/releases/download/v$wxVersion"
@@ -310,24 +310,27 @@ $wxLibraryDirectory = "lib\vc14x_dll"
 $hostCmakeArgs = @()
 if ($PluginArchitecture -eq "x64") {
     $sdkPin = Get-Content (Join-Path $repo "ci\windows64-sdk.json") -Raw | ConvertFrom-Json
-    $sdkArchive = Join-Path $repo $sdkPin.archive
-    if ((Get-FileHash -Algorithm SHA256 $sdkArchive).Hash.ToLowerInvariant() -ne $sdkPin.sha256) {
-        throw "Native OpenCPN SDK archive checksum mismatch"
+    $hostInstaller = Join-Path $repo "cache\opencpn-$($sdkPin.host_version)-x64.exe"
+    if (-not (Test-Path $hostInstaller)) {
+        Invoke-WebRequest $sdkPin.host_url -OutFile $hostInstaller
     }
-    $sdk = Join-Path $repo "cache\opencpn-x64-sdk"
-    Expand-Archive -Path $sdkArchive -DestinationPath $sdk -Force
-    $sdkManifest = Get-Content (Join-Path $sdk "manifest.json") -Raw | ConvertFrom-Json
-    if ($sdkManifest.architecture -ne "AMD64" -or
-        $sdkManifest.core_revision -ne $sdkPin.core_revision -or
-        $sdkManifest.wx_version -ne $wxVersion) {
-        throw "Native OpenCPN SDK provenance mismatch"
+    if ((Get-FileHash -Algorithm SHA256 $hostInstaller).Hash.ToLowerInvariant() -ne $sdkPin.host_sha256) {
+        throw "Pinned OpenCPN x64 installer checksum mismatch"
     }
-    foreach ($file in $sdkManifest.files.PSObject.Properties) {
-        if ((Get-FileHash -Algorithm SHA256 (Join-Path $sdk $file.Name)).Hash.ToLowerInvariant() -ne $file.Value) {
-            throw "Native OpenCPN SDK file checksum mismatch: $($file.Name)"
-        }
+    $hostRoot = Join-Path $repo "cache\opencpn-$($sdkPin.host_version)-x64-host"
+    New-Item -ItemType Directory -Force $hostRoot | Out-Null
+    & 7z x -y "-o$hostRoot" $hostInstaller | Out-Null
+    Assert-NativeSuccess "Extracting pinned OpenCPN x64 host"
+    $hostImage = Join-Path $hostRoot "opencpn.exe"
+    if (-not (Test-Path $hostImage)) {
+        throw "Pinned OpenCPN installer does not contain opencpn.exe"
     }
-    $importLibrary = Join-Path $sdk "lib\opencpn.lib"
+    $importLibrary = Join-Path $repo "cache\opencpn-x64-host-sdk\opencpn.lib"
+    $libTool = Join-Path (Split-Path $dumpbin -Parent) "lib.exe"
+    if (-not (Test-Path $libTool)) { throw "Cannot locate MSVC lib.exe" }
+    python (Join-Path $repo "ci\windows64-host-imports.py") build $hostImage `
+        --dumpbin $dumpbin --lib $libTool --library $importLibrary
+    Assert-NativeSuccess "Generating import library from upstream OpenCPN x64 host"
     $importHeaders = & $dumpbin /headers $importLibrary 2>&1
     Assert-NativeSuccess "Inspecting native host import library"
     # dumpbin uses different header formats for COFF objects and short imports.
@@ -339,7 +342,8 @@ if ($PluginArchitecture -eq "x64") {
     if ($machines.Count -eq 0 -or $wrongMachines.Count -ne 0) {
         throw "Native host import library is not exclusively AMD64"
     }
-    Copy-Item (Join-Path $sdk "manifest.json") (Join-Path $artifact "host-sdk-manifest.json")
+    Copy-Item (Join-Path $repo "ci\windows64-sdk.json") `
+        (Join-Path $artifact "host-sdk-manifest.json")
     $hostCmakeArgs = @("-DXGRIB_OPENCPN_IMPORT_LIBRARY=$importLibrary")
     $downloads = [ordered]@{}
     foreach ($entry in $sdkPin.wx_archives.PSObject.Properties) {
@@ -347,6 +351,7 @@ if ($PluginArchitecture -eq "x64") {
     }
     $wxHashAlgorithm = "SHA256"
     $wxLibraryDirectory = "lib\vc14x_x64_dll"
+    $wxBase = "https://github.com/wxWidgets/wxWidgets/releases/download/v$wxVersion"
 }
 foreach ($entry in $downloads.GetEnumerator()) {
     $archive = $entry.Key
@@ -472,6 +477,12 @@ $helperHeaders | Set-Content -Encoding utf8 `
 if (-not ($pluginHeaders -match $pluginMachine)) {
     throw "Packaged xGRIB plugin is not a $PluginArchitecture PE binary"
 }
+if ($PluginArchitecture -eq "x64") {
+    python (Join-Path $repo "ci\windows64-host-imports.py") verify $hostImage `
+        --dumpbin $dumpbin --plugin $pluginBinary `
+        --report (Join-Path $logDir "plugin-host-imports.log")
+    Assert-NativeSuccess "Checking xGRIB imports against upstream OpenCPN x64 host"
+}
 if (-not ($helperHeaders -match "8664 machine \(x64\)")) {
     throw "Packaged environmental helper is not an x64 PE binary"
 }
@@ -531,10 +542,10 @@ if (-not (Select-String -Quiet -Path $metadata.FullName -Pattern "<target>msvc")
     throw "Windows metadata target is invalid"
 }
 if ($PluginArchitecture -eq "x64" -and (
-    $metadataXml.plugin.target.Trim() -ne "msvc-wx32-x64" -or
+    $metadataXml.plugin.target.Trim() -ne "msvc-64" -or
     $metadataXml.plugin.'target-version'.Trim() -ne "10" -or
     $metadataXml.plugin.'target-arch'.Trim() -ne "x86_64")) {
-    throw "Native x64 package metadata does not match the Preview host ABI"
+    throw "Native x64 package metadata does not match the OpenCPN x64 host ABI"
 }
 if (-not (Select-String -Quiet -Path $metadata.FullName `
         -SimpleMatch "<source> https://github.com/pob220/xgrib_pi </source>")) {

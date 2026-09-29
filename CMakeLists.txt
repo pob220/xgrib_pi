@@ -81,6 +81,19 @@ set(OCPN_MIN_VERSION "ov511")
 set(OCPN_API_VERSION_MAJOR "1")
 set(OCPN_API_VERSION_MINOR "21")
 
+# The catalogue baseline stays at API 1.21.  Compile against either stock
+# header set to catch incompatibilities without publishing duplicate packages.
+set(XGRIB_API_HEADER_VERSION "$ENV{XGRIB_API_HEADER_VERSION}" CACHE STRING
+    "OpenCPN plugin API headers used to compile (1.21 or 1.22)")
+if(NOT XGRIB_API_HEADER_VERSION)
+  set(XGRIB_API_HEADER_VERSION "1.21")
+endif()
+if(NOT XGRIB_API_HEADER_VERSION MATCHES "^1\\.(21|22)$")
+  message(FATAL_ERROR "XGRIB_API_HEADER_VERSION must be 1.21 or 1.22")
+endif()
+string(REGEX REPLACE "^1\\." "" XGRIB_API_HEADER_MINOR
+       "${XGRIB_API_HEADER_VERSION}")
+
 set(WX_VER "32")
 set(WX_VER_PATCH "8")
 
@@ -545,10 +558,10 @@ if (NOT OCPN_FLATPAK_CONFIG)
     target_link_libraries(${PACKAGE_NAME} windows::headers GLEW::GLEW glu32)
   endif (WIN32)
 
-  add_subdirectory(opencpn-libs/api-${OCPN_API_VERSION_MINOR})
+  add_subdirectory(opencpn-libs/api-${XGRIB_API_HEADER_MINOR})
   if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(XGRIB_OPENCPN_IMPORT_LIBRARY "" CACHE FILEPATH
-        "Native Windows x64 Preview host import library")
+        "Native Windows x64 host import library")
     if(NOT EXISTS "${XGRIB_OPENCPN_IMPORT_LIBRARY}")
       message(FATAL_ERROR "Windows x64 requires its native OpenCPN import library; the bundled SDK is x86")
     endif()

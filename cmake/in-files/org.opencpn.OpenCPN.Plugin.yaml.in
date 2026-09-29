@@ -40,6 +40,7 @@ ${flatpak_extra_modules}
         - -DOCPN_TARGET=${OCPN_TARGET}
         - -DSDK_VER=${SDK_VER}
         - -DWX_VER=${WX_VER}
+        - -DXGRIB_API_HEADER_VERSION=${XGRIB_API_HEADER_VERSION}
     build-options:
         cflags: -fPIC
         cxxflags: -fPIC -DFLATPAK

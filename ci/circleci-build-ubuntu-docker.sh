@@ -25,6 +25,7 @@ docker run --rm \
   -e "WX_VER=${WX_VER:-32}" \
   -e "BUILD_GTK3=${BUILD_GTK3:-true}" \
   -e "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL:-3}" \
+  -e "XGRIB_API_HEADER_VERSION=${XGRIB_API_HEADER_VERSION:-1.21}" \
   -e "XGRIB_SOURCE_COMMIT=${source_commit}" \
   -v "${PWD}:/src:ro" \
   -v "${PWD}/build:/work" \
