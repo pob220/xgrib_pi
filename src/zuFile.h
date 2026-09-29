@@ -71,17 +71,24 @@ typedef struct {
   FILE* faux;  // auxiliary file for bzip
 } ZUFILE;
 
-ZUFILE* zu_open(const char* fname, const char* mode,
-                int type = ZU_COMPRESS_AUTO);
+#ifdef __cplusplus
+ZUFILE* zu_open(const char* fname, const char* mode, int type = ZU_COMPRESS_AUTO);
+#else
+ZUFILE* zu_open(const char* fname, const char* mode, int type);
+#endif
 int zu_close(ZUFILE* f);
 
 int zu_can_read_file(const char* fname);
 
+// Returns bytes read, zero at EOF, or -1 for an invalid request/read error.
+// len must fit int; failure never subtracts from the logical file position.
 int zu_read(ZUFILE* f, void* buf, long len);
 
 long zu_tell(ZUFILE* f);
 
-int zu_seek(ZUFILE* f, long offset, int whence);  // TODO: whence=SEEK_END
+// SEEK_SET/SEEK_CUR only. Negative relative offsets rewind compressed streams.
+// Returns 0 on success and -1 on failure; SEEK_END remains unsupported.
+int zu_seek(ZUFILE* f, long offset, int whence);
 
 void zu_rewind(ZUFILE* f);
 

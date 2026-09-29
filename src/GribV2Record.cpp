@@ -35,13 +35,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define __STDC_LIMIT_MACROS
 
-#include "wx/wxprec.h"
-
-#ifndef WX_PRECOMP
-#include "wx/wx.h"
-#endif  // precompiled headers
 
 #include <stdlib.h>
+#include <memory>
+#include <vector>
+#include <limits>
+#include <algorithm>
+#include "GribDecodeLimits.h"
 
 #include "GribV2Record.h"
 
@@ -63,7 +63,12 @@ public:
 
 class GRIBMetadata {
 public:
-  GRIBMetadata() : bitmap(0), bms(0) {
+  GRIBMetadata() : bitmap(0), bms(0), bmssize(0) {
+    bms_ind = 255;
+    D = E = pack_width = 0;
+    R = 0;
+    nx = ny = 0;
+    xinc.loinc = yinc.lainc = 0;
     stat_proc.t = 0;
     lvl1_type = 0;
     lvl2_type = 0;
@@ -162,7 +167,7 @@ public:
 
 class GRIBMessage {
 public:
-  GRIBMessage() : buffer(0) {};
+  GRIBMessage() : buffer(0), offset(0), total_len(0), num_grids(0), bitmap_points(0) {};
   ~GRIBMessage() { delete[] buffer; };
   unsigned char *buffer;
   int offset; /* offset in bytes to next GRIB2 section */
@@ -172,111 +177,56 @@ public:
   int prod_status, data_type;
   GRIBMetadata md;
   size_t num_grids;
+  size_t bitmap_points;
   GRIB2Grid grids;
 };
 
 #ifdef JASPER
-static int dec_jpeg2000(char *injpc, int bufsize, int *outfld)
-/*$$$  SUBPROGRAM DOCUMENTATION BLOCK
- *                .      .    .                                       .
- * SUBPROGRAM:    dec_jpeg2000      Decodes JPEG2000 code stream
- *   PRGMMR: Gilbert          ORG: W/NP11     DATE: 2002-12-02
- *
- * ABSTRACT: This Function decodes a JPEG2000 code stream specified in the
- *   JPEG2000 Part-1 standard (i.e., ISO/IEC 15444-1) using JasPer
- *   Software version 1.500.4 (or 1.700.2) written by the University of British
- *   Columbia and Image Power Inc, and others.
- *   JasPer is available at http://www.ece.uvic.ca/~mdadams/jasper/.
- *
- * PROGRAM HISTORY LOG:
- * 2002-12-02  Gilbert
- *
- * USAGE:     int dec_jpeg2000(char *injpc,int bufsize,int *outfld)
- *
- *   INPUT ARGUMENTS:
- *      injpc - Input JPEG2000 code stream.
- *    bufsize - Length (in bytes) of the input JPEG2000 code stream.
- *
- *   OUTPUT ARGUMENTS:
- *     outfld - Output matrix of grayscale image values.
- *
- *   RETURN VALUES :
- *          0 = Successful decode
- *         -2 = no memory Error.
- *         -3 = Error decode jpeg2000 code stream.
- *         -5 = decoded image had multiple color components.
- *              Only grayscale is expected.
- *
- * REMARKS:
- *
- *      Requires JasPer Software version 1.500.4 or 1.700.2
- *
- * ATTRIBUTES:
- *   LANGUAGE: C
- *   MACHINE:  IBM SP
- *
- *$$$*/
-
-{
-  int ier;
-  int i, j, k;
-  jas_image_t *image = nullptr;
-  jas_stream_t *jpcstream;
-  jas_image_cmpt_t *pcmpt;
-  char *opts = 0;
-  jas_matrix_t *data;
-
-  //    jas_init();
-
-  ier = 0;
-  //
-  //     Create jas_stream_t containing input JPEG200 codestream in memory.
-  //
-
-  jpcstream = jas_stream_memopen(injpc, bufsize);
-  if (jpcstream == nullptr) {
-    printf(" dec_jpeg2000: no memory\n");
-    return -2;
-  }
-  //
-  //     Decode JPEG200 codestream into jas_image_t structure.
-  //
-  image = jpc_decode(jpcstream, opts);
-  if (image == nullptr) {
-    printf(" jpc_decode return = %d \n", ier);
+static int dec_jpeg2000(char *input, int length, int *output, std::size_t capacity) {
+  // GRIB uses a raw JPEG2000 code stream. Validate its mandatory SOC/SIZ
+  // geometry before invoking the codec or indexing its output buffer.
+  const unsigned char *b = reinterpret_cast<unsigned char*>(input);
+  if (length < 45 || b[0] != 0xff || b[1] != 0x4f || b[2] != 0xff || b[3] != 0x51)
     return -3;
-  }
-
-  pcmpt = image->cmpts_[0];
-
-  //   Expecting jpeg2000 image to be grayscale only.
-  //   No color components.
-  //
-  if (image->numcmpts_ != 1) {
-    printf("dec_jpeg2000: Found color image.  Grayscale expected.\n");
-    return (-5);
-  }
-
-  //
-  //    Create a data matrix of grayscale image values decoded from
-  //    the jpeg2000 codestream.
-  //
-  data = jas_matrix_create(jas_image_height(image), jas_image_width(image));
-  jas_image_readcmpt(image, 0, 0, 0, jas_image_width(image),
-                     jas_image_height(image), data);
-  //
-  //    Copy data matrix to output integer array.
-  //
-  k = 0;
-  for (i = 0; i < pcmpt->height_; i++)
-    for (j = 0; j < pcmpt->width_; j++) outfld[k++] = data->rows_[i][j];
-  //
-  //     Clean up JasPer work structures.
-  //
-  jas_matrix_destroy(data);
-  ier = jas_stream_close(jpcstream);
-  jas_image_destroy(image);
-
+  const std::uint32_t width = grib_decode::u32(b + 8), height = grib_decode::u32(b + 12);
+  const std::uint32_t x = grib_decode::u32(b + 16), y = grib_decode::u32(b + 20);
+  if (b[40] != 0 || b[41] != 1 || b[43] != 1 || b[44] != 1 ||
+      (b[42] & 0x7f) >= 31 || width <= x || height <= y ||
+      std::uint64_t(width - x) * (height - y) != capacity ||
+      std::uint64_t(width) * height > GRIB_MAX_GRID_POINTS ||
+      !grib_decode::u32(b + 24) || !grib_decode::u32(b + 28)) return -5;
+  const std::uint32_t tileWidth = grib_decode::u32(b + 24), tileHeight = grib_decode::u32(b + 28);
+  const std::uint32_t tileX = grib_decode::u32(b + 32), tileY = grib_decode::u32(b + 36);
+  const std::size_t maxSamples = std::max<std::size_t>(capacity, 65536);
+  if (tileX > x || tileY > y || std::uint64_t(tileX) + tileWidth <= x ||
+      std::uint64_t(tileY) + tileHeight <= y) return -5;
+  const std::uint64_t tiles = ((std::uint64_t(width) - tileX + tileWidth - 1) / tileWidth) *
+      ((std::uint64_t(height) - tileY + tileHeight - 1) / tileHeight);
+  if (tiles > maxSamples / 256) return -5;  // same tile budget as modern JasPer
+  std::unique_ptr<jas_stream_t, decltype(&jas_stream_close)> stream(
+      jas_stream_memopen(input, length), &jas_stream_close);
+  if (!stream) return -2;
+  char options[64];
+  snprintf(options, sizeof(options), "max_samples=%zu", maxSamples);
+#if defined(JAS_VERSION_MAJOR) && JAS_VERSION_MAJOR >= 2
+  // Current JasPer hides the codec entry point; its public dispatcher requires
+  // normal library/thread initialization by the embedding application.
+  jas_image_t* decoded = jas_image_decode(stream.get(), jas_image_strtofmt("jpc"), options);
+#else
+  // OpenCPN's older bundled codec did not use the format registry/initializer.
+  // Retain that entry point so adopting these files preserves legacy behavior.
+  jas_image_t* decoded = jpc_decode(stream.get(), options);
+#endif
+  std::unique_ptr<jas_image_t, decltype(&jas_image_destroy)> image(decoded, &jas_image_destroy);
+  if (!image || jas_image_numcmpts(image.get()) != 1) return -3;
+  const auto nx = jas_image_cmptwidth(image.get(), 0), ny = jas_image_cmptheight(image.get(), 0);
+  if (nx <= 0 || ny <= 0 || std::uint64_t(nx) * ny != capacity) return -5;
+  std::unique_ptr<jas_matrix_t, decltype(&jas_matrix_destroy)> matrix(
+      jas_matrix_create(ny, nx), &jas_matrix_destroy);
+  if (!matrix || jas_image_readcmpt(image.get(), 0, 0, 0, nx, ny, matrix.get())) return -2;
+  std::size_t k = 0;
+  for (int row = 0; row < ny; ++row)
+    for (int col = 0; col < nx; ++col) output[k++] = jas_matrix_get(matrix.get(), row, col);
   return 0;
 }
 #endif
@@ -284,7 +234,7 @@ static int dec_jpeg2000(char *injpc, int bufsize, int *outfld)
 static unsigned int uint2(unsigned char const *p) { return (p[0] << 8) + p[1]; }
 
 static unsigned int uint4(unsigned const char *p) {
-  return ((p[0] << 24) + (p[1] << 16) + (p[2] << 8) + p[3]);
+  return grib_decode::u32(p);
 }
 
 static int int2(unsigned const char *p) {
@@ -307,37 +257,48 @@ static int int4(unsigned const char *p) {
   return i;
 }
 
-static float ieee2flt(unsigned const char *ieee) {
-  double fmant;
-  int exp;
-
-  if ((ieee[0] & 127) == 0 && ieee[1] == 0 && ieee[2] == 0 && ieee[3] == 0)
-    return (float)0.0;
-
-  exp = ((ieee[0] & 127) << 1) + (ieee[1] >> 7);
-  fmant = (double)((int)ieee[3] + (int)(ieee[2] << 8) +
-                   (int)((ieee[1] | 128) << 16));
-  if (ieee[0] & 128) fmant = -fmant;
-
-  return (float)(ldexp(fmant, (int)(exp - 128 - 22)));
+static float ieee2flt(unsigned const char *b) {
+  const std::uint32_t value = uint4(b);
+  float result;
+  static_assert(sizeof(result) == sizeof(value), "IEEE binary32 required");
+  memcpy(&result, &value, sizeof(result));
+  return result;
 }
 
-static inline void getBits(unsigned const char *buf, int *loc, size_t first,
-                           size_t nbBits) {
-  if (nbBits == 0) {
-    // x >> 32 is undefined behavior, on x86 it returns x
-    *loc = 0;
-    return;
+// Entire message structure is checked before any template accesses. The state
+// machine also permits the repeated sections specified by GRIB2 regulation 92.
+static bool validateMessage(GRIBMessage *msg) {
+  if (msg->total_len < 41 ||
+      memcmp(msg->buffer + msg->total_len - 4, "7777", 4)) return false;
+  std::size_t off = 16, end = msg->total_len - 4;
+  unsigned expected = 1;
+  bool grid = false;
+  while (off < end) {
+    if (end - off < 5) return false;
+    const unsigned char *b = msg->buffer + off;
+    const std::uint32_t len = uint4(b);
+    const unsigned sec = b[4];
+    if (len < 5 || len > end - off) return false;
+    if (expected == 1) {
+      if (sec != 1 || len < 21) return false;
+      expected = 3;
+    } else if (expected == 3 || expected == 8) {
+      if (sec == 2) { expected = 3; }
+      else if (sec == 3) { grid = true; expected = 4; }
+      else if (sec == 4 && grid && expected == 8) { expected = 5; }
+      else return false;
+    } else {
+      if (sec != expected) return false;
+      expected++;
+      if (sec == 7) { ++msg->num_grids; expected = 8; }
+    }
+    off += len;
   }
+  return off == end && expected == 8 && msg->num_grids != 0;
+}
 
-  zuint oct = first / 8;
-  zuint bit = first % 8;
-
-  zuint val = (buf[oct] << 24) + (buf[oct + 1] << 16) + (buf[oct + 2] << 8) +
-              (buf[oct + 3]);
-  val = val << bit;
-  val = val >> (32 - nbBits);
-  *loc = val;
+static std::size_t sectionLength(const GRIBMessage *msg) {
+  return uint4(msg->buffer + msg->offset / 8);
 }
 
 //-------------------------------------------------------------------------------
@@ -397,6 +358,7 @@ static bool unpackGDS(GRIBMessage *grib_msg) {
   size_t ofs = grib_msg->offset / 8;
   unsigned char *b = grib_msg->buffer + ofs;
 
+  if (sectionLength(grib_msg) < 14) return false;
   src = b[5]; /* source of grid definition */
   if (src != 0) {
     fprintf(stderr, "Don't recognize predetermined grid definitions");
@@ -411,6 +373,10 @@ static bool unpackGDS(GRIBMessage *grib_msg) {
 
   /* grid definition template number Table 3.1 */
   grib_msg->md.gds_templ_num = uint2(b + 12);
+  const std::size_t len = sectionLength(grib_msg);
+  if ((grib_msg->md.gds_templ_num == 0 || grib_msg->md.gds_templ_num == 40 ||
+       grib_msg->md.gds_templ_num == 10) && len < 72) return false;
+  if (grib_msg->md.gds_templ_num == 30 && len < 81) return false;
   switch (grib_msg->md.gds_templ_num) {
     case 0:  /* Latitude/Longitude Also called Equidistant Cylindrical or Plate
                 Caree */
@@ -506,10 +472,14 @@ static bool unpackGDS(GRIBMessage *grib_msg) {
               grib_msg->md.gds_templ_num);
       return false;
   }
-  return true;
+  std::size_t count;
+  return grib_decode::gridSize(grib_msg->md.nx, grib_msg->md.ny, count) &&
+         uint4(b + 6) == count;
 }
 
-static void unpack_stat_proc(GRIBMessage *grib_msg, unsigned const char *b) {
+static bool unpack_stat_proc(GRIBMessage *grib_msg, unsigned const char *b,
+                             std::size_t length) {
+  if (length < 12 || !b[7] || std::size_t(b[7]) > (length - 12) / 12) return false;
   int hh, mm, ss;
   size_t n, off;
 
@@ -528,6 +498,7 @@ static void unpack_stat_proc(GRIBMessage *grib_msg, unsigned const char *b) {
 
   if (grib_msg->md.stat_proc.t != 0) {
     delete[] grib_msg->md.stat_proc.t;
+    grib_msg->md.stat_proc.t = nullptr;
   }
   grib_msg->md.stat_proc.t =
       new GRIBStatproc[grib_msg->md.stat_proc.num_ranges];
@@ -539,8 +510,11 @@ static void unpack_stat_proc(GRIBMessage *grib_msg, unsigned const char *b) {
     grib_msg->md.stat_proc.t[n].time_length = uint4(b + off + 3);
     grib_msg->md.stat_proc.t[n].incr_unit = b[off + 7];
     grib_msg->md.stat_proc.t[n].incr_length = uint4(b + off + 8);
+    if (grib_msg->md.stat_proc.t[n].time_length < 0 ||
+        grib_msg->md.stat_proc.t[n].incr_length < 0) return false;
     off += 12;
   }
+  return true;
 }
 
 // Section 4: Product Definition Section
@@ -549,6 +523,8 @@ static bool unpackPDS(GRIBMessage *grib_msg) {
   size_t ofs = grib_msg->offset / 8;
   unsigned char *b = grib_msg->buffer + ofs;
 
+  const std::size_t length = sectionLength(grib_msg);
+  if (length < 9) return false;
   num_coords = uint2(b + 5); /* indication of hybrid coordinate system */
   if (num_coords > 0) {
     fprintf(stderr, "Unable to decode hybrid coordinates");
@@ -558,6 +534,10 @@ static bool unpackPDS(GRIBMessage *grib_msg) {
   grib_msg->md.pds_templ_num =
       uint2(b + 7); /* product definition template number */
   grib_msg->md.stat_proc.num_ranges = 0;
+  if (length < 34 || uint4(b + 18) > INT_MAX) return false;
+  if ((grib_msg->md.pds_templ_num == 1 || grib_msg->md.pds_templ_num == 11 ||
+       grib_msg->md.pds_templ_num == 15) && length < 37) return false;
+  if ((grib_msg->md.pds_templ_num == 2 || grib_msg->md.pds_templ_num == 12) && length < 36) return false;
   switch (grib_msg->md.pds_templ_num) {
     case 0:
     case 1:
@@ -578,7 +558,16 @@ static bool unpackPDS(GRIBMessage *grib_msg) {
 
       grib_msg->md.lvl1_type = b[22]; /* type of first level */
       factor = b[23];                 /* value of first level */
-      grib_msg->md.lvl1 = int4(b + 24) / pow(10., (double)factor);
+      // GRIB2 uses all-ones for a missing scaled surface value. This is
+      // normal for non-numeric surfaces (ground, top of atmosphere, MSL).
+      // Interpreting it as a signed number rejects valid surface fields.
+      if (factor == 255 && uint4(b + 24) == UINT32_MAX) {
+        if (grib_msg->md.lvl1_type != 1 && grib_msg->md.lvl1_type != 8 &&
+            grib_msg->md.lvl1_type != 101) return false;
+        grib_msg->md.lvl1 = 0;
+      } else {
+        grib_msg->md.lvl1 = int4(b + 24) / pow(10., (double)factor);
+      }
 
       grib_msg->md.lvl2_type = b[28]; /* type of second level */
       factor = b[29];                 /* value of second level */
@@ -593,7 +582,7 @@ static bool unpackPDS(GRIBMessage *grib_msg) {
 
           switch (grib_msg->md.pds_templ_num) {
             case 11:
-              unpack_stat_proc(grib_msg, b + 37);
+              if (!unpack_stat_proc(grib_msg, b + 37, length - 37)) return false;
               break;
           }
           break;
@@ -604,12 +593,12 @@ static bool unpackPDS(GRIBMessage *grib_msg) {
 
           switch (grib_msg->md.pds_templ_num) {
             case 12:
-              unpack_stat_proc(grib_msg, b + 36);
+              if (!unpack_stat_proc(grib_msg, b + 36, length - 36)) return false;
               break;
           }
           break;
         case 8:
-          unpack_stat_proc(grib_msg, b + 34);
+          if (!unpack_stat_proc(grib_msg, b + 34, length - 34)) return false;
           break;
         case 15:
           grib_msg->md.spatial_proc.stat_proc = b[34];
@@ -631,12 +620,15 @@ static bool unpackDRS(GRIBMessage *grib_msg) {
   size_t ofs = grib_msg->offset / 8;
   unsigned char *b = grib_msg->buffer + ofs;
 
+  const std::size_t length = sectionLength(grib_msg);
+  if (length < 11) return false;
   grib_msg->md.num_packed = uint4(b + 5); /* number of packed values */
   grib_msg->md.drs_templ_num =
       uint2(b + 9); /* data representation template number */
 
   switch (grib_msg->md.drs_templ_num) {  // Table 5.0
     case 4:                              // Grid Point Data - Simple Packing
+      if (length < 12) return false;
       grib_msg->md.precision = b[11];
       break;
     case 0:  // Grid Point Data - Simple Packing
@@ -649,6 +641,7 @@ static bool unpackDRS(GRIBMessage *grib_msg) {
       /* cf
        * http://www.wmo.int/pages/prog/www/WMOCodes/Guides/GRIB/GRIB2_062006.pdf
        * p. 36*/
+      if (length < 21) return false;
       grib_msg->md.R = ieee2flt(b + 11);
       grib_msg->md.E = int2(b + 15);
       grib_msg->md.D = int2(b + 17);
@@ -658,6 +651,7 @@ static bool unpackDRS(GRIBMessage *grib_msg) {
       grib_msg->md.orig_val_type = b[20];
 
       if (grib_msg->md.drs_templ_num == 3 || grib_msg->md.drs_templ_num == 2) {
+        if (length < 47) return false;
         grib_msg->md.complex_pack.split_method = b[21];
         grib_msg->md.complex_pack.miss_val_mgmt = b[22];
         if (grib_msg->md.orig_val_type == 0) {  // Table 5.1
@@ -684,6 +678,7 @@ static bool unpackDRS(GRIBMessage *grib_msg) {
         grib_msg->md.complex_pack.length.pack_width = b[46];
       }
       if (grib_msg->md.drs_templ_num == 3) {
+        if (length < 49) return false;
         grib_msg->md.complex_pack.spatial_diff.order = b[47];
         grib_msg->md.complex_pack.spatial_diff.order_vals_width = b[48];
       } else {
@@ -700,309 +695,189 @@ static bool unpackDRS(GRIBMessage *grib_msg) {
 }
 
 //  Section 6: Bit-Map Section
-static bool unpackBMS(GRIBMessage *grib_msg) {
-  int ind, len, n, bit;
-  size_t ofs = grib_msg->offset / 8;
-  unsigned char *b = grib_msg->buffer + ofs;
-
-  ind = b[5]; /* bit map indicator */
-  switch (ind) {
-    case 0:  // A bit map applies to this product and is specified in this
-             // section.
-      len = uint4(b);
-      if (len < 7) return false;
-      len -= 6;
-      grib_msg->md.bmssize = len;
-      len *= 8;
-      delete[] grib_msg->md.bitmap;
-      delete[] grib_msg->md.bms;
-      grib_msg->md.bitmap = new unsigned char[len];
-      grib_msg->md.bms = new zuchar[grib_msg->md.bmssize];
-      memcpy(grib_msg->md.bms, b + 6, grib_msg->md.bmssize);
-      for (n = 0; n < len; n++) {
-        getBits(grib_msg->buffer, &bit, grib_msg->offset + 48 + n, 1);
-        grib_msg->md.bitmap[n] = bit;
-      }
-      break;
-    case 254:  // A bit map previously defined in the same GRIB2 message applies
-               // to this product.
-      break;
-    case 255:  // A bit map does not apply to this product.
-      delete[] grib_msg->md.bitmap;
-      grib_msg->md.bitmap = nullptr;
-      delete[] grib_msg->md.bms;
-      grib_msg->md.bms = nullptr;
-      grib_msg->md.bmssize = 0;
-      break;
-    default:
-      fprintf(stderr,
-              "This code is not currently set up to deal with predefined "
-              "bit-maps\n");
-      return false;
+// Section 6. Retain the last explicit bitmap for indicator 254, even when an
+// intervening field uses indicator 255. Padding bits never count as values.
+static bool unpackBMS(GRIBMessage *msg) {
+  const unsigned char *b = msg->buffer + msg->offset / 8;
+  const std::size_t length = sectionLength(msg);
+  std::size_t count;
+  if (length < 6 || !grib_decode::gridSize(msg->md.nx, msg->md.ny, count)) return false;
+  const unsigned indicator = b[5];
+  if (indicator == 0) {
+    const std::size_t packed = (count + 7) / 8;
+    if (length != 6 + packed) return false;
+    std::unique_ptr<unsigned char[]> bitmap(new unsigned char[count]);
+    std::unique_ptr<zuchar[]> bms(new zuchar[packed]);
+    memcpy(bms.get(), b + 6, packed);
+    for (std::size_t n = 0; n < count; ++n)
+      bitmap[n] = (b[n / 8 + 6] >> (7 - n % 8)) & 1;
+    delete[] msg->md.bitmap;
+    delete[] msg->md.bms;
+    msg->md.bitmap = bitmap.release();
+    msg->md.bms = bms.release();
+    msg->md.bmssize = packed;
+    msg->bitmap_points = count;
+  } else if (indicator == 254) {
+    if (length != 6 || !msg->md.bitmap || msg->bitmap_points != count) return false;
+  } else if (indicator != 255 || length != 6) {
+    return false;  // predefined bitmaps are unsupported
   }
+  msg->md.bms_ind = indicator;
   return true;
 }
 
-// Section 7: Data Section
-static bool unpackDS(GRIBMessage *grib_msg) {
-  int off, pval, l;
-  unsigned int n, m;
-
-  struct {
-    int *ref_vals, *widths;
-    int *lengths;
-    int *first_vals = 0, sign, omin;
-    long long miss_val, group_miss_val;
-    int max_length;
-  } groups;
-  float lastgp, D = pow(10., grib_msg->md.D), E = pow(2., grib_msg->md.E);
-
-  groups.omin = 0;
-  groups.first_vals = nullptr;
-
-  off = grib_msg->offset + 40;
-  int npoints = grib_msg->md.ny * grib_msg->md.nx;
-  switch (grib_msg->md.drs_templ_num) {
-    case 0:
-      grib_msg->grids.gridpoints = new double[npoints];
-      for (l = 0; l < npoints; l++) {
-        if (grib_msg->md.bitmap == nullptr || grib_msg->md.bitmap[l] == 1) {
-          getBits(grib_msg->buffer, &pval, off, grib_msg->md.pack_width);
-          grib_msg->grids.gridpoints[l] = grib_msg->md.R + pval * E / D;
-          off += grib_msg->md.pack_width;
-        } else
-          grib_msg->grids.gridpoints[l] = GRIB_MISSING_VALUE;
+// Section 7: validate blocks once, then decode with unchecked fast bit loads.
+// All temporary arrays have automatic ownership, including on allocation failure.
+static bool unpackDS(GRIBMessage *msg) {
+  std::size_t count;
+  if (!grib_decode::gridSize(msg->md.nx, msg->md.ny, count)) return false;
+  const unsigned char *bitmap = msg->md.bms_ind == 255 ? nullptr : msg->md.bitmap;
+  if (bitmap && msg->bitmap_points != count) return false;
+  const std::size_t packed = bitmap ? std::count(bitmap, bitmap + count, 1) : count;
+  if (msg->md.num_packed < 0 || static_cast<std::size_t>(msg->md.num_packed) != packed) return false;
+  const std::size_t length = sectionLength(msg);
+  if (length < 5) return false;
+  const unsigned char *bytes = msg->buffer + msg->offset / 8 + 5;
+  grib_decode::BitCursor cursor(bytes, length - 5);
+  const unsigned width = msg->md.pack_width;
+  const double D = pow(10., msg->md.D), E = pow(2., msg->md.E);
+  const unsigned templ = msg->md.drs_templ_num;
+  if (templ != 4 && (width > 32 || !std::isfinite(msg->md.R) ||
+      !std::isfinite(E) || !std::isfinite(D) || D == 0)) return false;
+  std::unique_ptr<double[]> values;
+  if (templ == 0) {
+    if (!cursor.has(std::uint64_t(packed) * width)) return false;
+    values.reset(new double[count]);
+    const double scale = E / D;
+    for (std::size_t i = 0; i < count; ++i)
+      values[i] = !bitmap || bitmap[i] ? msg->md.R + cursor.take(width) * scale : GRIB_MISSING_VALUE;
+  } else if (templ == 4) {
+    const unsigned precision = msg->md.precision;
+    if ((precision != 1 && precision != 2) ||
+        !cursor.has(std::uint64_t(packed) * precision * 32)) return false;
+    values.reset(new double[count]);
+    std::size_t offset = 0;
+    for (std::size_t i = 0; i < count; ++i) {
+      if (bitmap && !bitmap[i]) { values[i] = GRIB_MISSING_VALUE; continue; }
+      if (precision == 1) { values[i] = ieee2flt(bytes + offset); offset += 4; }
+      else {
+        const std::uint64_t raw = (std::uint64_t(uint4(bytes + offset)) << 32) | uint4(bytes + offset + 4);
+        memcpy(&values[i], &raw, sizeof(raw));
+        offset += 8;
       }
-      break;
-    case 3:
-      if (grib_msg->md.complex_pack.num_groups > 0) {
-        if (grib_msg->md.complex_pack.spatial_diff.order) {
-          groups.first_vals =
-              new int[grib_msg->md.complex_pack.spatial_diff.order];
-          for (n = 0; n < grib_msg->md.complex_pack.spatial_diff.order; ++n) {
-            getBits(
-                grib_msg->buffer, &groups.first_vals[n], off,
-                grib_msg->md.complex_pack.spatial_diff.order_vals_width * 8);
-            off += grib_msg->md.complex_pack.spatial_diff.order_vals_width * 8;
+      if (!std::isfinite(values[i])) values[i] = GRIB_MISSING_VALUE;
+    }
+  } else if (templ == 2 || templ == 3) {
+    const auto &cp = msg->md.complex_pack;
+    const std::size_t groups = cp.num_groups;
+    const unsigned order = templ == 3 ? cp.spatial_diff.order : 0;
+    const unsigned descriptorWidth = templ == 3 ? cp.spatial_diff.order_vals_width : 0;
+    if (cp.split_method != 1 || cp.miss_val_mgmt < 0 || cp.miss_val_mgmt > 2 ||
+        groups > packed || cp.width.pack_width > 32 || cp.length.pack_width > 32 ||
+        (templ == 3 && ((order != 1 && order != 2) || !descriptorWidth || descriptorWidth > 4))) return false;
+    // Empty-group encoding represents an all-missing field.
+    if (!groups) {
+      values.reset(new double[count]);
+      std::fill(values.get(), values.get() + count, GRIB_MISSING_VALUE);
+    } else {
+      if (order > packed) return false;
+      std::uint32_t first[2] = {};
+      std::int64_t minimum = 0;
+      if (order) {
+        if (!cursor.has(std::uint64_t(order + 1) * descriptorWidth * 8)) return false;
+        for (unsigned i = 0; i < order; ++i) first[i] = cursor.take(descriptorWidth * 8);
+        const bool negative = cursor.take(1) != 0;
+        minimum = cursor.take(descriptorWidth * 8 - 1);
+        if (negative) minimum = -minimum;
+      }
+      if (!cursor.has(std::uint64_t(groups) * width)) return false;
+      std::vector<std::uint32_t> refs(groups), widths(groups), lengths(groups);
+      for (std::size_t i = 0; i < groups; ++i) refs[i] = cursor.take(width);
+      if (!cursor.align() || !cursor.has(std::uint64_t(groups) * cp.width.pack_width)) return false;
+      for (std::size_t i = 0; i < groups; ++i) {
+        const std::uint64_t w = std::uint64_t(cursor.take(cp.width.pack_width)) + cp.width.ref;
+        if (w > 32) return false;
+        widths[i] = w;
+      }
+      if (!cursor.align() || !cursor.has(std::uint64_t(groups) * cp.length.pack_width)) return false;
+      for (std::size_t i = 0; i < groups; ++i) lengths[i] = cursor.take(cp.length.pack_width);
+      if (!cursor.align()) return false;
+      std::uint64_t total = 0, bits = 0;
+      for (std::size_t i = 0; i < groups; ++i) {
+        const std::uint64_t n = i + 1 == groups ? cp.length.last :
+            std::uint64_t(cp.length.ref) + std::uint64_t(lengths[i]) * cp.length.incr;
+        if (n > packed - total) return false;
+        lengths[i] = n;
+        total += n;
+        bits += n * widths[i];
+      }
+      if (total != packed || !cursor.has(bits)) return false;
+      values.reset(new double[count]);
+      const double scale = E / D;
+      const double maxNumerator = (2.0 * UINT_MAX + INT_MAX) *
+          (order ? static_cast<double>(count) : 1.0) * (order == 2 ? count : 1.0);
+      if (!std::isfinite(std::abs(msg->md.R) + maxNumerator * std::abs(scale))) return false;
+      std::size_t index = 0;
+      const std::uint64_t refMissing = width ? (std::uint64_t(1) << width) - 1 : 0;
+      for (std::size_t g = 0; g < groups; ++g) {
+        const unsigned w = widths[g];
+        const std::uint64_t missing = w ? (std::uint64_t(1) << w) - 1 : refMissing;
+        for (std::size_t i = 0; i < lengths[g]; ++i) {
+          // The bitmap population and sum of group lengths were checked
+          // above: each iteration is guaranteed to have a remaining value.
+          while (bitmap && !bitmap[index]) values[index++] = GRIB_MISSING_VALUE;
+          const std::uint64_t v = w ? cursor.take(w) : refs[g];
+          const bool absent = cp.miss_val_mgmt &&
+              (v == missing || (cp.miss_val_mgmt == 2 && missing && v == missing - 1));
+          if (absent) values[index] = GRIB_MISSING_VALUE;
+          else {
+            const double value = static_cast<double>(v) + (w ? refs[g] : 0) + minimum;
+            values[index] = order ? value : msg->md.R + value * scale;
           }
-        }
-        getBits(grib_msg->buffer, &groups.sign, off, 1);
-        getBits(
-            grib_msg->buffer, &groups.omin, off + 1,
-            grib_msg->md.complex_pack.spatial_diff.order_vals_width * 8 - 1);
-        if (groups.sign == 1) {
-          groups.omin = -groups.omin;
-        }
-        off += grib_msg->md.complex_pack.spatial_diff.order_vals_width * 8;
-      }
-    // fall through
-    case 2:
-      grib_msg->grids.gridpoints = new double[npoints];
-      if (grib_msg->md.complex_pack.num_groups == 0) {
-        for (l = 0; l < npoints; ++l) {
-          grib_msg->grids.gridpoints[l] = GRIB_MISSING_VALUE;
-        }
-        break;
-      }
-      if (grib_msg->md.complex_pack.miss_val_mgmt > 0) {
-        groups.miss_val = pow(2., grib_msg->md.pack_width) - 1;
-      } else {
-        groups.miss_val = GRIB_MISSING_VALUE;
-      }
-
-      groups.ref_vals = new int[grib_msg->md.complex_pack.num_groups];
-      groups.widths = new int[grib_msg->md.complex_pack.num_groups];
-      groups.lengths = new int[grib_msg->md.complex_pack.num_groups];
-
-      for (n = 0; n < grib_msg->md.complex_pack.num_groups; ++n) {
-        getBits(grib_msg->buffer, &groups.ref_vals[n], off,
-                grib_msg->md.pack_width);
-        off += grib_msg->md.pack_width;
-      }
-      off = (off + 7) & ~7;  // byte boundary padding
-
-      for (n = 0; n < grib_msg->md.complex_pack.num_groups; ++n) {
-        getBits(grib_msg->buffer, &groups.widths[n], off,
-                grib_msg->md.complex_pack.width.pack_width);
-        groups.widths[n] += grib_msg->md.complex_pack.width.ref;
-        off += grib_msg->md.complex_pack.width.pack_width;
-      }
-      off = (off + 7) & ~7;
-
-      for (n = 0; n < grib_msg->md.complex_pack.num_groups; ++n) {
-        getBits(grib_msg->buffer, &groups.lengths[n], off,
-                grib_msg->md.complex_pack.length.pack_width);
-        off += grib_msg->md.complex_pack.length.pack_width;
-      }
-      off = (off + 7) & ~7;
-
-      groups.max_length = 0;
-      for (n = 0; n < grib_msg->md.complex_pack.num_groups - 1; ++n) {
-        groups.lengths[n] =
-            grib_msg->md.complex_pack.length.ref +
-            groups.lengths[n] * grib_msg->md.complex_pack.length.incr;
-        if (groups.lengths[n] > groups.max_length) {
-          groups.max_length = groups.lengths[n];
+          ++index;
         }
       }
-      groups.lengths[n] = grib_msg->md.complex_pack.length.last;
-      if (groups.lengths[n] > groups.max_length) {
-        groups.max_length = groups.lengths[n];
+      for (; index < count; ++index) values[index] = GRIB_MISSING_VALUE;
+      // Restore first/second-order differences using doubles, avoiding signed
+      // integer overflow for valid large values and malformed descriptors.
+      double previous = 0, previous2 = 0;
+      std::size_t seen = 0;
+      for (std::size_t i = 0; order && i < count; ++i) {
+        if (values[i] == GRIB_MISSING_VALUE) continue;
+        double v = values[i];
+        if (order) {
+          if (seen < order) v = first[seen];
+          else v += order == 1 ? previous : 2 * previous - previous2;
+          previous2 = previous;
+          previous = v;
+        }
+        values[i] = msg->md.R + v * scale;
+        ++seen;
       }
-      // unpack the field of differences
-      for (n = 0, l = 0; n < grib_msg->md.complex_pack.num_groups; ++n) {
-        if (groups.widths[n] > 0) {
-          if (grib_msg->md.complex_pack.miss_val_mgmt > 0) {
-            groups.group_miss_val = pow(2., groups.widths[n]) - 1;
-          } else {
-            groups.group_miss_val = GRIB_MISSING_VALUE;
-          }
-          for (int i = 0; i < groups.lengths[n];) {
-            if (grib_msg->md.bitmap != nullptr && grib_msg->md.bitmap[l] == 0) {
-              grib_msg->grids.gridpoints[l] = GRIB_MISSING_VALUE;
-            } else {
-              getBits(grib_msg->buffer, &pval, off, groups.widths[n]);
-              off += groups.widths[n];
-              if (pval == groups.group_miss_val) {
-                grib_msg->grids.gridpoints[l] = GRIB_MISSING_VALUE;
-              } else {
-                grib_msg->grids.gridpoints[l] =
-                    pval + groups.ref_vals[n] + groups.omin;
-              }
-              ++i;
-            }
-            ++l;
-          }
-        } else {  // constant group XXX bitmap?
-          for (int i = 0; i < groups.lengths[n];) {
-            if (grib_msg->md.bitmap != nullptr && grib_msg->md.bitmap[l] == 0) {
-              grib_msg->grids.gridpoints[l] = GRIB_MISSING_VALUE;
-            } else {
-              if (groups.ref_vals[n] == groups.miss_val) {
-                grib_msg->grids.gridpoints[l] = GRIB_MISSING_VALUE;
-              } else {
-                grib_msg->grids.gridpoints[l] =
-                    groups.ref_vals[n] + groups.omin;
-              }
-              ++i;
-            }
-            ++l;
-          }
-        }
-      }
-
-      for (; l < npoints; ++l) {
-        grib_msg->grids.gridpoints[l] = GRIB_MISSING_VALUE;
-      }
-
-      if (grib_msg->md.drs_templ_num == 3) {
-        if (groups.first_vals != nullptr) {
-          for (n = grib_msg->md.complex_pack.spatial_diff.order - 1; n > 0;
-               --n) {
-            lastgp = groups.first_vals[n] - groups.first_vals[n - 1];
-            for (l = 0, m = 0; l < grib_msg->md.nx * grib_msg->md.ny; ++l) {
-              if (grib_msg->grids.gridpoints[l] != GRIB_MISSING_VALUE) {
-                if (m >= grib_msg->md.complex_pack.spatial_diff.order) {
-                  grib_msg->grids.gridpoints[l] += lastgp;
-                  lastgp = grib_msg->grids.gridpoints[l];
-                }
-                ++m;
-              }
-            }
-          }
-        }
-        for (l = 0, m = 0, lastgp = 0; l < npoints; ++l) {
-          if (grib_msg->grids.gridpoints[l] != GRIB_MISSING_VALUE) {
-            if (m < grib_msg->md.complex_pack.spatial_diff.order) {
-              grib_msg->grids.gridpoints[l] =
-                  grib_msg->md.R + groups.first_vals[m] * E / D;
-              lastgp = grib_msg->md.R * D / E + groups.first_vals[m];
-            } else {
-              lastgp += grib_msg->grids.gridpoints[l];
-              grib_msg->grids.gridpoints[l] = lastgp * E / D;
-            }
-            ++m;
-          }
-        }
-        delete[] groups.first_vals;
-      } else
-        for (l = 0; l < npoints; ++l) {
-          if (grib_msg->grids.gridpoints[l] != GRIB_MISSING_VALUE) {
-            grib_msg->grids.gridpoints[l] =
-                grib_msg->md.R + grib_msg->grids.gridpoints[l] * E / D;
-          }
-        }
-      delete[] groups.ref_vals;
-      delete[] groups.widths;
-      delete[] groups.lengths;
-      break;
-    case 4: {
-      // Grid point data - IEEE Floating Point Data
-      if (grib_msg->md.precision == 1) {  // IEEE754 single precision
-        grib_msg->grids.gridpoints = new double[npoints];
-        for (int l = 0; l < npoints; l++) {
-          if (grib_msg->md.bitmap == nullptr || grib_msg->md.bitmap[l] == 1) {
-            grib_msg->grids.gridpoints[l] =
-                ieee2flt(grib_msg->buffer + off / 8);
-            off += 32;
-          } else
-            grib_msg->grids.gridpoints[l] = GRIB_MISSING_VALUE;
-        }
-      } else if (grib_msg->md.precision == 2) {  // IEEE754 single precision
-        static const int one = 1;
-        bool const is_lsb = *((char *)&one) == 1;
-        grib_msg->grids.gridpoints = new double[npoints];
-        for (l = 0; l < npoints; l++) {
-          if (grib_msg->md.bitmap == nullptr || grib_msg->md.bitmap[l] == 1) {
-            double d;
-            if (is_lsb) {
-              unsigned char temp[8];
-              for (int j = 0; j < 8; j++) {
-                temp[j] = grib_msg->buffer[off / 8 + 7 - j];
-              }
-              memcpy(&d, temp, 8);
-            } else {
-              memcpy(&d, grib_msg->buffer + off / 8, 8);
-            }
-            grib_msg->grids.gridpoints[l] = d;
-            off += 64;
-          } else
-            grib_msg->grids.gridpoints[l] = GRIB_MISSING_VALUE;
-        }
-      } else {
-        fprintf(stderr,
-                "g2_unpack7: Invalid precision=%d for Data Section 5.4.\n",
-                grib_msg->md.precision);
-        return false;
-      }
-    } break;
+    }
 #ifdef JASPER
-    case 40:
-    case 40000:
-      int len, *jvals, cnt;
-      getBits(grib_msg->buffer, &len, grib_msg->offset, 32);
-      if (len < 5) return false;
-      len = len - 5;
-      jvals = new int[npoints];
-      grib_msg->grids.gridpoints = new double[npoints];
-      if (len > 0)
-        dec_jpeg2000((char *)&grib_msg->buffer[grib_msg->offset / 8 + 5], len,
-                     jvals);
-      cnt = 0;
-      for (l = 0; l < npoints; l++) {
-        if (grib_msg->md.bitmap == nullptr || grib_msg->md.bitmap[l] == 1) {
-          if (len == 0) jvals[cnt] = 0;
-          grib_msg->grids.gridpoints[l] = grib_msg->md.R + jvals[cnt++] * E / D;
-        } else
-          grib_msg->grids.gridpoints[l] = GRIB_MISSING_VALUE;
-      }
-      delete[] jvals;
-      break;
+  } else if (templ == 40 || templ == 40000) {
+    std::vector<int> decoded(packed);
+    if (length > 5) {
+      if (dec_jpeg2000(reinterpret_cast<char*>(const_cast<unsigned char*>(bytes)),
+                       length - 5, decoded.data(), packed) != 0) return false;
+    } else if (width) return false;
+    values.reset(new double[count]);
+    std::size_t index = 0;
+    for (std::size_t i = 0; i < count; ++i)
+      values[i] = !bitmap || bitmap[i] ? msg->md.R + decoded[index++] * E / D : GRIB_MISSING_VALUE;
 #endif
-    default:
-      erreur("Unknown packing %d", grib_msg->md.drs_templ_num);
-      break;
+  } else return false;
+  // Restore column-adjacent scanning to the row-major storage used by sampling.
+  if (msg->md.scan_mode & 0x20) {
+    std::unique_ptr<double[]> rows(new double[count]);
+    for (int y = 0; y < msg->md.ny; ++y)
+      for (int x = 0; x < msg->md.nx; ++x)
+        rows[std::size_t(y) * msg->md.nx + x] = values[std::size_t(x) * msg->md.ny + y];
+    values.swap(rows);
   }
+  delete[] msg->grids.gridpoints;
+  msg->grids.gridpoints = values.release();
   return true;
 }
 
@@ -1218,7 +1093,8 @@ static int mapStatisticalEndTime(GRIBMessage *grid) {
       case 0:                      // minute
       // return (grid->md.stat_proc.etime/100 % 100)-(grid->time/100 % 100);
       case 1:  // hour
-        return grid->md.fcst_time + grid->md.stat_proc.t[0].time_length;
+        return grid->md.fcst_time <= INT_MAX - grid->md.stat_proc.t[0].time_length
+                   ? grid->md.fcst_time + grid->md.stat_proc.t[0].time_length : -1;
         // return (grid->md.stat_proc.etime/10000- grid->time/10000);
       case 2:  // Day
         return (grid->md.stat_proc.edy - grid->dy);
@@ -1234,7 +1110,9 @@ static int mapStatisticalEndTime(GRIBMessage *grid) {
 
   if (grid->md.time_unit == 0 && grid->md.stat_proc.t[0].time_unit == 1) {
     // in minute + hourly increment
-    return grid->md.fcst_time + grid->md.stat_proc.t[0].time_length * 60;
+    const long long end = static_cast<long long>(grid->md.fcst_time) +
+                          static_cast<long long>(grid->md.stat_proc.t[0].time_length) * 60;
+    return end <= INT_MAX ? static_cast<int>(end) : -1;
   }
 
   if (grid->md.time_unit == 1 && grid->md.stat_proc.t[0].time_unit == 0 &&
@@ -1270,6 +1148,7 @@ static bool mapTimeRange(GRIBMessage *grid, zuint *p1, zuint *p2,
         if (center == 7 && grid->md.stat_proc.num_ranges == 2) {
           /* NCEP CFSR monthly grids */
           *p2 = grid->md.stat_proc.t[0].incr_length;
+          if (static_cast<zuint>(grid->md.stat_proc.t[1].time_length) > *p2) return false;
           *p1 = *p2 - grid->md.stat_proc.t[1].time_length;
           *n_avg = grid->md.stat_proc.t[0].time_length;
           switch (grid->md.stat_proc.t[0].proc_code) {
@@ -1554,14 +1433,15 @@ void GribV2Record::readDataSet(ZUFILE *file) {
   data = nullptr;
   BMSbits = nullptr;
   hasBMS = false;
+  BMSsize = 0;
   knownData = false;
   IsDuplicated = false;
 
   while (strncmp(&((char *)grib_msg->buffer)[grib_msg->offset / 8], "7777",
                  4) != 0) {
     DS = false;
-    getBits(grib_msg->buffer, &len, grib_msg->offset, 32);
-    getBits(grib_msg->buffer, &sec_num, grib_msg->offset + 4 * 8, 8);
+    len = sectionLength(grib_msg);
+    sec_num = grib_msg->buffer[grib_msg->offset / 8 + 4];
     switch (sec_num) {
       case 2:  //  Section 2: Local Use Section
         if (skip == true) break;
@@ -1633,6 +1513,8 @@ void GribV2Record::readDataSet(ZUFILE *file) {
           }
 
           levelType = grib_msg->md.lvl1_type;
+          if (!std::isfinite(grib_msg->md.lvl1) || grib_msg->md.lvl1 < 0 ||
+              grib_msg->md.lvl1 > std::numeric_limits<zuint>::max()) { ok = false; break; }
           levelValue = grib_msg->md.lvl1;
           if (grib_msg->md.lvl2_type == 8 && grib_msg->md.lvl1_type == 1) {
             // cf table 4.5:  8 Nominal top of the atmosphere
@@ -1664,7 +1546,7 @@ void GribV2Record::readDataSet(ZUFILE *file) {
         if (skip == true) break;
         ok = unpackBMS(grib_msg);
         if (ok) {
-          if (grib_msg->md.bmssize != 0) {
+          if (grib_msg->md.bms_ind != 255 && grib_msg->md.bmssize != 0) {
             hasBMS = true;
             BMSsize = grib_msg->md.bmssize;
             BMSbits = new zuchar[grib_msg->md.bmssize];
@@ -1715,7 +1597,7 @@ void GribV2Record::readDataSet(ZUFILE *file) {
 }
 
 // -----------------
-GribV2Record::GribV2Record(ZUFILE *file, int id_) {
+GribV2Record::GribV2Record(ZUFILE *file, int id_) : GribV2Record() {
   id = id_;
   seekStart = zu_tell(file);  // moved to section 0 read
   data = nullptr;
@@ -1725,7 +1607,7 @@ GribV2Record::GribV2Record(ZUFILE *file, int id_) {
   eof = false;
   knownData = false;
   IsDuplicated = false;
-  long start = seekStart;
+  long start = zu_tell(file);
 
   grib_msg = new GRIBMessage();
 
@@ -1756,20 +1638,9 @@ GribV2Record::GribV2Record(ZUFILE *file, int id_) {
   ok = readGribSection0_IS(file,
                            b_haveReadGRIB);  // Section 0: Indicator Section
 
-  int len, sec_num;
   if (ok) {
-    unpackIDS(grib_msg);  // Section 1: Identification Section
-    int off;
-    /* find out how many grids are in this message */
-    off = grib_msg->offset / 8;
-    while (strncmp(&((char *)grib_msg->buffer)[off], "7777", 4) != 0) {
-      len = uint4(grib_msg->buffer + off);
-      sec_num = grib_msg->buffer[off + 4];
-      if (sec_num == 7) grib_msg->num_grids++;
-      off += len;
-    }
+    unpackIDS(grib_msg);  // minimum length checked by validateMessage
   } else {
-    // seek back if V1
     (void)zu_seek(file, start, SEEK_SET);
     return;
   }
@@ -1779,7 +1650,7 @@ GribV2Record::GribV2Record(ZUFILE *file, int id_) {
   refhour = grib_msg->time / 10000;
   refminute = (grib_msg->time / 100) % 100;
   refDate = makeDate(refyear, refmonth, refday, refhour, refminute, 0);
-  sprintf(strRefDate, "%04d-%02d-%02d %02d:%02d", refyear, refmonth, refday,
+  snprintf(strRefDate, sizeof(strRefDate), "%04d-%02d-%02d %02d:%02d", refyear, refmonth, refday,
           refhour, refminute);
   idCenter = grib_msg->center_id;
   idModel = grib_msg->table_ver;
@@ -1795,26 +1666,43 @@ bool GribV2Record::hasMoreDataSet() const {
 
 // ---------------------------------------
 GribV2Record *GribV2Record::GribV2NextDataSet(ZUFILE *file, int id_) {
-  GribV2Record *rec1 = new GribV2Record(*this);
-  // XXX should have a shallow copy constructor
-  delete[] rec1->data;
-  delete[] rec1->BMSbits;
-  // new records take ownership
-  this->grib_msg = 0;
-  rec1->id = id_;
-  rec1->readDataSet(file);
-  return rec1;
+  if (!hasMoreDataSet()) return nullptr;
+  std::unique_ptr<GribV2Record> next(new GribV2Record(static_cast<const GribRecord&>(*this)));
+  delete[] next->data;
+  next->data = nullptr;
+  delete[] next->BMSbits;
+  next->BMSbits = nullptr;
+  next->grib_msg = grib_msg;
+  grib_msg = nullptr;
+  next->id = id_;
+  next->productDiscipline = productDiscipline;
+  next->readDataSet(file);
+  return next.release();
 }
 
-//-------------------------------------------------------------------------------
-// Constructeur de recopie
-//-------------------------------------------------------------------------------
-#pragma warning(disable : 4717)
-GribV2Record::GribV2Record(const GribRecord &rec) : GribRecord(rec) {
-  *this = rec;
-#pragma warning(default : 4717)
+// Copies are complete independent records; parser continuation is transferred
+// only explicitly by GribV2NextDataSet, never aliased by implicit copying.
+GribV2Record::GribV2Record(const GribRecord &rec)
+    : GribRecord(rec), grib_msg(nullptr) {}
+GribV2Record::GribV2Record(const GribV2Record &rec)
+    : GribRecord(rec), grib_msg(nullptr) {}
+GribV2Record& GribV2Record::operator=(const GribV2Record &rec) {
+  if (this != &rec) {
+    GribRecord::operator=(rec);
+    delete grib_msg;
+    grib_msg = nullptr;
+  }
+  return *this;
 }
 
+GribV2Record& GribV2Record::operator=(const GribRecord& rec) {
+  if (static_cast<const GribRecord*>(this) != &rec) {
+    GribRecord::operator=(rec);
+    delete grib_msg;
+    grib_msg = nullptr;
+  }
+  return *this;
+}
 GribV2Record::~GribV2Record() { delete grib_msg; }
 
 //==============================================================
@@ -1823,57 +1711,45 @@ GribV2Record::~GribV2Record() { delete grib_msg; }
 //----------------------------------------------
 // SECTION 0: THE INDICATOR SECTION (IS)
 //----------------------------------------------
-static bool unpackIS(ZUFILE *fp, GRIBMessage *grib_msg) {
-  unsigned char temp[16];
-  int status;
-  size_t num;
-
-  if (grib_msg->buffer != nullptr) {
-    delete[] grib_msg->buffer;
-    grib_msg->buffer = nullptr;
+static bool unpackIS(ZUFILE *fp, GRIBMessage *msg) {
+  unsigned char header[16] = {'G', 'R', 'I', 'B'};
+  if (zu_read(fp, header + 4, 12) != 12 || header[7] != 2) return false;
+  // GRIB2 length is unsigned 64-bit, not just its low 32 bits.
+  if (uint4(header + 8) != 0) return false;
+  const std::uint32_t length = uint4(header + 12);
+  if (length < 41 || length > GRIB_MAX_MESSAGE_BYTES || length > (INT_MAX - 7) / 8) return false;
+  // Read incrementally: a tiny truncated file must not force a large allocation
+  // merely by advertising a huge message in its indicator section.
+  std::vector<unsigned char> bytes(header, header + 16);
+  unsigned char chunk[65536];
+  while (bytes.size() < length) {
+    const std::size_t count = std::min<std::size_t>(sizeof(chunk), length - bytes.size());
+    if (zu_read(fp, chunk, count) != static_cast<int>(count)) return false;
+    bytes.insert(bytes.end(), chunk, chunk + count);
   }
-  grib_msg->num_grids = 0;
-
-  if ((status = zu_read(fp, &temp[4], 12)) != 12) {
-    return false;
-  }
-  grib_msg->disc = temp[6];
-  grib_msg->ed_num = temp[7];
-
-  //  Bail out early if this is not GRIB2
-  if (grib_msg->ed_num != 2) return false;
-
-  getBits(temp, &grib_msg->total_len, 96, 32);
-  // too small or overflow
-  if (grib_msg->total_len < 16 || grib_msg->total_len > (INT_MAX - 4))
-    return false;
-
-  grib_msg->md.nx = grib_msg->md.ny = 0;
-  grib_msg->buffer = new unsigned char[grib_msg->total_len + 4];
-  memcpy(grib_msg->buffer, temp, 16);
-  num = grib_msg->total_len - 16;
-
-  status = zu_read(fp, &grib_msg->buffer[16], num);
-  if (status != (int)num) return false;
-
-  if (strncmp(&((char *)grib_msg->buffer)[grib_msg->total_len - 4], "7777",
-              4) != 0)
-    fprintf(stderr, "Warning: no end section found\n");
-
-  grib_msg->offset = 128;
-  return true;
+  std::unique_ptr<unsigned char[]> buffer(new unsigned char[length + 4]());
+  memcpy(buffer.get(), bytes.data(), length);
+  delete[] msg->buffer;
+  msg->buffer = buffer.release();
+  msg->disc = header[6];
+  msg->ed_num = header[7];
+  msg->total_len = length;
+  msg->num_grids = 0;
+  msg->offset = 128;
+  return validateMessage(msg);
 }
 
 bool GribV2Record::readGribSection0_IS(ZUFILE *file, bool b_skip_initial_GRIB) {
-  char strgrib[4];
+  char strgrib[4] = {};
   fileOffset0 = zu_tell(file);
 
   if (!b_skip_initial_GRIB) {
     // Cherche le 1er 'G'
-    while ((zu_read(file, strgrib, 1) == 1) && (strgrib[0] != 'G')) {
-    }
+    std::size_t scanned = 0;
+    while (scanned < GRIB_MAX_HEADER_SCAN_BYTES &&
+           zu_read(file, strgrib, 1) == 1 && strgrib[0] != 'G') { ++scanned; }
 
-    if (strgrib[0] != 'G') {
+    if (scanned == GRIB_MAX_HEADER_SCAN_BYTES || strgrib[0] != 'G') {
       ok = false;
       eof = true;
       return false;
@@ -1951,8 +1827,6 @@ zuint GribV2Record::periodSeconds(zuchar unit, zuint P1, zuint P2,
   }
   grib_debug("id=%d: PDS unit %d (time range) b21=%d %d P1=%d P2=%d\n", id,
              unit, range, res, P1, P2);
-  dur = 0;
-
   switch (range) {
     case 0:
       dur = (zuint)P1;
@@ -1979,6 +1853,7 @@ zuint GribV2Record::periodSeconds(zuchar unit, zuint P1, zuint P2,
       dur = 0;
       ok = false;
   }
+  if (res && dur > std::numeric_limits<zuint>::max() / res) { ok = false; return 0; }
   return res * dur;
 }
 

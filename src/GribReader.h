@@ -34,12 +34,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef GRIBREADER_H
 #define GRIBREADER_H
 
-#include "wx/wxprec.h"
 
-#ifndef WX_PRECOMP
-#include "wx/wx.h"
-#endif  // precompiled headers
-
+#include <wx/string.h>
 #include <iostream>
 #include <cmath>
 #include <vector>
@@ -53,11 +49,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 class GribReader {
 public:
   GribReader();
+  GribReader(const GribReader&) = delete;
+  GribReader& operator=(const GribReader&) = delete;
   GribReader(const wxString fname);
   ~GribReader();
 
   void openFile(const wxString fname);
   bool isOk() { return ok; }
+  bool isResourceLimitExceeded() const { return resourceLimitExceeded; }
   long getFileSize() { return fileSize; }
   wxString getFileName() { return fileName; }
 
@@ -131,10 +130,12 @@ private:
   long fileSize;
   //        double    hoursBetweenRecords;
   int dewpointDataStatus;
+  std::size_t retainedBytes;
+  bool resourceLimitExceeded;
 
   std::map<std::string, std::vector<GribRecord *> *> mapGribRecords;
 
-  void storeRecordInMap(GribRecord *rec);
+  bool storeRecordInMap(GribRecord *rec);
 
   void readGribFileContent();
   void readAllGribRecords();

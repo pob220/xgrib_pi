@@ -2433,6 +2433,12 @@ GRIBFile::GRIBFile(const wxArrayString& file_names, bool CumRec, bool WaveRec,
     file_name = file_names[i];
     m_pGribReader->openFile(file_name);
 
+    if (m_pGribReader->isResourceLimitExceeded()) {
+      m_bOK = false;
+      m_last_message = _(" GRIB set exceeds the safe memory limit");
+      return;
+    }
+
     if (m_pGribReader->isOk()) {
       m_bOK = true;
       if (newestFile) {

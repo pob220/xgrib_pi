@@ -231,6 +231,7 @@ private:
 
   bool m_bShowGrib;
   bool m_bBundledGribConflict{false};
+  bool m_jasperInitialized{false};
   bool m_bConflictWarningShown{false};
   /**
    * Stores current viewport.

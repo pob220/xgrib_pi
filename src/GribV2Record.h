@@ -44,6 +44,9 @@ class GribV2Record : public GribRecord {
 public:
   GribV2Record(ZUFILE* file, int id_);
   GribV2Record(const GribRecord& rec);
+  GribV2Record(const GribV2Record& rec);
+  GribV2Record& operator=(const GribV2Record& rec);
+  GribV2Record& operator=(const GribRecord& rec);
   GribV2Record() { grib_msg = 0; }
 
   ~GribV2Record();

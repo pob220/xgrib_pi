@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <jasper/jasper.h>
 
 #include "GribProtocolVersion.h"
 #include "grib_pi.h"
@@ -108,6 +109,28 @@ grib_pi::~grib_pi(void) {
 }
 
 int grib_pi::Init(void) {
+  // JasPer 4.x requires library and calling-thread initialization before
+  // decoding GRIB2 JPEG fields. GRIBFile decoding occurs on the UI thread.
+#if defined(JAS_VERSION_MAJOR) && JAS_VERSION_MAJOR >= 2
+  jas_conf_clear();
+  jas_conf_set_max_mem_usage(256u * 1024u * 1024u);
+  if (jas_init_library() != 0) {
+    wxLogError("xGRIB: unable to initialize the JPEG2000 decoder");
+    return 0;
+  }
+  if (jas_init_thread() != 0) {
+    jas_cleanup_library();
+    wxLogError("xGRIB: unable to initialize the JPEG2000 decoder thread");
+    return 0;
+  }
+#else
+  if (jas_init() != 0) {
+    wxLogError("xGRIB: unable to initialize the JPEG2000 decoder");
+    return 0;
+  }
+#endif
+  m_jasperInitialized = true;
+
   AddLocaleCatalog("opencpn-xgrib_pi");
 
   // Set some default private member parameters
@@ -238,6 +261,16 @@ bool grib_pi::DeInit(void) {
 
   delete m_pGRIBOverlayFactory;
   m_pGRIBOverlayFactory = nullptr;
+
+  if (m_jasperInitialized) {
+#if defined(JAS_VERSION_MAJOR) && JAS_VERSION_MAJOR >= 2
+    jas_cleanup_thread();
+    jas_cleanup_library();
+#else
+    jas_cleanup();
+#endif
+    m_jasperInitialized = false;
+  }
 
   return true;
 }

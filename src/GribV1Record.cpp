@@ -19,15 +19,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * \file
  * \implements \ref GribV1Record.h
  */
-#include "wx/wxprec.h"
-
-#ifndef WX_PRECOMP
-#include "wx/wx.h"
-#endif  // precompiled headers
 
 #include <stdlib.h>
 
 #include "GribV1Record.h"
+#include "GribDecodeLimits.h"
+#include <memory>
+#include <limits>
 
 //-------------------------------------------------------------------------------
 // Adjust data type from different mete center
@@ -377,25 +375,25 @@ GribV1Record::GribV1Record(ZUFILE* file, int id_) {
   ok = readGribSection0_IS(file, b_haveReadGRIB);
   if (ok) {
     ok = readGribSection1_PDS(file);
-    zu_seek(file, fileOffset1 + sectionSize1, SEEK_SET);
+    if (ok && zu_seek(file, fileOffset1 + sectionSize1, SEEK_SET) != 0) ok = false;
   }
   if (ok) {
     ok = readGribSection2_GDS(file);
-    zu_seek(file, fileOffset2 + sectionSize2, SEEK_SET);
+    if (ok && zu_seek(file, fileOffset2 + sectionSize2, SEEK_SET) != 0) ok = false;
   }
   if (ok) {
     ok = readGribSection3_BMS(file);
-    zu_seek(file, fileOffset3 + sectionSize3, SEEK_SET);
+    if (ok && zu_seek(file, fileOffset3 + sectionSize3, SEEK_SET) != 0) ok = false;
   }
   if (ok) {
     ok = readGribSection4_BDS(file);
-    zu_seek(file, fileOffset4 + sectionSize4, SEEK_SET);
+    if (ok && zu_seek(file, fileOffset4 + sectionSize4, SEEK_SET) != 0) ok = false;
   }
   if (ok) {
     ok = readGribSection5_ES(file);
   }
   if (ok) {
-    zu_seek(file, seekStart + totalSize + (b_len_add_8 ? 8 : 0), SEEK_SET);
+    if (zu_seek(file, seekStart + totalSize + (b_len_add_8 ? 8 : 0), SEEK_SET) != 0) ok = false;
   }
 
   if (ok) {
@@ -412,29 +410,30 @@ GribV1Record::GribV1Record(ZUFILE* file, int id_) {
 //-------------------------------------------------------------------------------
 #pragma warning(disable : 4717)
 GribV1Record::GribV1Record(const GribRecord& rec) : GribRecord(rec) {
-  *this = rec;
+  // Base copy already owns independent buffers.
 #pragma warning(default : 4717)
 }
 
+GribV1Record::GribV1Record(const GribV1Record& rec) : GribRecord(rec) {}
+GribV1Record& GribV1Record::operator=(const GribV1Record& rec) {
+  GribRecord::operator=(rec);
+  return *this;
+}
+GribV1Record& GribV1Record::operator=(const GribRecord& rec) {
+  GribRecord::operator=(rec);
+  return *this;
+}
 GribV1Record::~GribV1Record() {}
 
 //----------------------------------------------
-static zuint readPackedBits(zuchar* buf, zuint first, zuint nbBits) {
-#if 0
-    // should test when loading nbBitsInPack?
-    if (nbBits == 0 || nbBits > 31) {
-        // x >> 32 is undefined behavior, on x86 it returns x
-        return 0;
-    }
-#endif
-  zuint oct = first / 8;
-  zuint bit = first % 8;
+static zuint readPackedBits(zuchar* buf, zuint first, zuint width) {
+  return grib_decode::bits(buf, first, width);
+}
 
-  zuint val = (buf[oct] << 24) + (buf[oct + 1] << 16) + (buf[oct + 2] << 8) +
-              (buf[oct + 3]);
-  val = val << bit;
-  val = val >> (32 - nbBits);
-  return val;
+bool GribV1Record::validSection(zuint offset, zuint size, zuint minimum) const {
+  if (size < minimum || totalSize < 12 || offset < seekStart) return false;
+  const std::uint64_t used = std::uint64_t(offset) - seekStart;
+  return used <= totalSize - 4 && size <= totalSize - 4 - used;
 }
 
 //==============================================================
@@ -445,15 +444,16 @@ static zuint readPackedBits(zuchar* buf, zuint first, zuint nbBits) {
 //----------------------------------------------
 bool GribV1Record::readGribSection0_IS(ZUFILE* file,
                                        unsigned int b_skip_initial_GRIB) {
-  char strgrib[4];
+  char strgrib[4] = {};
   fileOffset0 = zu_tell(file);
 
   if (b_skip_initial_GRIB == 0) {
     // Cherche le 1er 'G'
-    while ((zu_read(file, strgrib, 1) == 1) && (strgrib[0] != 'G')) {
-    }
+    std::size_t scanned = 0;
+    while (scanned < GRIB_MAX_HEADER_SCAN_BYTES &&
+           zu_read(file, strgrib, 1) == 1 && strgrib[0] != 'G') { ++scanned; }
 
-    if (strgrib[0] != 'G') {
+    if (scanned == GRIB_MAX_HEADER_SCAN_BYTES || strgrib[0] != 'G') {
       ok = false;
       eof = true;
       return false;
@@ -485,7 +485,9 @@ bool GribV1Record::readGribSection0_IS(ZUFILE* file,
     }
   }
 
-  seekStart = zu_tell(file) - 4;
+  const long startOffset = zu_tell(file) - 4;
+  if (startOffset < 0 || static_cast<unsigned long>(startOffset) > std::numeric_limits<zuint>::max()) { ok = false; return false; }
+  seekStart = startOffset;
   totalSize = readInt3(file);
 
   editionNumber = readChar(file);
@@ -495,6 +497,7 @@ bool GribV1Record::readGribSection0_IS(ZUFILE* file,
     return false;
   }
 
+  if (totalSize < 12 || seekStart > std::numeric_limits<zuint>::max() - totalSize - 8) { ok = false; return false; }
   return true;
 }
 //----------------------------------------------
@@ -508,6 +511,7 @@ bool GribV1Record::readGribSection1_PDS(ZUFILE* file) {
     return false;
   }
   sectionSize1 = makeInt3(data1[0], data1[1], data1[2]);
+  if (!validSection(fileOffset1, sectionSize1, 28)) { ok = false; return false; }
   tableVersion = data1[3];
   idCenter = data1[4];
   idModel = data1[5];
@@ -526,7 +530,7 @@ bool GribV1Record::readGribSection1_PDS(ZUFILE* file) {
   refminute = data1[16];
 
   refDate = makeDate(refyear, refmonth, refday, refhour, refminute, 0);
-  sprintf(strRefDate, "%04d-%02d-%02d %02d:%02d", refyear, refmonth, refday,
+  snprintf(strRefDate, sizeof(strRefDate), "%04d-%02d-%02d %02d:%02d", refyear, refmonth, refday,
           refhour, refminute);
 
   periodP1 = data1[18];
@@ -546,7 +550,7 @@ bool GribV1Record::readGribSection1_PDS(ZUFILE* file) {
     erreur("Record %d: GDS not found", id);
     ok = false;
   }
-  if (decimalFactorD == 0) {
+  if (decimalFactorD == 0 || !std::isfinite(decimalFactorD)) {
     erreur("Record %d: decimalFactorD null", id);
     ok = false;
   }
@@ -559,6 +563,7 @@ bool GribV1Record::readGribSection2_GDS(ZUFILE* file) {
   if (!hasGDS) return 0;
   fileOffset2 = zu_tell(file);
   sectionSize2 = readInt3(file);  // byte 1-2-3
+  if (!ok || !validSection(fileOffset2, sectionSize2, 28)) { ok = false; return false; }
   NV = readChar(file);            // byte 4
   PV = readChar(file);            // byte 5
   gridType = readChar(file);      // byte 6
@@ -611,7 +616,8 @@ bool GribV1Record::readGribSection2_GDS(ZUFILE* file) {
     latMin = La2;
     latMax = La1;
   }
-  if (Ni <= 1 || Nj <= 1) {
+  std::size_t count;
+  if (!grib_decode::gridSize(Ni, Nj, count)) {
     erreur("Record %d: Ni=%d Nj=%d", id, Ni, Nj);
     ok = false;
   } else {
@@ -641,22 +647,23 @@ bool GribV1Record::readGribSection3_BMS(ZUFILE* file) {
     return ok;
   }
   sectionSize3 = readInt3(file);
-  (void)readChar(file);
+  if (!ok || !validSection(fileOffset3, sectionSize3, 6)) { ok = false; return false; }
+  const unsigned unused = readChar(file);
   int bitMapFollows = readInt2(file);
 
   if (bitMapFollows != 0) {
-    return ok;
+    ok = false;  // predefined bitmap is unsupported, never silently all-present
+    return false;
   }
   if (sectionSize3 <= 6) {
     ok = false;
     return ok;
   }
   BMSsize = sectionSize3 - 6;
+  const std::uint64_t count = std::uint64_t(Ni) * Nj;
+  if (unused > 15 || std::uint64_t(BMSsize) * 8 - unused != count) { ok = false; return false; }
   BMSbits = new zuchar[BMSsize];
-
-  for (zuint i = 0; i < BMSsize; i++) {
-    BMSbits[i] = readChar(file);
-  }
+  if (zu_read(file, BMSbits, BMSsize) != static_cast<int>(BMSsize)) { ok = false; eof = true; }
   return ok;
 }
 
@@ -667,6 +674,7 @@ bool GribV1Record::readGribSection4_BDS(ZUFILE* file) {
   fileOffset4 = zu_tell(file);
   sectionSize4 = readInt3(file);  // byte 1-2-3
 
+  if (!ok || !validSection(fileOffset4, sectionSize4, 11)) { ok = false; return false; }
   zuchar flags = readChar(file);        // byte 4
   scaleFactorE = readSignedInt2(file);  // byte 5-6
   refValue = readFloat4(file);          // byte 7-8-9-10
@@ -674,7 +682,7 @@ bool GribV1Record::readGribSection4_BDS(ZUFILE* file) {
   scaleFactorEpow2 = pow(2., scaleFactorE);
   unusedBitsEndBDS = flags & 0x0F;
   isGridData = (flags & 0x80) == 0;
-  isSimplePacking = (flags & 0x80) == 0;
+  isSimplePacking = (flags & 0x40) == 0;
   isFloatValues = (flags & 0x80) == 0;
 
   // printf("BDS type=%3d - bits=%02d - level %3d - %d\n", dataType,
@@ -697,15 +705,15 @@ bool GribV1Record::readGribSection4_BDS(ZUFILE* file) {
     return ok;
   }
 
-  if (sectionSize4 <= 11 || sectionSize4 > INT_MAX - 4) {
+  if (sectionSize4 < 11 || sectionSize4 > INT_MAX - 4 || nbBitsInPack > 32 ||
+       !std::isfinite(scaleFactorEpow2) || !std::isfinite(refValue)) {
     ok = false;
     return ok;
   }
   zuint startbit = 0;
   int datasize = sectionSize4 - 11;
-  zuchar* buf =
-      new zuchar[datasize +
-                 4]();  // +4 pour simplifier les décalages ds readPackedBits
+  std::unique_ptr<zuchar[]> buffer(new zuchar[datasize + 4]());
+  zuchar* buf = buffer.get(); // +4 pour simplifier les décalages ds readPackedBits
 
   if (zu_read(file, buf, datasize) != datasize) {
     erreur("Record %d: data read error", id);
@@ -713,69 +721,68 @@ bool GribV1Record::readGribSection4_BDS(ZUFILE* file) {
     eof = true;
   }
   if (!ok) {
-    delete[] buf;
     return ok;
   }
 
-  // Allocate memory for the data
-  data = new double[Ni * Nj];
+  // Check packed value count before allocating the decoded field. The bitmap
+  // is packed, so count its set bits once, excluding unused tail bits.
+  std::size_t count;
+  if (!grib_decode::gridSize(Ni, Nj, count)) { ok = false; return false; }
+  std::size_t present = count;
+  if (hasBMS) {
+    present = 0;
+    for (std::size_t k = 0; k < count; ++k)
+      present += (BMSbits[k / 8] >> (7 - k % 8)) & 1;
+  }
+  const std::uint64_t available = std::uint64_t(datasize) * 8;
+  if (unusedBitsEndBDS > available || std::uint64_t(present) * nbBitsInPack > available - unusedBitsEndBDS) {
+    ok = false; return false;
+  }
+  data = new double[count];
 
-  // Read data in the order given by isAdjacentI
-  zuint i, j, x;
-  int ind;
-  if (isAdjacentI) {
-    for (j = 0; j < Nj; j++) {
-      for (i = 0; i < Ni; i++) {
-#if 0
-                // XXX
-                // not need because we do it in XY after recomputing Di and Dj?
-                if (!hasDiDj && !isScanJpositive) {
-                    ind = (Nj-1 -j)*Ni+i;
-                }
-                else {
-                    ind = j*Ni+i;
-                }
-#else
-        ind = j * Ni + i;
-#endif
-
-        if (hasValue(i, j)) {
-          x = readPackedBits(buf, startbit, nbBitsInPack);
-          data[ind] = (refValue + x * scaleFactorEpow2) / decimalFactorD;
-          startbit += nbBitsInPack;
-          // printf(" %d %d %f ", i,j, data[ind]);
-        } else {
-          data[ind] = GRIB_NOTDEF;
-        }
+  // The geometry, bitmap and packed bit count are validated above. Decode
+  // directly into contiguous rows instead of repeating accessor/index checks.
+  const double reference = refValue, scale = scaleFactorEpow2, divisor = decimalFactorD;
+  const unsigned width = nbBitsInPack;
+  auto unpack = [&]() -> double {
+    const zuint value = readPackedBits(buf, startbit, width);
+    startbit += width;
+    return reference + value * scale;
+  };
+  if (isAdjacentI && width == 16) {
+    // Common byte-aligned packing: two bytes per value, already bounded by the
+    // complete packed-count check. This also permits dense-loop vectorization.
+    const unsigned char* cursor = buf;
+    if (!hasBMS && divisor == 1.0) {
+      for (std::size_t n = 0; n < count; ++n, cursor += 2)
+        data[n] = reference + ((unsigned(cursor[0]) << 8) | cursor[1]) * scale;
+    } else for (std::size_t n = 0; n < count; ++n) {
+      if (hasBMS && !(BMSbits[n / 8] & (0x80u >> (n % 8)))) {
+        data[n] = GRIB_NOTDEF;
+        continue;
       }
+      const unsigned value = (unsigned(cursor[0]) << 8) | cursor[1];
+      cursor += 2;
+      data[n] = (reference + value * scale) / divisor;
+    }
+  } else if (isAdjacentI) {
+    if (!hasBMS) {
+      if (divisor == 1.0) {
+        for (std::size_t n = 0; n < count; ++n) data[n] = unpack();
+      } else {
+        for (std::size_t n = 0; n < count; ++n) data[n] = unpack() / divisor;
+      }
+    } else {
+      for (std::size_t n = 0; n < count; ++n)
+        data[n] = (BMSbits[n / 8] & (0x80u >> (n % 8))) ? unpack() / divisor : GRIB_NOTDEF;
     }
   } else {
-    for (i = 0; i < Ni; i++) {
-      for (j = 0; j < Nj; j++) {
-#if 0
-                if (!hasDiDj && !isScanJpositive) {
-                    ind = (Nj-1 -j)*Ni+i;
-                }
-                else {
-                    ind = j*Ni+i;
-                }
-#else
-        ind = j * Ni + i;
-#endif
-
-        if (hasValue(i, j)) {
-          x = readPackedBits(buf, startbit, nbBitsInPack);
-          startbit += nbBitsInPack;
-          data[ind] = (refValue + x * scaleFactorEpow2) / decimalFactorD;
-          // printf(" %d %d %f ", i,j, data[ind]);
-        } else {
-          data[ind] = GRIB_NOTDEF;
-        }
-      }
-    }
+    std::size_t bit = 0;
+    for (zuint x = 0; x < Ni; ++x)
+      for (zuint y = 0; y < Nj; ++y, ++bit)
+        data[std::size_t(y) * Ni + x] = !hasBMS || (BMSbits[bit / 8] & (0x80u >> (bit % 8)))
+            ? unpack() / divisor : GRIB_NOTDEF;
   }
-
-  delete[] buf;
   return ok;
 }
 

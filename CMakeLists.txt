@@ -73,9 +73,9 @@ set(LONG_DESCRIPTION
 
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "3")
-set(VERSION_PATCH "2")
+set(VERSION_PATCH "3")
 set(VERSION_TWEAK "0")
-set(VERSION_DATE "26/09/2026") # DD/MM/YYYY format
+set(VERSION_DATE "29/09/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -251,6 +251,7 @@ set(HDRS
     src/GribTable.h
     src/CustomGrid.h
     src/GribReader.h
+    src/GribDecodeLimits.h
     src/GribRecord.h
     src/GribRecordSet.h
     src/GribV1Record.h
@@ -586,6 +587,13 @@ if (NOT OCPN_FLATPAK_CONFIG)
   find_package(ZLIB REQUIRED)
   target_link_libraries(${PACKAGE_NAME} ${XGRIB_JASPER_TARGET} ${XGRIB_BZIP2_TARGET}
                         ZLIB::ZLIB)
+  target_compile_definitions(${PACKAGE_NAME} PRIVATE JASPER)
+  if(XGRIB_USE_BUNDLED_JASPER)
+    # The pinned JasPer target intentionally marks its own headers PRIVATE.
+    target_include_directories(${PACKAGE_NAME} BEFORE PRIVATE
+      "${xgrib_jasper_BINARY_DIR}/src/libjasper/include"
+      "${xgrib_jasper_SOURCE_DIR}/src/libjasper/include")
+  endif()
 
   if(XGRIB_USE_BUNDLED_JASPER AND EXISTS "${XGRIB_JASPER_LICENSE}")
     install(FILES "${XGRIB_JASPER_LICENSE}"
@@ -757,6 +765,21 @@ if (NOT OCPN_FLATPAK_CONFIG)
     target_link_libraries(xgrib_reader_integration_tests PRIVATE
       ${XGRIB_JASPER_TARGET} BZip2::BZip2 ZLIB::ZLIB
       ${wxWidgets_LIBRARIES})
+    target_compile_definitions(xgrib_reader_integration_tests PRIVATE JASPER)
+    if(XGRIB_USE_BUNDLED_JASPER)
+      target_include_directories(xgrib_reader_integration_tests BEFORE PRIVATE
+        "${xgrib_jasper_BINARY_DIR}/src/libjasper/include"
+        "${xgrib_jasper_SOURCE_DIR}/src/libjasper/include")
+    endif()
+
+    add_test(NAME xgrib_reader_jpeg_hardening
+      COMMAND xgrib_reader_integration_tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/hardening/eccodes-2-grid_jpeg-b0-c0.grb
+        --jpeg)
+    add_test(NAME xgrib_reader_malformed_hardening
+      COMMAND xgrib_reader_integration_tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/hardening/minimal-grib2-crash.grb2
+        --malformed)
 
     set(XGRIB_TEST_GRIB "${CMAKE_CURRENT_BINARY_DIR}/xgrib-test-current.grb")
     add_test(NAME xgrib_generate_reader_fixture

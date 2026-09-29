@@ -1,12 +1,14 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <set>
 #include <string>
 
 #include <wx/string.h>
+#include <jasper/jasper.h>
 
 #include "GribReader.h"
 #include "GribVectorPolicy.h"
@@ -39,6 +41,28 @@ void Expect(bool condition, const char* message) {
   std::exit(1);
 }
 
+class JasperRuntime {
+public:
+  JasperRuntime() {
+#if defined(JAS_VERSION_MAJOR) && JAS_VERSION_MAJOR >= 2
+    jas_conf_clear();
+    jas_conf_set_max_mem_usage(256u * 1024u * 1024u);
+    Expect(jas_init_library() == 0, "JasPer library initialization");
+    Expect(jas_init_thread() == 0, "JasPer thread initialization");
+#else
+    Expect(jas_init() == 0, "legacy JasPer initialization");
+#endif
+  }
+  ~JasperRuntime() {
+#if defined(JAS_VERSION_MAJOR) && JAS_VERSION_MAJOR >= 2
+    jas_cleanup_thread();
+    jas_cleanup_library();
+#else
+    jas_cleanup();
+#endif
+  }
+};
+
 double NormalizeLongitude(double value) {
   double normalized = std::fmod(value + 180.0, 360.0);
   if (normalized < 0.0) normalized += 360.0;
@@ -48,6 +72,7 @@ double NormalizeLongitude(double value) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  JasperRuntime jasper;
   Expect(GribV2DataTypeForParameter(10, 0, 3) == GRB_HTSGW,
          "GRIB2 significant wave height should be recognized");
   Expect(GribV2DataTypeForParameter(10, 0, 10) == GRB_WVDIR,
@@ -97,11 +122,38 @@ int main(int argc, char** argv) {
 
   Expect(argc == 2 || argc == 3,
          "usage: xgrib_reader_integration_tests FILE.grb "
-         "[--any|--combined|--combined-all|--long-current|--tonga]");
+         "[--any|--combined|--combined-all|--long-current|--tonga|--jpeg|--malformed]");
 
   GribReader reader(wxString::FromUTF8(argv[1]));
-  Expect(reader.isOk(), "xGRIB reader rejected native generator output");
   const std::string mode = argc == 3 ? argv[2] : "";
+  if (mode == "--malformed") {
+    Expect(!reader.isOk(), "malformed GRIB2 message must be rejected");
+    return 0;
+  }
+  Expect(reader.isOk(), "xGRIB reader rejected native generator output");
+  if (mode == "--jpeg") {
+    Expect(reader.getTotalNumberOfGribRecords() == 1,
+           "JPEG fixture should decode to one wind field");
+    const GribRecord* record = reader.getFirstGribRecord();
+    Expect(record != nullptr, "JPEG fixture record");
+    std::ifstream expected(std::string(argv[1]) + ".values");
+    std::size_t count = 0;
+    expected >> count;
+    Expect(expected && count == static_cast<std::size_t>(record->getNi()) *
+                                  record->getNj(), "JPEG reference field size");
+    for (std::size_t index = 0; index < count; ++index) {
+      double reference;
+      expected >> reference;
+      Expect(static_cast<bool>(expected), "JPEG reference value");
+      const double actual = record->getValue(index % record->getNi(),
+                                             index / record->getNi());
+      Expect(std::abs(actual - reference) <=
+                 1e-8 * std::max(1.0, std::abs(reference)),
+             "JPEG field differs from ecCodes reference");
+    }
+    std::cout << "xGRIB JPEG field matches ecCodes reference\n";
+    return 0;
+  }
   if (mode == "--tonga") {
     std::set<int> sampled;
     for (const auto& [key, records] : *reader.getGribMap()) {

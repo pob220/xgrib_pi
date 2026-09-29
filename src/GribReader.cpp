@@ -19,24 +19,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * \file
  * \implements \ref GribReader.h
  */
-#include "wx/wxprec.h"
-
-#ifndef WX_PRECOMP
-#include "wx/wx.h"
-#endif  // precompiled headers
 
 #include "GribReader.h"
 #include "GribV1Record.h"
 #include "GribV2Record.h"
 #include <cassert>
+#include <memory>
+#include "GribDecodeLimits.h"
 
 //-------------------------------------------------------------------------------
-GribReader::GribReader() {
+GribReader::GribReader() : file(nullptr), fileSize(0), retainedBytes(0), resourceLimitExceeded(false) {
   ok = false;
   dewpointDataStatus = NO_DATA_IN_FILE;
 }
 //-------------------------------------------------------------------------------
-GribReader::GribReader(const wxString fname) {
+GribReader::GribReader(const wxString fname) : GribReader() {
   ok = false;
   dewpointDataStatus = NO_DATA_IN_FILE;
   if (fname != "") {
@@ -63,6 +60,7 @@ void GribReader::clean_all_vectors() {
     delete ls;
   }
   mapGribRecords.clear();
+  retainedBytes = 0;
 }
 //-------------------------------------------------------------------------------
 void GribReader::clean_vector(std::vector<GribRecord*>& ls) {
@@ -75,21 +73,34 @@ void GribReader::clean_vector(std::vector<GribRecord*>& ls) {
 }
 
 //---------------------------------------------------------------------------------
-void GribReader::storeRecordInMap(GribRecord* rec) {
-#if 0
-    fprintf(stderr,
-        "GribReader: STORE record type: dataType=%d levelType=%d levelValue=%d idCenter==%d && idModel==%d && idGrid==%d\n",
-            rec->getDataType(), rec->getLevelType(), rec->getLevelValue(),
-            rec->getIdCenter(), rec->getIdModel(), rec->getIdGrid()
-        );
-#endif
-  std::map<std::string, std::vector<GribRecord*>*>::iterator it;
-  it = mapGribRecords.find(rec->getKey());
-  if (it == mapGribRecords.end()) {
-    mapGribRecords[rec->getKey()] = new std::vector<GribRecord*>;
-    assert(mapGribRecords[rec->getKey()]);
+bool GribReader::storeRecordInMap(GribRecord* rec) {
+  // Takes ownership even if allocation of a key, list or map node fails.
+  std::unique_ptr<GribRecord> owner(rec);
+  if (!rec) return false;
+  // Conservative metadata allowance also bounds files containing millions of
+  // tiny constant fields. This is a retained-record budget, not a RAM probe.
+  std::size_t count;
+  if (!grib_decode::gridSize(rec->getNi(), rec->getNj(), count)) return false;
+  const std::uint64_t bytes = std::uint64_t(count) * sizeof(double) +
+      (count + 7) / 8 + sizeof(GribV2Record) + 512;
+  if (bytes > GRIB_MAX_READER_BYTES || retainedBytes > GRIB_MAX_READER_BYTES - bytes) {
+    resourceLimitExceeded = true;
+    ok = false;
+    return false;
   }
-  mapGribRecords[rec->getKey()]->push_back(rec);
+  const std::string key = rec->getKey();
+  auto it = mapGribRecords.find(key);
+  if (it == mapGribRecords.end()) {
+    std::unique_ptr<std::vector<GribRecord*>> list(new std::vector<GribRecord*>);
+    list->push_back(rec);
+    mapGribRecords.emplace(key, list.get());
+    list.release();
+  } else {
+    it->second->push_back(rec);
+  }
+  owner.release();
+  retainedBytes += static_cast<std::size_t>(bytes);
+  return true;
 }
 
 //---------------------------------------------------------------------------------
@@ -119,7 +130,7 @@ void GribReader::readAllGribRecords() {
   // et stockage dans les listes appropriées.
   //--------------------------------------------------------
   GribRecord* rec = nullptr;
-  GribRecord* prevDataSet = nullptr;
+  std::unique_ptr<GribRecord> pending;
   int id = 0;
   time_t firstdate = -1;
   bool b_EOF;
@@ -133,30 +144,31 @@ void GribReader::readAllGribRecords() {
     // file from the start
 
     if (is_v2 == false) {
-      rec = new GribV1Record(file, id);
+      pending.reset(new GribV1Record(file, id));
+      rec = pending.get();
       if (rec->isOk() == false) {
-        delete rec;
-        rec = new GribV2Record(file, id);
+        pending.reset(new GribV2Record(file, id));
+        rec = pending.get();
         is_v2 = rec->isOk();
       }
     } else {
       GribV2Record* rec2 = dynamic_cast<GribV2Record*>(rec);
       if (rec2 && rec2->hasMoreDataSet()) {
-        rec = rec2->GribV2NextDataSet(file, id);
-        delete prevDataSet;
+        GribRecord* next = rec2->GribV2NextDataSet(file, id);
+        pending.reset(next);
+        rec = pending.get();
       } else {
-        rec = new GribV2Record(file, id);
+        pending.reset(new GribV2Record(file, id));
+        rec = pending.get();
       }
 
       is_v2 = rec->isOk();
       if (rec->isOk() == false) {
-        delete rec;
-        rec = new GribV1Record(file, id);
+        pending.reset(new GribV1Record(file, id));
+      rec = pending.get();
       }
     }
-    prevDataSet = nullptr;
     if (rec->isOk() == false) {
-      delete rec;
       break;
     }
     b_EOF = rec->isEof();
@@ -164,10 +176,10 @@ void GribReader::readAllGribRecords() {
     if (!rec->isDataKnown()) {
       GribV2Record* rec2 = dynamic_cast<GribV2Record*>(rec);
       if (rec2 == nullptr || !rec2->hasMoreDataSet()) {
-        delete rec;
+        pending.reset();
         rec = nullptr;
       } else {  // must delete it in the next iteration
-        prevDataSet = rec;
+        // pending retains ownership until the next dataset transfers state.
       }
       continue;
     }
@@ -184,90 +196,132 @@ void GribReader::readAllGribRecords() {
          rec->getLevelType() == LV_ISOBARIC  // wind at x hpa
          && (rec->getLevelValue() == 850 || rec->getLevelValue() == 700 ||
              rec->getLevelValue() == 500 || rec->getLevelValue() == 300)))
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if ((RecordIsGust(rec) && rec->getLevelType() == LV_GND_SURF &&
               rec->getLevelValue() == 0))
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if (RecordIsWind(rec) && rec->getLevelType() == LV_GND_SURF)
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if (rec->getDataType() == GRB_TEMP  // Air temperature at 2m
              && rec->getLevelType() == LV_ABOV_GND && rec->getLevelValue() == 2)
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if (rec->getDataType() == GRB_TEMP  // Air temperature at x hpa
              && rec->getLevelType() == LV_ISOBARIC &&
              (rec->getLevelValue() == 850 || rec->getLevelValue() == 700 ||
               rec->getLevelValue() == 500 || rec->getLevelValue() == 300))
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if (rec->getDataType() == GRB_HUMID_REL &&
              rec->getLevelType() == LV_ABOV_GND &&
              rec->getLevelValue() == 2)
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if (rec->getDataType() == GRB_PRECIP_TOT  // total rainfall
              && rec->getLevelType() == LV_GND_SURF && rec->getLevelValue() == 0)
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if (rec->getDataType() == GRB_PRECIP_RATE &&
              rec->getLevelType() == LV_GND_SURF && rec->getLevelValue() == 0)
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if ((rec->getDataType() == GRB_CLOUD_TOT  // cloud cover
               || rec->getDataType() == GRB_COMP_REFL) &&
              rec->getLevelType() == LV_ATMOS_ALL && rec->getLevelValue() == 0)
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
     else if (rec->getDataType() == GRB_HTSGW)  // Significant Wave Height
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if (rec->getDataType() ==
              GRB_PER)  // Combined Wind Waves and Swell period
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if (rec->getDataType() ==
              GRB_DIR)  // Combined Wind Waves and Swell Direction
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if (rec->getDataType() == GRB_WVHGT)  // Wind Wave Height
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if (rec->getDataType() == GRB_WVPER)  // Wind Waves period
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if (rec->getDataType() == GRB_WVDIR)  // Wind Waves Direction
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if (rec->getDataType() == GRB_CRAIN)  // Catagorical Rain  1/0
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if ((rec->getDataType() == GRB_WTMP) &&
              (rec->getLevelType() == LV_GND_SURF) &&
              (rec->getLevelValue() == 0))
-      storeRecordInMap(rec);  // rtofs Water Temp + translated gfs Water Temp
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }  // rtofs Water Temp + translated gfs Water Temp
 
     else if (RecordIsCurrent(rec))  // rtofs model sea current current
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if (rec->getDataType() == GRB_CAPE &&
              rec->getLevelType() == LV_GND_SURF &&
              rec->getLevelValue() == 0)  // Potential energy
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if ((rec->getDataType() == GRB_GEOPOT_HGT &&
               rec->getLevelType() ==
                   LV_ISOBARIC)  // geopotentiel geight at x hpa
              && (rec->getLevelValue() == 850 || rec->getLevelValue() == 700 ||
                  rec->getLevelValue() == 500 || rec->getLevelValue() == 300))
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else if ((rec->getDataType() == GRB_HUMID_REL &&
               rec->getLevelType() == LV_ISOBARIC)  // relative humidity at x hpa
              && (rec->getLevelValue() == 850 || rec->getLevelValue() == 700 ||
                  rec->getLevelValue() == 500 || rec->getLevelValue() == 300))
-      storeRecordInMap(rec);
+      {
+        if (!storeRecordInMap(pending.release())) return;
+      }
 
     else {
       GribV2Record* rec2 = dynamic_cast<GribV2Record*>(rec);
@@ -279,14 +333,14 @@ void GribReader::readAllGribRecords() {
                 );
 #endif
       if (rec2 == nullptr || !rec2->hasMoreDataSet()) {
-        delete rec;
+        pending.reset();
         rec = nullptr;
       } else {
-        prevDataSet = rec;
+        // pending retains ownership until the next dataset transfers state.
       }
     }
   } while (!b_EOF);
-  delete prevDataSet;
+  // pending deletes any skipped or rejected record on every exit path.
 }
 
 //---------------------------------------------------------------------------------
@@ -297,9 +351,9 @@ void GribReader::copyFirstCumulativeRecord(int dataType, int levelType,
   if (rec == nullptr) {
     rec = getFirstGribRecord(dataType, levelType, levelValue);
     if (rec != nullptr) {
-      GribRecord* r2 = new GribRecord(*rec);
+      std::unique_ptr<GribRecord> r2(new GribRecord(*rec));
       r2->setRecordCurrentDate(dateref);  // 1er enregistrement factice
-      storeRecordInMap(r2);
+      if (!storeRecordInMap(r2.release())) return;
     }
   }
 }
@@ -341,9 +395,9 @@ void GribReader::copyMissingWaveRecords(int dataType, int levelType,
             getGribRecord(dataType, levelType, levelValue, date2);
         if (rec2 && rec2->isOk()) {
           // create a copied record from date2
-          GribRecord* r2 = new GribRecord(*rec2);
+          std::unique_ptr<GribRecord> r2(new GribRecord(*rec2));
           r2->setRecordCurrentDate(date);
-          storeRecordInMap(r2);
+          if (!storeRecordInMap(r2.release())) return;
         }
       }
     }
@@ -429,6 +483,7 @@ void GribReader::readGribFileContent() {
   fileSize = zu_filesize(file);
   readAllGribRecords();
   createListDates();
+  if (resourceLimitExceeded) return;
   //    hoursBetweenRecords = computeHoursBeetweenGribRecords();
   // XXX should it be done after reading all files, rather than per file?
   if (getNumberOfGribRecords(GRB_WIND_GUST, LV_GND_SURF, 0) == 0) {
@@ -438,9 +493,10 @@ void GribReader::readGribFileContent() {
 
       GribRecord* recY = getGribRecord(GRB_WIND_GUST_VY, LV_GND_SURF, 0, date);
       if (recY == nullptr) continue;
-      GribRecord* rec = GribRecord::MagnitudeRecord(*recX, *recY);
+      std::unique_ptr<GribRecord> rec(GribRecord::MagnitudeRecord(*recX, *recY));
+      if (!rec) continue;
       rec->setDataType(GRB_WIND_GUST);
-      storeRecordInMap(rec);
+      if (!storeRecordInMap(rec.release())) return;
     }
   }
   //-----------------------------------------------------
@@ -462,7 +518,7 @@ void GribReader::readGribFileContent() {
     if (recModel == nullptr) continue;
 
     // Crée un GribRecord avec les dewpoints calculés
-    GribRecord* recDewpoint = new GribRecord(*recModel);
+    std::unique_ptr<GribRecord> recDewpoint(new GribRecord(*recModel));
     recDewpoint->setDataType(GRB_DEWPOINT);
     for (zuint i = 0; i < (zuint)recModel->getNi(); i++) {
       for (zuint j = 0; j < (zuint)recModel->getNj(); j++) {
@@ -472,7 +528,7 @@ void GribReader::readGribFileContent() {
         recDewpoint->setValue(i, j, dp);
       }
     }
-    storeRecordInMap(recDewpoint);
+    if (!storeRecordInMap(recDewpoint.release())) return;
   }
 }
 
@@ -689,8 +745,10 @@ double GribReader::computeDewPoint(double lon, double lat, time_t now) {
 //-------------------------------------------------------------------------------
 void GribReader::openFile(const wxString fname) {
   grib_debug("Open file: %s", (const char*)fname.utf8_str());
+  if (file) { zu_close(file); file = nullptr; }
   fileName = fname;
   ok = false;
+  resourceLimitExceeded = false;
   // clean_all_vectors();
   //--------------------------------------------------------
   // Open the file
@@ -700,23 +758,29 @@ void GribReader::openFile(const wxString fname) {
     erreur("Can't open file: %s", (const char*)fname.utf8_str());
     return;
   }
+  try {
   readGribFileContent();
 
   // Look for compressed files with alternate extensions
-  if (!ok) {
-    if (file != nullptr) zu_close(file);
+  if (!ok && !resourceLimitExceeded) {
+    if (file != nullptr) { zu_close(file); file = nullptr; }
     file = zu_open_wx(fname, "rb", ZU_COMPRESS_BZIP);
     if (file != nullptr) readGribFileContent();
   }
-  if (!ok) {
-    if (file != nullptr) zu_close(file);
+  if (!ok && !resourceLimitExceeded) {
+    if (file != nullptr) { zu_close(file); file = nullptr; }
     file = zu_open_wx(fname, "rb", ZU_COMPRESS_GZIP);
     if (file != nullptr) readGribFileContent();
   }
-  if (!ok) {
-    if (file != nullptr) zu_close(file);
+  if (!ok && !resourceLimitExceeded) {
+    if (file != nullptr) { zu_close(file); file = nullptr; }
     file = zu_open_wx(fname, "rb", ZU_COMPRESS_NONE);
     if (file != nullptr) readGribFileContent();
+  }
+  } catch (...) {
+    zu_close(file);
+    file = nullptr;
+    throw;
   }
   if (file != nullptr) {
     zu_close(file);

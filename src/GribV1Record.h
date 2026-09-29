@@ -38,12 +38,16 @@ class GribV1Record : public GribRecord {
 public:
   GribV1Record(ZUFILE* file, int id_);
   GribV1Record(const GribRecord& rec);
+  GribV1Record(const GribV1Record& rec);
+  GribV1Record& operator=(const GribV1Record& rec);
+  GribV1Record& operator=(const GribRecord& rec);
   GribV1Record() {}
 
   ~GribV1Record();
 
 protected:
 private:
+  bool validSection(zuint offset, zuint size, zuint minimum) const;
   zuint periodSeconds(zuchar unit, zuchar P1, zuchar P2, zuchar range);
   //-----------------------------------------
   void translateDataType();  // adapte les codes des différents centres météo
