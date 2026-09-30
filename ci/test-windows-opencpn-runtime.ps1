@@ -428,7 +428,7 @@ try {
         $forecastHandle, 0x014E, [IntPtr]::Zero, [IntPtr]::Zero)
     [void][XgribNativeWindow]::SendMessage(
         [XgribNativeWindow]::GetParent($forecastHandle), 0x0111,
-        [IntPtr](1002 -bor (1 -shl 16)), $forecastHandle)
+        [IntPtr](1002 -bor (9 -shl 16)), $forecastHandle)
     Start-Sleep -Milliseconds 500
     # Reopening generator output must rebuild the cursor panel, including its
     # parameter selections. A successful file-open log alone missed this bug.
