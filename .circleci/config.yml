@@ -476,22 +476,12 @@ workflows:
     when:
       not: << pipeline.parameters.run_workflow_deploy >>
     jobs:
-      - windows-vcpkg-dependencies:
-          filters:
-            branches:
-              only: [windows-focused-validation, fix/windows-ui-review-20260930]
-            tags:
-              ignore: /.*/
       - windows-x86:
-          requires: [windows-vcpkg-dependencies]
           filters: &windows-focused-filters
             branches:
-              only: [windows-focused-validation, fix/windows-ui-review-20260930]
+              only: windows-focused-validation
             tags:
               ignore: /.*/
-      - windows-x64:
-          requires: [windows-vcpkg-dependencies]
-          filters: *windows-focused-filters
       - windows-opencpn-runtime:
           requires: [windows-x86]
           filters: *windows-focused-filters
@@ -631,3 +621,23 @@ workflows:
       - deploy-alpha:
           context: xgrib-deployment
           requires: [hold-for-alpha-approval]
+
+  windows-ui-review:
+    when:
+      not: << pipeline.parameters.run_workflow_deploy >>
+    jobs:
+      - windows-vcpkg-dependencies:
+          filters: &windows-ui-review-filters
+            branches:
+              only: fix/windows-ui-review-20260930
+            tags:
+              ignore: /.*/
+      - windows-x86:
+          requires: [windows-vcpkg-dependencies]
+          filters: *windows-ui-review-filters
+      - windows-x64:
+          requires: [windows-vcpkg-dependencies]
+          filters: *windows-ui-review-filters
+      - windows-opencpn-runtime:
+          requires: [windows-x86]
+          filters: *windows-ui-review-filters
