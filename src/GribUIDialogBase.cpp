@@ -579,7 +579,9 @@ wxBitmap GRIBUICtrlBarBase::GetScaledBitmap(wxBitmap bitmap,
 #endif  // ocpnUSE_SVG
   {
     wxImage a = bitmap.ConvertToImage();
-    return wxBitmap(a.Scale(w, h), wxIMAGE_QUALITY_HIGH);
+    // Image quality belongs to Scale(), not the bitmap depth argument.
+    // wxIMAGE_QUALITY_HIGH is 4: using it as a depth corrupts MSW icons.
+    return wxBitmap(a.Scale(w, h, wxIMAGE_QUALITY_HIGH));
   }
 }
 

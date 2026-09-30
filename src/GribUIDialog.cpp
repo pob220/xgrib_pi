@@ -209,11 +209,13 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
 
   m_actionOpenButton =
       CreateActionButton(_("Open GRIB"), _("Open an existing GRIB file."));
+  m_actionOpenButton->SetId(ID_BTNOPENFILE);
   m_actionOpenButton->Bind(wxEVT_BUTTON, &GRIBUICtrlBar::OnOpenFile, this);
   m_fgCtrlGrabberSize->Add(m_actionOpenButton, 0, wxALL | wxEXPAND, 1);
 
   m_actionSettingsButton = CreateActionButton(
       _("Settings"), _("Configure GRIB display and behaviour."));
+  m_actionSettingsButton->SetId(ID_BTNSETTING);
 #ifdef __OCPN__ANDROID__
   m_actionSettingsButton->Bind(wxEVT_BUTTON, &GRIBUICtrlBar::OnSettings, this);
 #else
@@ -223,6 +225,7 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
 
   m_actionDownloadButton =
       CreateActionButton(_("Download GRIB"), _("Download a forecast GRIB."));
+  m_actionDownloadButton->SetId(ID_BTNREQUEST);
 #ifdef __OCPN__ANDROID__
   m_actionDownloadButton->Bind(wxEVT_BUTTON,
                                &GRIBUICtrlBar::OnRequestForecastData, this);
@@ -239,6 +242,14 @@ GRIBUICtrlBar::GRIBUICtrlBar(wxWindow* parent, wxWindowID id,
   m_actionGenerateButton->Bind(wxEVT_BUTTON,
                                &GRIBUICtrlBar::OnEnvironmentalGrib, this);
   m_fgCtrlGrabberSize->Add(m_actionGenerateButton, 0, wxALL | wxEXPAND, 1);
+
+#ifndef __OCPN__ANDROID__
+  // Keep the desktop context menu available on the replacement action buttons.
+  for (auto* action : {m_actionOpenButton, m_actionSettingsButton,
+                       m_actionDownloadButton, m_actionGenerateButton}) {
+    action->Bind(wxEVT_RIGHT_DOWN, &GRIBUICtrlBar::OnMouseEvent, this);
+  }
+#endif
 
   SetActionButtonBitmaps();
 
@@ -1615,6 +1626,10 @@ void GRIBUICtrlBar::OpenGeneratedGrib(const wxString& path) {
   m_file_names.Clear();
   m_file_names.Add(path);
   OpenFile(false);
+  // Unlike the file picker, the generator callback previously left the cursor
+  // panel in its empty-file state, hiding every available parameter checkbox.
+  SetDialogsStyleSizePosition(true);
+  UpdateTrackingControl();
   wxLogMessage("xGRIB: opened generated GRIB: %s", path);
 }
 
