@@ -340,6 +340,32 @@ jobs:
           name: Upload reviewed Alpha artifacts
           command: bash ci/deploy-alpha-artifacts.sh
 
+  windows-ui-runtime-retest:
+    machine:
+      image: windows-server-2022-gui:current
+      shell: powershell.exe -ExecutionPolicy Bypass
+    resource_class: windows.medium
+    steps:
+      - checkout
+      - run:
+          name: Test reviewed Win32 package with corrected checkbox automation
+          command: |
+            $ErrorActionPreference = "Stop"
+            $repo = (Get-Location).Path
+            $artifact = Join-Path $repo "artifacts/windows-x86"
+            New-Item -ItemType Directory -Force $artifact | Out-Null
+            $api = "https://circleci.com/api/v2/project/circleci/K9DC7cYmiJNgi5mJSq9gdA/4683a535-bc32-455c-a5bd-32974acf594e/1142/artifacts"
+            $items = (Invoke-RestMethod $api).items
+            $packages = @($items | Where-Object { $_.path -like "*/package/*.tar.gz" })
+            if ($packages.Count -ne 1) { throw "Expected one reviewed Win32 tarball" }
+            $archive = Join-Path $artifact ([IO.Path]::GetFileName($packages[0].path))
+            Invoke-WebRequest $packages[0].url -OutFile $archive
+            & powershell.exe -ExecutionPolicy Bypass -File ci/test-windows-opencpn-runtime.ps1 -Repository $repo -PackageArchive $archive -ArtifactDirectory $artifact
+            if ($LASTEXITCODE -ne 0) { throw "Native Windows UI regression test failed" }
+      - store_artifacts:
+          path: artifacts/windows-x86
+          destination: windows-ui-retest
+
 workflows:
   validate:
     when:
@@ -623,21 +649,10 @@ workflows:
           requires: [hold-for-alpha-approval]
 
   windows-ui-review:
-    when:
-      not: << pipeline.parameters.run_workflow_deploy >>
     jobs:
-      - windows-vcpkg-dependencies:
-          filters: &windows-ui-review-filters
+      - windows-ui-runtime-retest:
+          filters:
             branches:
               only: fix/windows-ui-review-20260930
             tags:
               ignore: /.*/
-      - windows-x86:
-          requires: [windows-vcpkg-dependencies]
-          filters: *windows-ui-review-filters
-      - windows-x64:
-          requires: [windows-vcpkg-dependencies]
-          filters: *windows-ui-review-filters
-      - windows-opencpn-runtime:
-          requires: [windows-x86]
-          filters: *windows-ui-review-filters

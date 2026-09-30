@@ -19,6 +19,20 @@ Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 public static class XgribNativeWindow {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr SendMessage(
+        IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")]
+    public static extern int GetDlgCtrlID(IntPtr window);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+    public static extern int GetWindowLong(IntPtr window, int index);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetClassName(
+        IntPtr window, System.Text.StringBuilder name, int capacity);
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetParent(IntPtr window);
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowEnabled(IntPtr window);
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool PostMessage(
@@ -392,25 +406,73 @@ try {
 
     Close-WindowElement $generatorWindow
     Start-Sleep -Milliseconds 500
+    # The weather fixture stops at hour 3, but currents extend to hour 6.
+    # Select hour 0 so both parameter controls have records to display.
+    $comboCondition = [System.Windows.Automation.PropertyCondition]::new(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::ComboBox)
+    $combos = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants, $comboCondition)
+    $forecastHandle = [IntPtr]::Zero
+    foreach ($combo in $combos) {
+        $handle = [IntPtr]$combo.Current.NativeWindowHandle
+        if ([XgribNativeWindow]::GetDlgCtrlID($handle) -eq 1002) {
+            $forecastHandle = $handle
+            break
+        }
+    }
+    if ($forecastHandle -eq [IntPtr]::Zero) {
+        throw "Forecast selector is missing"
+    }
+    [void][XgribNativeWindow]::SendMessage(
+        $forecastHandle, 0x014E, [IntPtr]::Zero, [IntPtr]::Zero)
+    [void][XgribNativeWindow]::SendMessage(
+        [XgribNativeWindow]::GetParent($forecastHandle), 0x0111,
+        [IntPtr](1002 -bor (1 -shl 16)), $forecastHandle)
+    Start-Sleep -Milliseconds 500
     # Reopening generator output must rebuild the cursor panel, including its
     # parameter selections. A successful file-open log alone missed this bug.
     foreach ($parameter in @("Wind", "Current")) {
-        $checkbox = Find-ElementByName $parameter
-        if ($null -eq $checkbox -or $checkbox.Current.IsOffscreen -or
-            -not $checkbox.Current.IsEnabled) {
+        $nameCondition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::NameProperty,
+            $parameter)
+        $matches = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+            [System.Windows.Automation.TreeScope]::Descendants, $nameCondition)
+        $checkboxHandle = [IntPtr]::Zero
+        foreach ($candidate in $matches) {
+            $handle = [IntPtr]$candidate.Current.NativeWindowHandle
+            $class = New-Object System.Text.StringBuilder 256
+            [void][XgribNativeWindow]::GetClassName($handle, $class, 256)
+            $buttonType = [XgribNativeWindow]::GetWindowLong($handle, -16) -band 15
+            if ($class.ToString() -eq "Button" -and
+                $buttonType -in @(2, 3, 5, 6) -and
+                -not $candidate.Current.IsOffscreen -and
+                [XgribNativeWindow]::IsWindowEnabled($handle)) {
+                $checkboxHandle = $handle
+                break
+            }
+        }
+        if ($checkboxHandle -eq [IntPtr]::Zero) {
             throw "Generated GRIB has no usable $parameter checkbox"
         }
-        $toggle = $checkbox.GetCurrentPattern(
-            [System.Windows.Automation.TogglePattern]::Pattern)
-        $initial = $toggle.Current.ToggleState
-        $toggle.Toggle()
+        # wxMSW's accessibility provider does not always expose TogglePattern.
+        # Read and click the actual native checkbox rather than a same-name item.
+        $initial = [XgribNativeWindow]::SendMessage(
+            $checkboxHandle, 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero)
+        [void][XgribNativeWindow]::SendMessage(
+            $checkboxHandle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
         Start-Sleep -Milliseconds 250
-        if ($toggle.Current.ToggleState -eq $initial) {
+        $changed = [XgribNativeWindow]::SendMessage(
+            $checkboxHandle, 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero)
+        if ($changed -eq $initial) {
             throw "$parameter checkbox did not change selection"
         }
-        $toggle.Toggle()
+        [void][XgribNativeWindow]::SendMessage(
+            $checkboxHandle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
         Start-Sleep -Milliseconds 250
-        if ($toggle.Current.ToggleState -ne $initial) {
+        $restored = [XgribNativeWindow]::SendMessage(
+            $checkboxHandle, 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero)
+        if ($restored -ne $initial) {
             throw "$parameter checkbox did not restore selection"
         }
     }
