@@ -570,8 +570,15 @@ void GRIBUICtrlBar::SetActionButtonBitmap(wxButton* button,
   button->SetBitmap(GetScaledBitmap(wxBitmap(xpm), svgName, m_ScaledFactor));
   button->SetBitmapPosition(wxLEFT);
   button->SetBitmapMargins(wxRound(10 * m_ScaledFactor), 0);
-  button->SetMinSize(
-      wxSize(wxRound(178 * m_ScaledFactor), wxRound(36 * m_ScaledFactor)));
+  // Include the actual translated label and icon. A fixed width clips
+  // Windows buttons when the user's dialog font is larger than the toolbar.
+  const wxSize labelSize = button->GetTextExtent(button->GetLabel());
+  const wxSize bitmapSize = button->GetBitmap().GetSize();
+  button->SetMinSize(wxSize(
+      wxMax(wxRound(178 * m_ScaledFactor),
+            labelSize.x + bitmapSize.x + wxRound(30 * m_ScaledFactor)),
+      wxMax(wxRound(36 * m_ScaledFactor),
+            wxMax(labelSize.y, bitmapSize.y) + wxRound(12 * m_ScaledFactor))));
 }
 
 void GRIBUICtrlBar::SetActionButtonBitmaps() {
@@ -963,8 +970,7 @@ void GRIBUICtrlBar::SetDialogsStyleSizePosition(bool force_recompute) {
        (m_old_DialogStyle >> 1 == ATTACHED && m_DialogStyle >> 1 == ATTACHED)))
     return;
 
-  bool m_HasCaption = GetWindowStyleFlag() == (wxCAPTION | wxCLOSE_BOX |
-                                               wxSYSTEM_MENU | wxTAB_TRAVERSAL);
+  bool m_HasCaption = (GetWindowStyleFlag() & wxCAPTION) != 0;
 
   /* first hide grabber, detach cursordata and set ctrl/buttons visibility to
   have CtrlBar in his "alone" version altitude button visibility is a special

@@ -19,6 +19,24 @@ Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 public static class XgribNativeWindow {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr SendMessage(
+        IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")]
+    public static extern int GetDlgCtrlID(IntPtr window);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+    public static extern int GetWindowLong(IntPtr window, int index);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetClassName(
+        IntPtr window, System.Text.StringBuilder name, int capacity);
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetParent(IntPtr window);
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowEnabled(IntPtr window);
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rect { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr window, out Rect rect);
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool PostMessage(
@@ -39,6 +57,30 @@ function Save-Screenshot([string] $path) {
     finally {
         $graphics.Dispose()
         $bitmap.Dispose()
+    }
+}
+
+function Get-CheckboxGlyphHash([IntPtr] $handle) {
+    $rect = New-Object XgribNativeWindow+Rect
+    if (-not [XgribNativeWindow]::GetWindowRect($handle, [ref]$rect)) {
+        throw "Cannot locate checkbox glyph"
+    }
+    # OpenCPN colours make wxMSW checkboxes owner drawn. BM_GETCHECK does
+    # not track their wxWidgets state and TogglePattern may be unavailable.
+    # Verify that the actual painted checkbox changes and restores.
+    $width = [Math]::Min(24, $rect.Right - $rect.Left)
+    $height = $rect.Bottom - $rect.Top
+    $bitmap = New-Object System.Drawing.Bitmap $width, $height
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $stream = New-Object System.IO.MemoryStream
+    $hash = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bitmap.Size)
+        $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+        return [Convert]::ToBase64String($hash.ComputeHash($stream.ToArray()))
+    }
+    finally {
+        $hash.Dispose(); $stream.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
     }
 }
 
@@ -154,10 +196,10 @@ $logDirectory = Join-Path $artifactPath "logs"
 $testDirectory = Join-Path $artifactPath "tests"
 $screenshotDirectory = Join-Path $artifactPath "screenshots"
 $runtimeRoot = Join-Path $repositoryPath "windows-opencpn-runtime"
-$opencpnRoot = Join-Path $runtimeRoot "OpenCPN-5.14.0"
+$opencpnRoot = Join-Path $runtimeRoot "OpenCPN-5.14.2"
 $downloadDirectory = Join-Path $runtimeRoot "downloads"
 $packageExtract = Join-Path $runtimeRoot "xgrib-package"
-$installer = Join-Path $downloadDirectory "opencpn_5.14.0_setup.exe"
+$installer = Join-Path $downloadDirectory "opencpn_5.14.2_setup.exe"
 $opencpnLog = Join-Path $opencpnRoot "opencpn.log"
 $runtimeLog = Join-Path $logDirectory "opencpn.log"
 $openCpnExtractLog = Join-Path $logDirectory "opencpn-extract.log"
@@ -165,8 +207,8 @@ $runtimeResultPath = Join-Path $testDirectory "windows-opencpn-runtime.json"
 New-Item -ItemType Directory -Force $logDirectory,$testDirectory,
     $screenshotDirectory,$runtimeRoot,$downloadDirectory,$packageExtract | Out-Null
 
-$installerUrl = "https://github.com/OpenCPN/OpenCPN/releases/download/Release_5.14.0/opencpn_5.14.0-0+4418.91f3b67_setup.exe"
-$installerSha256 = "f049075bd3411dc3d5ba2954229ecebf8510abd36529fd27d961d37f275c1076"
+$installerUrl = "https://dl.cloudsmith.io/public/david-register/opencpn-unstable/raw/files/opencpn_5.14.2-0+4830.de7e706_setup.exe"
+$installerSha256 = "a3c572ce9677a67919a25e5a1bff5dda767ef7aa51a1e0552f5205a074ad18af"
 Invoke-WebRequest $installerUrl -OutFile $installer
 $actualInstallerHash = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLowerInvariant()
 if ($actualInstallerHash -ne $installerSha256) {
@@ -180,7 +222,7 @@ if ($actualInstallerHash -ne $installerSha256) {
     Set-Content -Encoding utf8 $openCpnExtractLog
 if ($LASTEXITCODE -ne 0 -or
     -not (Test-Path (Join-Path $opencpnRoot "opencpn.exe"))) {
-    throw "OpenCPN 5.14.0 archive extraction failed"
+    throw "OpenCPN 5.14.2 archive extraction failed"
 }
 
 & tar.exe -xf $packageArchivePath -C $packageExtract
@@ -210,7 +252,7 @@ Copy-Item (Join-Path $repositoryPath "test\fixtures\current-differing.grb") $cur
 
 $config = @"
 [Settings]
-ConfigVersionString=Version 5.14.0 Build 2026-04-08
+ConfigVersionString=Version 5.14.2-0+de7e706 Build 2026-09-28
 NavMessageShown=1
 OpenGL=0
 DisableOpenGL=1
@@ -392,28 +434,75 @@ try {
 
     Close-WindowElement $generatorWindow
     Start-Sleep -Milliseconds 500
+    # The weather fixture stops at hour 3, but currents extend to hour 6.
+    # Select hour 0 so both parameter controls have records to display.
+    $comboCondition = [System.Windows.Automation.PropertyCondition]::new(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::ComboBox)
+    $combos = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants, $comboCondition)
+    $forecastHandle = [IntPtr]::Zero
+    foreach ($combo in $combos) {
+        $handle = [IntPtr]$combo.Current.NativeWindowHandle
+        if ([XgribNativeWindow]::GetDlgCtrlID($handle) -eq 1002) {
+            $forecastHandle = $handle
+            break
+        }
+    }
+    if ($forecastHandle -eq [IntPtr]::Zero) {
+        throw "Forecast selector is missing"
+    }
+    [void][XgribNativeWindow]::SendMessage(
+        $forecastHandle, 0x014E, [IntPtr]::Zero, [IntPtr]::Zero)
+    [void][XgribNativeWindow]::SendMessage(
+        [XgribNativeWindow]::GetParent($forecastHandle), 0x0111,
+        [IntPtr](1002 -bor (9 -shl 16)), $forecastHandle)
+    Start-Sleep -Milliseconds 500
     # Reopening generator output must rebuild the cursor panel, including its
     # parameter selections. A successful file-open log alone missed this bug.
     foreach ($parameter in @("Wind", "Current")) {
-        $checkbox = Find-ElementByName $parameter
-        if ($null -eq $checkbox -or $checkbox.Current.IsOffscreen -or
-            -not $checkbox.Current.IsEnabled) {
+        $nameCondition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::NameProperty,
+            $parameter)
+        $matches = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+            [System.Windows.Automation.TreeScope]::Descendants, $nameCondition)
+        $checkboxHandle = [IntPtr]::Zero
+        foreach ($candidate in $matches) {
+            $handle = [IntPtr]$candidate.Current.NativeWindowHandle
+            $class = New-Object System.Text.StringBuilder 256
+            [void][XgribNativeWindow]::GetClassName($handle, $class, 256)
+            $buttonType = [XgribNativeWindow]::GetWindowLong($handle, -16) -band 15
+            if ($class.ToString() -eq "Button" -and
+                $buttonType -in @(2, 3, 5, 6, 11) -and
+                [XgribNativeWindow]::GetDlgCtrlID($handle) -eq $(if ($parameter -eq "Wind") { 0 } else { 4 }) -and
+                -not $candidate.Current.IsOffscreen -and
+                [XgribNativeWindow]::IsWindowEnabled($handle)) {
+                $checkboxHandle = $handle
+                break
+            }
+        }
+        if ($checkboxHandle -eq [IntPtr]::Zero) {
             throw "Generated GRIB has no usable $parameter checkbox"
         }
-        $toggle = $checkbox.GetCurrentPattern(
-            [System.Windows.Automation.TogglePattern]::Pattern)
-        $initial = $toggle.Current.ToggleState
-        $toggle.Toggle()
-        Start-Sleep -Milliseconds 250
-        if ($toggle.Current.ToggleState -eq $initial) {
+        # wxMSW's accessibility provider does not always expose TogglePattern.
+        # Read and click the actual native checkbox rather than a same-name item.
+        # The first click also gives the checkbox focus. Compare successive
+        # focused states so the focus indicator cannot look like a selection.
+        $states = @()
+        for ($click = 0; $click -lt 4; $click++) {
+            [void][XgribNativeWindow]::SendMessage(
+                $checkboxHandle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+            Start-Sleep -Milliseconds 300
+            $states += Get-CheckboxGlyphHash $checkboxHandle
+        }
+        if ($states[0] -eq $states[1]) {
             throw "$parameter checkbox did not change selection"
         }
-        $toggle.Toggle()
-        Start-Sleep -Milliseconds 250
-        if ($toggle.Current.ToggleState -ne $initial) {
+        if ($states[0] -ne $states[2] -or $states[1] -ne $states[3]) {
             throw "$parameter checkbox did not restore selection"
         }
     }
+
     Save-Screenshot (Join-Path $screenshotDirectory "05-parameter-controls.png")
     $closePosted = [XgribNativeWindow]::PostMessage(
         $openCpnMainWindowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
@@ -483,7 +572,7 @@ foreach ($requiredLogText in @(
 
 $runtimeResult = [ordered]@{
     schema = "xgrib-windows-runtime-v1"
-    opencpn_version = "5.14.0"
+    opencpn_version = "5.14.2"
     installer_sha256 = $actualInstallerHash
     portable_profile = $true
     bundled_grib_disabled = $true
@@ -516,4 +605,4 @@ $runtimeResult = [ordered]@{
 }
 $runtimeResult | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 `
     $runtimeResultPath
-Write-Host "OpenCPN 5.14.0 loaded xGRIB and launched the packaged x64 helper"
+Write-Host "OpenCPN 5.14.2 loaded xGRIB and launched the packaged x64 helper"

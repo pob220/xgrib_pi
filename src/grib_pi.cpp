@@ -549,6 +549,9 @@ void grib_pi::OnToolbarToolCallback(int id) {
     long style = m_DialogStyle == ATTACHED_HAS_CAPTION
                      ? wxCAPTION | wxCLOSE_BOX | wxSYSTEM_MENU
                      : wxBORDER_NONE | wxSYSTEM_MENU;
+#ifndef __OCPN__ANDROID__
+    style |= wxRESIZE_BORDER;
+#endif
 #ifdef __WXOSX__
     style |= wxSTAY_ON_TOP;
 #endif

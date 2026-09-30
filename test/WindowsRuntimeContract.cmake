@@ -4,8 +4,8 @@ file(READ "${DIAGNOSTIC_SCRIPT}" diagnostic_script)
 file(READ "${CIRCLE_CONFIG}" circle_config)
 
 set(runtime_patterns
-  "opencpn_5\\.14\\.0-0\\+4418\\.91f3b67_setup\\.exe"
-  "f049075bd3411dc3d5ba2954229ecebf8510abd36529fd27d961d37f275c1076"
+  "opencpn_5\\.14\\.2-0\\+4830\\.de7e706_setup\\.exe"
+  "a3c572ce9677a67919a25e5a1bff5dda767ef7aa51a1e0552f5205a074ad18af"
   "7z\.exe x"
   "opencpn-extract\.log"
   "PackageArchive"
