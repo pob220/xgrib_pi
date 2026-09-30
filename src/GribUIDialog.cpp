@@ -1535,6 +1535,7 @@ void GRIBUICtrlBar::OnSettings(wxCommandEvent& event) {
 
   SetDialogsStyleSizePosition(true);
   delete dialog;
+  ::wxEndBusyCursor();
 
   event.Skip();
 }
@@ -2055,6 +2056,7 @@ void GRIBUICtrlBar::OnOpenFile(wxCommandEvent& event) {
       if (g_pi->m_bZoomToCenterAtInit) DoZoomToCenter();
     }
     SetDialogsStyleSizePosition(true);
+    ::wxEndBusyCursor();
   }
   delete dialog;
 #else
