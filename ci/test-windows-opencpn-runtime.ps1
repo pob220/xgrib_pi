@@ -33,6 +33,10 @@ public static class XgribNativeWindow {
     public static extern IntPtr GetParent(IntPtr window);
     [DllImport("user32.dll")]
     public static extern bool IsWindowEnabled(IntPtr window);
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rect { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr window, out Rect rect);
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool PostMessage(
@@ -53,6 +57,30 @@ function Save-Screenshot([string] $path) {
     finally {
         $graphics.Dispose()
         $bitmap.Dispose()
+    }
+}
+
+function Get-CheckboxGlyphHash([IntPtr] $handle) {
+    $rect = New-Object XgribNativeWindow+Rect
+    if (-not [XgribNativeWindow]::GetWindowRect($handle, [ref]$rect)) {
+        throw "Cannot locate checkbox glyph"
+    }
+    # OpenCPN colours make wxMSW checkboxes owner drawn. BM_GETCHECK does
+    # not track their wxWidgets state and TogglePattern may be unavailable.
+    # Verify that the actual painted checkbox changes and restores.
+    $width = [Math]::Min(24, $rect.Right - $rect.Left)
+    $height = $rect.Bottom - $rect.Top
+    $bitmap = New-Object System.Drawing.Bitmap $width, $height
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $stream = New-Object System.IO.MemoryStream
+    $hash = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bitmap.Size)
+        $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+        return [Convert]::ToBase64String($hash.ComputeHash($stream.ToArray()))
+    }
+    finally {
+        $hash.Dispose(); $stream.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
     }
 }
 
@@ -445,7 +473,8 @@ try {
             [void][XgribNativeWindow]::GetClassName($handle, $class, 256)
             $buttonType = [XgribNativeWindow]::GetWindowLong($handle, -16) -band 15
             if ($class.ToString() -eq "Button" -and
-                $buttonType -in @(2, 3, 5, 6) -and
+                $buttonType -in @(2, 3, 5, 6, 11) -and
+                [XgribNativeWindow]::GetDlgCtrlID($handle) -eq $(if ($parameter -eq "Wind") { 0 } else { 4 }) -and
                 -not $candidate.Current.IsOffscreen -and
                 [XgribNativeWindow]::IsWindowEnabled($handle)) {
                 $checkboxHandle = $handle
@@ -457,21 +486,18 @@ try {
         }
         # wxMSW's accessibility provider does not always expose TogglePattern.
         # Read and click the actual native checkbox rather than a same-name item.
-        $initial = [XgribNativeWindow]::SendMessage(
-            $checkboxHandle, 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero)
+        $initial = Get-CheckboxGlyphHash $checkboxHandle
         [void][XgribNativeWindow]::SendMessage(
             $checkboxHandle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
         Start-Sleep -Milliseconds 250
-        $changed = [XgribNativeWindow]::SendMessage(
-            $checkboxHandle, 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero)
+        $changed = Get-CheckboxGlyphHash $checkboxHandle
         if ($changed -eq $initial) {
             throw "$parameter checkbox did not change selection"
         }
         [void][XgribNativeWindow]::SendMessage(
             $checkboxHandle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
         Start-Sleep -Milliseconds 250
-        $restored = [XgribNativeWindow]::SendMessage(
-            $checkboxHandle, 0x00F0, [IntPtr]::Zero, [IntPtr]::Zero)
+        $restored = Get-CheckboxGlyphHash $checkboxHandle
         if ($restored -ne $initial) {
             throw "$parameter checkbox did not restore selection"
         }
