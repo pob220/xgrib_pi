@@ -392,6 +392,29 @@ try {
 
     Close-WindowElement $generatorWindow
     Start-Sleep -Milliseconds 500
+    # Reopening generator output must rebuild the cursor panel, including its
+    # parameter selections. A successful file-open log alone missed this bug.
+    foreach ($parameter in @("Wind", "Current")) {
+        $checkbox = Find-ElementByName $parameter
+        if ($null -eq $checkbox -or $checkbox.Current.IsOffscreen -or
+            -not $checkbox.Current.IsEnabled) {
+            throw "Generated GRIB has no usable $parameter checkbox"
+        }
+        $toggle = $checkbox.GetCurrentPattern(
+            [System.Windows.Automation.TogglePattern]::Pattern)
+        $initial = $toggle.Current.ToggleState
+        $toggle.Toggle()
+        Start-Sleep -Milliseconds 250
+        if ($toggle.Current.ToggleState -eq $initial) {
+            throw "$parameter checkbox did not change selection"
+        }
+        $toggle.Toggle()
+        Start-Sleep -Milliseconds 250
+        if ($toggle.Current.ToggleState -ne $initial) {
+            throw "$parameter checkbox did not restore selection"
+        }
+    }
+    Save-Screenshot (Join-Path $screenshotDirectory "05-parameter-controls.png")
     $closePosted = [XgribNativeWindow]::PostMessage(
         $openCpnMainWindowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
     if (-not $closePosted) {
