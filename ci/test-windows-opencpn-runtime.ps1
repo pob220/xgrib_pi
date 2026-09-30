@@ -486,22 +486,23 @@ try {
         }
         # wxMSW's accessibility provider does not always expose TogglePattern.
         # Read and click the actual native checkbox rather than a same-name item.
-        $initial = Get-CheckboxGlyphHash $checkboxHandle
-        [void][XgribNativeWindow]::SendMessage(
-            $checkboxHandle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
-        Start-Sleep -Milliseconds 250
-        $changed = Get-CheckboxGlyphHash $checkboxHandle
-        if ($changed -eq $initial) {
+        # The first click also gives the checkbox focus. Compare successive
+        # focused states so the focus indicator cannot look like a selection.
+        $states = @()
+        for ($click = 0; $click -lt 4; $click++) {
+            [void][XgribNativeWindow]::SendMessage(
+                $checkboxHandle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+            Start-Sleep -Milliseconds 300
+            $states += Get-CheckboxGlyphHash $checkboxHandle
+        }
+        if ($states[0] -eq $states[1]) {
             throw "$parameter checkbox did not change selection"
         }
-        [void][XgribNativeWindow]::SendMessage(
-            $checkboxHandle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
-        Start-Sleep -Milliseconds 250
-        $restored = Get-CheckboxGlyphHash $checkboxHandle
-        if ($restored -ne $initial) {
+        if ($states[0] -ne $states[2] -or $states[1] -ne $states[3]) {
             throw "$parameter checkbox did not restore selection"
         }
     }
+
     Save-Screenshot (Join-Path $screenshotDirectory "05-parameter-controls.png")
     $closePosted = [XgribNativeWindow]::PostMessage(
         $openCpnMainWindowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
