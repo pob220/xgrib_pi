@@ -2,6 +2,14 @@
 
 namespace xgrib {
 
+void TerminateGeneratorProcess(long pid, wxKillError* error) {
+#ifdef _WIN32
+  wxKill(pid, wxSIGKILL, error, wxKILL_CHILDREN);
+#else
+  wxKill(pid, wxSIGTERM, error, wxKILL_CHILDREN);
+#endif
+}
+
 wxString QuoteProcessArgument(const wxString& value) {
 #ifdef _WIN32
   wxString quoted = "\"";

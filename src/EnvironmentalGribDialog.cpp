@@ -329,6 +329,7 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
       m_processTimer(this),
       m_estimateTimer(this),
       m_onGribReady(std::move(onGribReady)) {
+  wxLogMessage("xGRIB: constructing environmental generator dialog");
   auto* top = new wxBoxSizer(wxVERTICAL);
   m_scrolled =
       new wxScrolledWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
@@ -342,6 +343,7 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   grid->AddGrowableCol(1, 1);
 
   m_generatorPath = new wxTextCtrl(scrolled, wxID_ANY, FindDefaultGenerator());
+  wxLogMessage("xGRIB: environmental generator path resolved");
   m_west = new wxTextCtrl(scrolled, wxID_ANY, "-8.5");
   m_south = new wxTextCtrl(scrolled, wxID_ANY, "50.5");
   m_east = new wxTextCtrl(scrolled, wxID_ANY, "-2.5");
@@ -601,6 +603,8 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
                          wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
   m_log->SetMinSize(wxSize(300, 100));
   top->Add(m_log, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 12);
+  m_processStatus = new wxStaticText(this, wxID_ANY, _("Ready"));
+  top->Add(m_processStatus, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
   auto* buttons = new wxBoxSizer(wxHORIZONTAL);
   m_checkButton = new wxButton(this, wxID_ANY, "Check Dependencies");
@@ -707,12 +711,15 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   wxLogMessage("xGRIB environmental generator executable: %s",
                m_generatorPath->GetValue());
   LoadSettings();
+  wxLogMessage("xGRIB: environmental generator settings loaded");
   ConfigureSmokeTestFromEnvironment();
   UpdateSelectedPathDisplays();
   ValidateOfflineTidalPackage();
+  wxLogMessage("xGRIB: environmental generator offline package check complete");
   RefreshOutputFilenameDefault();
   UpdateProviderUi();
   SetBusy(false);
+  wxLogMessage("xGRIB: environmental generator dialog ready");
 }
 
 void EnvironmentalGribDialog::ConfigureSmokeTestFromEnvironment() {
@@ -790,7 +797,7 @@ void EnvironmentalGribDialog::PrepareForParentShutdown() {
   m_processTimer.Stop();
   if (m_processRunning && m_processPid != 0 && ChildProcessStillExists()) {
     wxKillError error = wxKILL_OK;
-    wxKill(m_processPid, wxSIGTERM, &error, wxKILL_CHILDREN);
+    xgrib::TerminateGeneratorProcess(m_processPid, &error);
     wxLogMessage(
         "xGRIB: stopped environmental generator pid=%ld during shutdown "
         "(wxKillError=%d)",
@@ -1927,7 +1934,7 @@ void EnvironmentalGribDialog::OnCancel(wxCommandEvent&) {
   m_processCancelled = true;
   AppendLog(wxString::Format("Cancelling process, pid=%ld", m_processPid));
   wxKillError error = wxKILL_OK;
-  wxKill(m_processPid, wxSIGTERM, &error, wxKILL_CHILDREN);
+  xgrib::TerminateGeneratorProcess(m_processPid, &error);
   if (error != wxKILL_OK) {
     AppendLog(wxString::Format("Process cancel request returned wxKillError=%d",
                                static_cast<int>(error)));
@@ -1977,6 +1984,14 @@ void EnvironmentalGribDialog::OnDialogClose(wxCloseEvent& event) {
 void EnvironmentalGribDialog::OnProcessTimer(wxTimerEvent& event) {
   (void)event;
   DrainProcessOutput();
+  if (m_processRunning) {
+    const long seconds = ((wxGetUTCTimeMillis() - m_processStarted) / 1000).ToLong();
+    const wxString status = wxString::Format(
+        m_processCancelled ? _("Cancelling helper (pid %ld), %ld seconds elapsed")
+                           : _("Running helper (pid %ld), %ld seconds elapsed"),
+        m_processPid, seconds);
+    if (m_processStatus->GetLabel() != status) m_processStatus->SetLabel(status);
+  }
   if (m_processRunning && m_processPid != 0 && !ChildProcessStillExists()) {
     AppendLog(
         wxString::Format("Process pid=%ld is no longer running; finalizing "
@@ -2162,7 +2177,7 @@ void EnvironmentalGribDialog::OnProcessTerminated(wxProcessEvent& event) {
                              static_cast<int>(event.GetPid())));
   DrainProcessOutput();
   FlushProcessOutput();
-  FinishCommand(event.GetExitCode(), true);
+  FinishCommand(event.GetExitCode(), true, true);
 }
 
 void EnvironmentalGribDialog::AppendLog(const wxString& message) {
@@ -2258,8 +2273,9 @@ void EnvironmentalGribDialog::StartCommand(const wxString& command,
   if (samples.DirExists()) env.env["ECCODES_SAMPLES_PATH"] = samples.GetPath();
   if (proj.DirExists()) env.env["PROJ_DATA"] = proj.GetPath();
 
-  long pid = wxExecute(command, wxEXEC_ASYNC | wxEXEC_NODISABLE, process,
-                       &env);
+  long pid = wxExecute(command, wxEXEC_ASYNC | wxEXEC_NODISABLE |
+                                   wxEXEC_HIDE_CONSOLE | wxEXEC_MAKE_GROUP_LEADER,
+                       process, &env);
   if (pid == 0) {
     AppendLog("Process failed to launch");
     wxLogError("xGRIB environmental generator failed to launch");
@@ -2271,6 +2287,8 @@ void EnvironmentalGribDialog::StartCommand(const wxString& command,
   m_process = process;
   m_processRunning = true;
   m_processPid = pid;
+  m_processStarted = wxGetUTCTimeMillis();
+  m_processStatus->SetLabel(wxString::Format(_("Running helper (pid %ld)"), pid));
   AppendLog(wxString::Format("Process launched, pid=%ld", pid));
   wxLogMessage("xGRIB environmental generator launched, pid=%ld", pid);
   if (!m_processTimer.Start(100)) {
@@ -2278,16 +2296,23 @@ void EnvironmentalGribDialog::StartCommand(const wxString& command,
         "Failed to start the process-output monitor; terminating the helper to "
         "avoid an output-pipe deadlock.");
     wxKillError error = wxKILL_OK;
-    wxKill(pid, wxSIGTERM, &error, wxKILL_CHILDREN);
+    xgrib::TerminateGeneratorProcess(pid, &error);
     AppendLog(wxString::Format("Helper termination requested (wxKillError=%d).",
                                static_cast<int>(error)));
   }
 }
 
-void EnvironmentalGribDialog::FinishCommand(long exit_code, bool launched) {
+void EnvironmentalGribDialog::FinishCommand(long exit_code, bool launched,
+                                            bool completion_notified) {
   m_processTimer.Stop();
   if (m_process) {
-    delete m_process;
+    // wxExecute still holds this pointer until it delivers OnTerminate.
+    // Polling can detect exit first; detach and let that notification delete
+    // the object instead of leaving wxExecute with a dangling pointer.
+    if (completion_notified)
+      delete m_process;
+    else
+      m_process->Detach();
     m_process = nullptr;
   }
   AppendLog(wxString::Format("Exit status: %ld", exit_code));
@@ -2438,7 +2463,7 @@ bool EnvironmentalGribDialog::ChildProcessStillExists() const {
   if (errno == ESRCH) return false;
   return true;
 #else
-  return true;
+  return wxProcess::Exists(static_cast<int>(m_processPid));
 #endif
 }
 
@@ -2453,6 +2478,7 @@ bool EnvironmentalGribDialog::OutputFileLooksValidGrib(
 }
 
 void EnvironmentalGribDialog::SetBusy(bool busy) {
+  m_processStatus->SetLabel(busy ? _("Starting helper...") : _("Ready"));
   m_checkButton->Enable(!busy);
   m_generateButton->Enable(!busy);
   m_cancelButton->Enable(busy);

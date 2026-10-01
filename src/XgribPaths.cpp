@@ -6,6 +6,15 @@
 #include "ocpn_plugin.h"
 
 wxString GetXgribDataDirectory() {
+  // A development launcher can pair its plugin library with its own resources
+  // even when OpenCPN gives an older per-user data directory precedence.
+  wxString pluginDataDirectory;
+  if (wxGetEnv("XGRIB_PLUGIN_DATA_DIR", &pluginDataDirectory) &&
+      !pluginDataDirectory.empty() && wxDirExists(pluginDataDirectory)) {
+    wxFileName directory(pluginDataDirectory, "");
+    directory.AppendDir("data");
+    return directory.GetPathWithSep();
+  }
   wxString smokeTestEnabled;
   wxString smokeTestDataDirectory;
   if (wxGetEnv("XGRIB_TEST_OPEN_GENERATOR", &smokeTestEnabled) &&

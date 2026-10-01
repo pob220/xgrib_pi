@@ -92,13 +92,14 @@ else (WIN32)
   set(CPACK_PACKAGE_INSTALL_DIRECTORY ${PACKAGE_NAME})
 endif (WIN32)
 
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR
+    CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
   set(CPACK_STRIP_FILES FALSE)
   message(STATUS "${CMLOC}Not stripping debug information from module")
-else (CMAKE_BUILD_TYPE STREQUAL "DEBUG")
+else ()
   set(CPACK_STRIP_FILES TRUE)
   message(STATUS "${CMLOC}Stripping debug information from module")
-endif (CMAKE_BUILD_TYPE STREQUAL "Debug")
+endif ()
 
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/gpl.txt")
 

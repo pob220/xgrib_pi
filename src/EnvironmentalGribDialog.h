@@ -58,7 +58,8 @@ private:
                    const wxString& prefix);
   void StartCommand(const wxString& command, const wxString& password,
                     bool generation);
-  void FinishCommand(long exit_code, bool launched);
+  void FinishCommand(long exit_code, bool launched,
+                     bool completion_notified = false);
   bool ChildProcessStillExists() const;
   bool OutputFileLooksValidGrib(wxString* details = nullptr) const;
   void SetBusy(bool busy);
@@ -174,6 +175,7 @@ private:
   wxCheckBox* m_openAfter;
   wxCheckBox* m_showMergeInstructions;
   wxTextCtrl* m_log;
+  wxStaticText* m_processStatus;
   wxTimer m_processTimer;
   wxTimer m_estimateTimer;
   wxStaticText* m_estimateSummary{nullptr};
@@ -192,6 +194,7 @@ private:
   bool m_processGeneration{false};
   bool m_processCancelled{false};
   long m_processPid{0};
+  wxLongLong m_processStarted;
   bool m_hasCurrentViewPort{false};
   PlugIn_ViewPort m_currentViewPort{};
   wxString m_currentCommand;

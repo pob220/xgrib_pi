@@ -1,5 +1,8 @@
 # Windows x64 testing build
 
+For the ordinary x86 host, matching release source, RelWithDebInfo builds and
+Generate troubleshooting, see [Windows Generate debugging](windows-generate-debugging.md).
+
 xGRIB 0.3.3.0 builds a native Windows x64 package for the OpenCPN 5.14.2 x64
 testing host. It is distinct from the Windows x86 package. The x64 OpenCPN
 installer is currently distributed from the OpenCPN unstable repository; its

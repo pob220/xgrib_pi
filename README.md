@@ -187,6 +187,16 @@ cmake --build --preset linux-release-build
 ctest --preset linux-release-test
 ```
 
+For an optimized build with debugging symbols, use the corresponding
+`linux-relwithdebinfo`, `macos-arm64-relwithdebinfo` or
+`windows-plugin-x86-relwithdebinfo` preset and its `-build` / `-test` presets.
+Windows retains the staged x64 helper specified by `XGRIB_GENERATOR_STAGE`;
+debugging the helper itself requires building that helper with symbols too.
+
+A development launcher can set `XGRIB_PLUGIN_DATA_DIR` to its installed
+`share/opencpn/plugins/xgrib_pi` directory to keep resources and the helper
+paired with its plugin library despite an older per-user installation.
+
 Before pushing shared source, CMake, dependency, metadata or packaging changes,
 run the clean end-to-end local preflight:
 

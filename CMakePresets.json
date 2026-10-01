@@ -65,6 +65,33 @@
         "wxWidgets_LIB_DIR": "$env{XGRIB_WX_LIB}",
         "wxWidgets_ROOT_DIR": "$env{XGRIB_WX_ROOT}"
       }
+    },
+    {
+      "name": "linux-relwithdebinfo",
+      "displayName": "linux with debugging symbols",
+      "description": "Optimized build with symbols, tests and bundled helper runtime",
+      "inherits": "linux-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "macos-arm64-relwithdebinfo",
+      "displayName": "macos-arm64 with debugging symbols",
+      "description": "Optimized build with symbols, tests and bundled helper runtime",
+      "inherits": "macos-arm64-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "windows-plugin-x86-relwithdebinfo",
+      "displayName": "windows-plugin-x86 with debugging symbols",
+      "description": "Optimized build with symbols, tests and bundled helper runtime",
+      "inherits": "windows-plugin-x86-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
     }
   ],
   "buildPresets": [
@@ -80,6 +107,19 @@
       "name": "windows-plugin-x86-release-build",
       "configurePreset": "windows-plugin-x86-release",
       "configuration": "Release"
+    },
+    {
+      "name": "linux-relwithdebinfo-build",
+      "configurePreset": "linux-relwithdebinfo"
+    },
+    {
+      "name": "macos-arm64-relwithdebinfo-build",
+      "configurePreset": "macos-arm64-relwithdebinfo"
+    },
+    {
+      "name": "windows-plugin-x86-relwithdebinfo-build",
+      "configurePreset": "windows-plugin-x86-relwithdebinfo",
+      "configuration": "RelWithDebInfo"
     }
   ],
   "testPresets": [
@@ -104,6 +144,28 @@
       "output": {
         "outputOnFailure": true
       }
+    },
+    {
+      "name": "linux-relwithdebinfo-test",
+      "configurePreset": "linux-relwithdebinfo",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "macos-arm64-relwithdebinfo-test",
+      "configurePreset": "macos-arm64-relwithdebinfo",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-plugin-x86-relwithdebinfo-test",
+      "configurePreset": "windows-plugin-x86-relwithdebinfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "configuration": "RelWithDebInfo"
     }
   ]
 }

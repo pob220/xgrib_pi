@@ -384,6 +384,9 @@ if(XGRIB_EXTERNAL_GENERATOR_DIR)
     "${CMLOC}Using external environmental GRIB generator: ${XGRIB_EXTERNAL_GENERATOR}")
 else()
 
+# Windows uses ecCodes' vcpkg CMake config in generator/CMakeLists.txt.
+# Only Unix needs the pkg-config path repair and legacy constructor probe.
+if(NOT WIN32)
 # Debian 12's ecCodes package expands its multiarch pkg-config prefix to
 # /usr/lib instead of /usr. CMake rejects the resulting /usr/lib/include path
 # before compiling, although the headers are correctly installed in
@@ -424,9 +427,10 @@ check_cxx_symbol_exists(codes_handle_new_from_samples "eccodes.h"
                         XGRIB_HAVE_CODES_HANDLE_NEW_FROM_SAMPLES)
 unset(CMAKE_REQUIRED_INCLUDES)
 unset(CMAKE_REQUIRED_LIBRARIES)
+endif()
 
 add_subdirectory(generator EXCLUDE_FROM_ALL)
-if(NOT XGRIB_HAVE_CODES_HANDLE_NEW_FROM_SAMPLES)
+if(NOT WIN32 AND NOT XGRIB_HAVE_CODES_HANDLE_NEW_FROM_SAMPLES)
   target_compile_definitions(environmental_grib_engine PRIVATE
     codes_handle_new_from_samples=grib_handle_new_from_samples)
   message(STATUS "${CMLOC}Using legacy ecCodes sample constructor")
@@ -687,6 +691,11 @@ if (NOT OCPN_FLATPAK_CONFIG)
       ${wxWidgets_LIBRARIES})
     add_test(NAME xgrib_process_command_tests
              COMMAND xgrib_process_command_tests)
+    add_test(NAME xgrib_windows_eccodes_configure
+      COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+        -DTEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/WindowsEcCodesConfigureTests.cmake)
 
     add_test(NAME xgrib_environmental_process_output_contract
       COMMAND ${CMAKE_COMMAND}

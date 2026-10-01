@@ -1453,6 +1453,7 @@ void GRIBUICtrlBar::OnEnvironmentalGrib(wxCommandEvent& event) {
     pPlugIn->SetDialogFont(m_environmentalGribDialog);
   }
   m_environmentalGribDialog->SetCurrentViewPort(pPlugIn->GetCurrentViewPort());
+  wxLogMessage("xGRIB: showing environmental generator dialog");
   m_environmentalGribDialog->Show();
   m_environmentalGribDialog->Raise();
 #endif
