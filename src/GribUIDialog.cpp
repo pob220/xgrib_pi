@@ -567,13 +567,17 @@ void GRIBUICtrlBar::SetActionButtonBitmap(wxButton* button,
                                           const char* const* xpm,
                                           const wxString& svgName) {
   if (!button) return;
-  button->SetBitmap(GetScaledBitmap(wxBitmap(xpm), svgName, m_ScaledFactor));
+  const wxBitmap bitmap =
+      GetScaledBitmap(wxBitmap(xpm), svgName, m_ScaledFactor);
+  button->SetBitmap(bitmap);
   button->SetBitmapPosition(wxLEFT);
   button->SetBitmapMargins(wxRound(10 * m_ScaledFactor), 0);
   // Include the actual translated label and icon. A fixed width clips
   // Windows buttons when the user's dialog font is larger than the toolbar.
   const wxSize labelSize = button->GetTextExtent(button->GetLabel());
-  const wxSize bitmapSize = button->GetBitmap().GetSize();
+  // wxQt can return an empty bitmap from GetBitmap() after SetBitmap().
+  // Measure the source icon instead: querying an empty wxQt bitmap crashes.
+  const wxSize bitmapSize = bitmap.IsOk() ? bitmap.GetSize() : wxSize(0, 0);
   button->SetMinSize(wxSize(
       wxMax(wxRound(178 * m_ScaledFactor),
             labelSize.x + bitmapSize.x + wxRound(30 * m_ScaledFactor)),

@@ -10,6 +10,13 @@ UKV regridding, current calculation and ecCodes writing therefore do not run
 inside OpenCPN. Generated files open directly in xGRIB after strict GRIB
 validation.
 
+### Fixed in 0.3.5
+
+Opening the Android weather panel no longer queries an empty wxQt button
+bitmap. Action buttons measure the source icon, preserving their translated
+labels and avoiding the startup crash. Forecast generator source menus now
+use the same touch-sized rows as the UTC time picker and support touch scrolling.
+
 ### New in 0.3
 
 OpenCPN now receives xGRIB's complete semantic version through plugin API 1.17

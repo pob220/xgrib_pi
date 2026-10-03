@@ -44,9 +44,9 @@ QString Text(const std::string& value) { return QString::fromUtf8(value.c_str())
 wxString Wx(const QString& value) { return wxString::FromUTF8(Text(value).c_str()); }
 QString QtText(const wxString& value) { return QString::fromUtf8(value.ToUTF8()); }
 
-class TouchTimeDelegate : public QStyledItemDelegate {
+class TouchChoiceDelegate : public QStyledItemDelegate {
  public:
-  explicit TouchTimeDelegate(QObject* parent) : QStyledItemDelegate(parent) {}
+  explicit TouchChoiceDelegate(QObject* parent) : QStyledItemDelegate(parent) {}
   QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
     const auto size = QStyledItemDelegate::sizeHint(option, index);
     return QSize(size.width(), std::max(72, size.height()));
@@ -164,6 +164,9 @@ struct AndroidGribGeneratorDialog::Impl {
     Note(rowLayout, label); layout->addWidget(row);
     auto* choice = new QComboBox;
     choice->setObjectName(QString("xgrib_") + key);
+    choice->setItemDelegate(new TouchChoiceDelegate(choice));
+    choice->view()->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    QScroller::grabGesture(choice->view()->viewport(), QScroller::TouchGesture);
     choice->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     choice->setMinimumContentsLength(10);
     for (const auto& value : values) choice->addItem(value.second, value.first);
@@ -215,7 +218,7 @@ struct AndroidGribGeneratorDialog::Impl {
     for (int i = 0; i < 60; ++i) minute->addItem(QString("%1").arg(i, 2, 10, QChar('0')));
     minute->setCurrentIndex(startUtc.time().minute()); time->addWidget(minute, 1);
     for (auto* choice : {hour, minute}) {
-      choice->setItemDelegate(new TouchTimeDelegate(choice));
+      choice->setItemDelegate(new TouchChoiceDelegate(choice));
       choice->setMaxVisibleItems(10);
       for (int i = 0; i < choice->count(); ++i)
         choice->setItemData(i, QSize(0, 52), Qt::SizeHintRole);
