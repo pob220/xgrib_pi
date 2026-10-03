@@ -46,6 +46,11 @@
 #include "qdebug.h"
 #endif
 
+#ifdef __OCPN__ANDROID__
+#include <QCoreApplication>
+#include <QEvent>
+#endif
+
 double g_ContentScaleFactor;
 
 // the class factories, used to create and destroy instances of the PlugIn
@@ -261,6 +266,12 @@ bool grib_pi::DeInit(void) {
 
   delete m_pGRIBOverlayFactory;
   m_pGRIBOverlayFactory = nullptr;
+
+#ifdef __OCPN__ANDROID__
+  // wxQt destroys native widgets with deleteLater(). Finish those deletions
+  // before a hot plugin replacement unloads our Qt delegates and event filters.
+  QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+#endif
 
   if (m_jasperInitialized) {
 #if defined(JAS_VERSION_MAJOR) && JAS_VERSION_MAJOR >= 2
