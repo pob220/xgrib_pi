@@ -91,6 +91,18 @@ if old in source:
 elif new not in source:
     raise SystemExit(f'Unexpected OpenCPN Android archiver in {path}')
 path.write_text(source)
+
+# The core overrides CMAKE_SHARED_LINKER_FLAGS, so set both native page
+# layout flags at that assignment instead of relying on caller cache flags.
+path = Path(sys.argv[1]).parent.parent / 'CMakeLists.txt'
+source = path.read_text()
+old = 'set(CMAKE_SHARED_LINKER_FLAGS "-Wl,-soname,libgorp.so -Wl,--build-id")'
+new = 'set(CMAKE_SHARED_LINKER_FLAGS "-Wl,-soname,libgorp.so -Wl,--build-id -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384")'
+if old in source:
+    source = source.replace(old, new, 1)
+elif new not in source:
+    raise SystemExit('Unexpected Android core linker flags')
+path.write_text(source)
 PY
 
 cmake -S "$core_source" -B "$core_build" \
@@ -156,3 +168,5 @@ python3 "$source_dir/ci/package-android-import.py" \
   | grep -E 'SONAME.*libxgrib_pi.so|NEEDED.*libgorp.so'
 cp "${packages[0]}" "${metadata[0]}" "$artifacts/package/"
 (cd "$artifacts/package" && sha256sum ./*.tar.gz ./*.xml > SHA256SUMS)
+
+python3 "$source_dir/ci/verify-android-pages.py" "$artifacts/package/"*.tar.gz --report "$artifacts/android-pages.json"

@@ -362,6 +362,8 @@ if(QT_ANDROID)
   add_subdirectory(generator)
   target_link_libraries(${PACKAGE_NAME} environmental_grib_engine)
   target_link_options(${PACKAGE_NAME} PRIVATE "-Wl,--exclude-libs,ALL")
+  target_link_options(${PACKAGE_NAME} PRIVATE
+    "-Wl,-z,max-page-size=16384" "-Wl,-z,common-page-size=16384")
 endif()
 
 # The generator is a separate native process.  Keeping it out of the plugin
