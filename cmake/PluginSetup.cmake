@@ -354,6 +354,9 @@ endif ()
 if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
   # Match the native OpenCPN x64 catalogue target, distinct from x86.
   set(PKG_TARGET "msvc-64")
+  # The catalogue target distinguishes the ABI; the schema's build-target
+  # describes the toolchain and accepts msvc for either Windows ABI.
+  set(PKG_BUILD_TARGET "msvc")
   set(PKG_TARGET_VERSION "10")
   unset(PKG_TARGET_WX_VER)
 endif()

@@ -68,14 +68,14 @@ set(PACKAGE_CONTACT "Paul")
 set(PACKAGE "xgrib_pi")
 set(SHORT_DESCRIPTION "Display, download, and generate environmental GRIB files.")
 set(LONG_DESCRIPTION
-    "A catalogue-installable GRIB viewer with integrated generation of combined weather, wave, and current GRIB files using an isolated native helper."
+    "A catalogue-installable GRIB viewer with integrated generation of combined weather, wave, and current GRIB files using an isolated native helper. Disable bundled GRIB before enabling xGRIB, then restart OpenCPN. Requires OpenCPN with plugin API 1.21 and a matching platform package."
 )
 
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "3")
-set(VERSION_PATCH "5")
+set(VERSION_PATCH "6")
 set(VERSION_TWEAK "0")
-set(VERSION_DATE "03/10/2026") # DD/MM/YYYY format
+set(VERSION_DATE "05/10/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -178,6 +178,10 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 # ========================================================
 
 include("PluginSetup")
+if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 4)
+  string(APPEND LONG_DESCRIPTION
+    " The Windows x86 plugin requires a 64-bit Windows system for its separate native generator.")
+endif()
 
 # ========================================================
 # ----- Above sets up standard variables required by CMAKE - Do not remove
@@ -441,6 +445,7 @@ if(NOT XGRIB_EXTERNAL_GENERATOR_DIR)
   add_dependencies(${PACKAGE_NAME} environmental-grib)
 endif()
 if(BUILD_TESTING AND TARGET environmental_grib_tests)
+  add_dependencies(${PACKAGE_NAME} environmental_grib_gfs_fallback_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_cancellation_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_estimate_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_tests)

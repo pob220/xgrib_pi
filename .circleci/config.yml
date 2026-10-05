@@ -4,6 +4,10 @@ parameters:
   run_workflow_deploy:
     type: boolean
     default: false
+  publication_channel:
+    type: enum
+    enum: [alpha, master]
+    default: alpha
 
 commands:
   retain-linux-artifacts:
@@ -326,9 +330,13 @@ jobs:
             - ~/.cache/vcpkg/archives
 
   deploy-alpha:
+    parameters:
+      channel: {type: string, default: "alpha"}
     docker:
       - image: cimg/python:3.13
     resource_class: small
+    environment:
+      XGRIB_PUBLICATION_CHANNEL: << parameters.channel >>
     steps:
       - checkout
       - attach_workspace:
@@ -337,7 +345,7 @@ jobs:
           name: Install deployment client
           command: python -m pip install --user cloudsmith-cli
       - run:
-          name: Upload reviewed Alpha artifacts
+          name: Upload reviewed packages to the selected catalogue repository
           command: bash ci/deploy-alpha-artifacts.sh
 
 workflows:
@@ -486,7 +494,7 @@ workflows:
           requires: [windows-x86]
           filters: *windows-focused-filters
 
-  deploy_reviewed_alpha:
+  deploy_reviewed_release:
     when: << pipeline.parameters.run_workflow_deploy >>
     jobs:
       - linux-catalogue:
@@ -619,5 +627,6 @@ workflows:
             - release-macos-arm64-api122
             - release-android-arm64-api122
       - deploy-alpha:
+          channel: << pipeline.parameters.publication_channel >>
           context: xgrib-deployment
           requires: [hold-for-alpha-approval]

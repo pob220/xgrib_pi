@@ -9,7 +9,12 @@ if [[ -z "${CLOUDSMITH_API_KEY:-}" ]]; then
   exit 2
 fi
 
-repo=${CLOUDSMITH_ALPHA_REPO:-pob220/xgrib-alpha}
+channel=${XGRIB_PUBLICATION_CHANNEL:-alpha}
+case "$channel" in
+  alpha) repo=${CLOUDSMITH_ALPHA_REPO:-pob220/xgrib-alpha}; label=Alpha ;;
+  master) repo=${CLOUDSMITH_PROD_REPO:-pob220/xgrib-prod}; label=Master ;;
+  *) echo "Unsupported xGRIB publication channel: $channel" >&2; exit 2 ;;
+esac
 artifact_root=${XGRIB_DEPLOY_ARTIFACT_ROOT:-artifacts}
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT HUP INT TERM
@@ -44,10 +49,10 @@ find "$artifact_root" -mindepth 3 -maxdepth 3 -type f -path '*/package/*.tar.gz'
 
     cloudsmith push raw --republish --no-wait-for-sync \
       --name "$metadata_name" --version "$cloudsmith_version" \
-      --summary "xGRIB OpenCPN Alpha metadata for $target" \
+      --summary "xGRIB OpenCPN $label metadata for $target" \
       "$repo" "$staged_xml"
     cloudsmith push raw --republish --no-wait-for-sync \
       --name "$package_name" --version "$cloudsmith_version" \
-      --summary "xGRIB OpenCPN Alpha package for $target" \
+      --summary "xGRIB OpenCPN $label package for $target" \
       "$repo" "$staged_archive"
   done

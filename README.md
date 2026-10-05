@@ -10,6 +10,22 @@ UKV regridding, current calculation and ecCodes writing therefore do not run
 inside OpenCPN. Generated files open directly in xGRIB after strict GRIB
 validation.
 
+### New in 0.3.6
+
+GFS weather and waves automatically switch from NOAA NOMADS to the hosted
+regional service at `https://grib.agentracert.com` when NOAA cannot be reached,
+returns a rate-limit response, or has a service outage. Successful timesteps
+are retained; the service supplies only the remainder at the same forecast
+cycle and native 0.25-degree grid. The client verifies the result checksum,
+field levels, times and geographical coverage before merging it.
+
+Failover requires no account or access-key setup. It sends the selected area
+to the hosted service, which reads its scheduled NOAA/AWS cache. The current
+cache supports **minimal/routing GFS weather and GFS waves**. Marine/all weather
+presets still require additional cached fields; xGRIB reports that limitation
+and never removes requested fields. Ordinary missing forecast files retain
+the existing cycle-selection behaviour. Other providers are unchanged.
+
 ### Fixed in 0.3.5
 
 Opening the Android weather panel no longer queries an empty wxQt button

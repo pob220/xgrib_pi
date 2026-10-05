@@ -109,6 +109,13 @@ boundaries:
 
 ## Catalogue package
 
+For a master release, trigger the reviewed deployment workflow with
+`run_workflow_deploy=true` and `publication_channel=master`. Packages and their
+embedded/external metadata are uploaded directly to `pob220/xgrib-prod` after
+the approval gate. The default channel remains alpha for experimental releases.
+Publish the master catalogue metadata only after all platform builds, runtime
+checks and public package/hash verification pass.
+
 Frontend2's `package`/`tarball` and `cloudsmith-upload.sh` flow produces an
 OpenCPN Plugin Manager archive with embedded `metadata.xml`. Build release
 artifacts in the project CI's oldest supported Linux image; do not publish an
