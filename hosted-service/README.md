@@ -110,8 +110,9 @@ Partially ingested cycles can be served when all specifically requested files
 are cached. Missing coverage is explicit. Only allowlisted fields can be served.
 
 The ecCodes C++ helper clones metadata and crops native cells; it performs no
-interpolation. Longitude bounds are west-inclusive/east-exclusive, and both
-latitude bounds are inclusive, matching NOMADS wave subsetting. Date-line and
+interpolation. The western boundary and both latitude bounds are inclusive. Weather includes
+the eastern boundary; waves exclude it, matching their respective NOMADS filters.
+Global grids contain each longitude once. Date-line and
 zero-meridian crossing regions and native-grid strides 1..8 are supported.
 
 ## Validation

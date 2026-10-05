@@ -9,6 +9,6 @@ if ! test -s secrets/tokens; then
     python3 -c 'import secrets; print(secrets.token_urlsafe(48))' > secrets/tokens
     chmod 600 secrets/tokens
 fi
-docker build -t xgrib-grib-service:0.2.0 .
+docker build -t xgrib-grib-service:0.2.1 .
 sh deploy/start-api.sh
 sh deploy/start-ingest.sh

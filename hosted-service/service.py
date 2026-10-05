@@ -37,7 +37,7 @@ FIELDS = {
     "waves": {"swh": "HTSGW:surface", "perpw": "PERPW:surface", "dirpw": "DIRPW:surface"},
 }
 BASE = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 
 class Problem(Exception):
@@ -89,7 +89,7 @@ def validate_request(data):
             raise Problem("unsupported fields for " + product)
     # Conservative cost bound, including every field and time. Reject work
     # before admitting a job, even if it would subsequently hit the cache.
-    points = math.ceil(span / (0.25 * stride)) * (math.ceil((n - s) / (0.25 * stride)) + 1)
+    points = min(math.ceil(360 / (0.25 * stride)), math.ceil(span / (0.25 * stride)) + 1) * (math.ceil((n - s) / (0.25 * stride)) + 1)
     if points < 4 or points * len(set(hours)) * sum(len(set(v)) for v in fields.values()) > 10000000:
         raise Problem("region/time/field combination exceeds the 10-million-value job limit", 413)
     return {"cycle": data["cycle"], "hours": sorted(set(hours)),
@@ -392,6 +392,8 @@ class Cache:
                                 command = [self.crop, str(self.source(request["cycle"], product, hour)), str(chunk),
                                            *(str(b[k]) for k in ("west", "south", "east", "north")),
                                            str(request["stride"]), request["cycle"], str(hour), ",".join(fields)]
+                                if product == "weather":
+                                    command.append("--east-inclusive")
                                 run = subprocess.run(command, capture_output=True, text=True, timeout=45)
                                 if run.returncode:
                                     raise Problem("regional crop failed: " + run.stderr.strip()[:200], 422)

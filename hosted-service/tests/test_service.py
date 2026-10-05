@@ -20,7 +20,7 @@ REQUEST = {"cycle": "2026100412", "hours": [0],
            "fields": {"weather": ["10u"]}}
 
 
-def fixture(path, cycle="2026100412", hour=0, northward=False):
+def fixture(path, cycle="2026100412", hour=0, northward=False, short_name="10u"):
     with Handle() as h:
         for key, value in {"Ni": 8, "Nj": 5, "latitudeOfFirstGridPointInDegrees": -60.0 if northward else 60.0,
                            "latitudeOfLastGridPointInDegrees": 60.0 if northward else -60.0,
@@ -29,7 +29,8 @@ def fixture(path, cycle="2026100412", hour=0, northward=False):
                            "iDirectionIncrementInDegrees": 45.0, "jDirectionIncrementInDegrees": 30.0,
                            "jScansPositively": int(northward), "dataDate": int(cycle[:8]),
                            "dataTime": int(cycle[8:])*100, "step": hour,
-                           "typeOfLevel": "heightAboveGround", "level": 10, "shortName": "10u",
+                           "typeOfLevel": "heightAboveGround" if short_name == "10u" else "surface",
+                           "level": 10 if short_name == "10u" else 0, "shortName": short_name,
                            "packingType": "grid_simple", "bitsPerValue": 24, "bitmapPresent": 1}.items():
             h.set(key, value)
         values = [i + 0.125 for i in range(40)]
@@ -183,11 +184,26 @@ class CropTests(unittest.TestCase):
 
     def test_zero_meridian_wrap_and_values(self):
         r = self.crop()
-        self.assertEqual((r["ni"], r["nj"]), (4, 5))
+        self.assertEqual((r["ni"], r["nj"]), (5, 5))
         self.assertEqual([v % 360 for v in r["lon"][:4]], [270, 315, 0, 45])
         self.assertEqual(r["values"][:4], [6.125, 7.125, 0.125, 1.125])
         self.assertEqual((r["cycle"], r["step"], r["typeOfLevel"], r["level"]), ((20261004,1200), 0, "heightAboveGround",10))
-        self.assertEqual(r["values"][7], r["missing"])
+        self.assertEqual(r["values"][8], r["missing"])
+
+    def test_weather_and_waves_preserve_their_nomads_east_boundaries(self):
+        self.source()
+        wave = self.cache.source("2026100412", "waves", 0)
+        fixture(wave, short_name="swh")
+        request = copy.deepcopy(REQUEST)
+        request["fields"]["waves"] = ["swh"]
+        result = self.cache.make_result(service.validate_request(request))
+        messages = decoded(self.cache.root / "results" / (result["id"] + ".grib2"))
+        self.assertEqual({m["name"]: m["ni"] for m in messages}, {"10u": 5, "swh": 4})
+
+    def test_global_weather_has_each_longitude_once(self):
+        r = self.crop({"west": -180, "south": -60, "east": 180, "north": 60})
+        self.assertEqual(r["ni"], 8)
+        self.assertEqual(len(set(v % 360 for v in r["lon"][:8])), 8)
 
     def test_dateline_wrap(self):
         r = self.crop({"west": 135, "south": -60, "east": -90, "north": 60})
@@ -195,9 +211,9 @@ class CropTests(unittest.TestCase):
 
     def test_stride_and_northward_scanning(self):
         r = self.crop(stride=2, northward=True)
-        self.assertEqual((r["ni"], r["nj"]), (2,3))
-        self.assertEqual(r["lon"][:2], [270, 0])
-        self.assertEqual(r["lat"], [-60, -60, 0, 0, 60, 60])
+        self.assertEqual((r["ni"], r["nj"]), (3,3))
+        self.assertEqual([v % 360 for v in r["lon"][:2]], [270, 0])
+        self.assertEqual(r["lat"], [-60] * 3 + [0] * 3 + [60] * 3)
 
     def test_empty_and_single_point_crop_fail(self):
         self.source()

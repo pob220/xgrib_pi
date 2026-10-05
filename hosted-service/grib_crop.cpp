@@ -40,8 +40,10 @@ struct FileCloser { void operator()(FILE* f) const { if (f) fclose(f); } };
 
 int main(int argc, char** argv) {
   try {
-    if (argc != 11) throw std::runtime_error(
-        "usage: grib-crop INPUT OUTPUT WEST SOUTH EAST NORTH STRIDE CYCLE HOUR FIELDS");
+    if (argc != 11 && argc != 12) throw std::runtime_error(
+        "usage: grib-crop INPUT OUTPUT WEST SOUTH EAST NORTH STRIDE CYCLE HOUR FIELDS [--east-inclusive]");
+    const bool east_inclusive = argc == 12 && std::string(argv[11]) == "--east-inclusive";
+    if (argc == 12 && !east_inclusive) throw std::runtime_error("unknown crop option");
     double west = std::stod(argv[3]), south = std::stod(argv[4]);
     double east = std::stod(argv[5]), north = std::stod(argv[6]);
     int stride = std::stoi(argv[7]), hour = std::stoi(argv[9]);
@@ -87,11 +89,12 @@ int main(int argc, char** argv) {
       double span = east > west ? east - west : east + 360 - west;
       std::vector<std::pair<double, long>> cols;
       std::vector<long> rows;
-      // Match NOMADS small_grib boundaries: west inclusive, east exclusive;
-      // both latitude limits inclusive. Columns remain eastward across 180/0.
+      // NOMADS weather includes the eastern cell; waves exclude it. A global
+      // grid includes each column once. Both latitude limits are inclusive.
       for (long i = 0; i < ni; ++i) {
         double delta = normal(lon0 + i * dx - west);
-        if (delta < span - 1e-7) cols.emplace_back(delta, i);
+        if (delta < span - 1e-7 || (east_inclusive && delta <= span + 1e-7))
+          cols.emplace_back(delta, i);
       }
       std::sort(cols.begin(), cols.end());
       for (long j = 0; j < nj; ++j) {
