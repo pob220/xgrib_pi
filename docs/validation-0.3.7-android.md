@@ -71,6 +71,8 @@ GRIB time metadata is described by [ECMWF's GRIB format reference](https://codes
 | Android chart readout and stepping through 6–7 October UTC midnight | Wind, current, waves, temperature and pressure displayed; midnight advanced correctly |
 | Native ordinary English Channel GFS weather + waves after cancellation | 21 records generated successfully |
 | Live Android cancellation | Returned to usable form; no partial final output published |
+| Android non-overlap error | Both UTC ranges and corrective guidance visible; no output published |
+| User settings after tests | Original generator preferences, saved-login state and automatic rotation restored |
 | Portrait/landscape and cold restart | Native touch controls usable; plugin loaded successfully |
 
 A short IFS/current job was deliberately found to have no common time period.
