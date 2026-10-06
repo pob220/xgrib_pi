@@ -1,22 +1,41 @@
 {
-  "fixtures" : 
-  {
-    "combined" : "combined-known.grb2",
-    "corrupt" : "corrupt.grb",
-    "current_differing" : "current-differing.grb",
-    "current_matching" : "current-matching.grb",
-    "wind" : "wind-known.grb2"
+  "fixtures": {
+    "combined": "combined-known.grb2",
+    "corrupt": "corrupt.grb",
+    "current_differing": "current-differing.grb",
+    "current_matching": "current-matching.grb",
+    "wind": "wind-known.grb2"
   },
-  "generated_by" : "environmental_grib_merge_tests",
-  "grid" : 
-  {
-    "east" : -6.0999999999999996,
-    "north" : 53.100000000000001,
-    "nx" : 3,
-    "ny" : 2,
-    "south" : 53.0,
-    "west" : -6.2999999999999998
+  "generated_by": "environmental_grib_merge_tests",
+  "grid": {
+    "east": -6.1,
+    "north": 53.1,
+    "nx": 3,
+    "ny": 2,
+    "south": 53.0,
+    "west": -6.3
   },
-  "reference_time" : "2026-07-12T00:00:00Z",
-  "schema" : "xgrib-deterministic-fixtures-v1"
+  "reference_time": "2026-07-12T00:00:00Z",
+  "schema": "xgrib-deterministic-fixtures-v1",
+  "dateline_fixture": {
+    "file": "dateline-combined.grb",
+    "generated_by": "environmental_grib_dateline_tests",
+    "reference_time": "2026-10-04T12:00:00Z",
+    "bbox": {
+      "west": 170,
+      "south": -1,
+      "east": -170,
+      "north": 1
+    },
+    "fields": [
+      "10u",
+      "10v",
+      "swh",
+      "perpw",
+      "dirpw",
+      "current-u",
+      "current-v"
+    ],
+    "sha256": "a68f43325e5abbf9075205b2bb8cc3cd518f05098c11e94f32fe79db0f6c3f51"
+  }
 }

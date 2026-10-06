@@ -73,7 +73,7 @@ set(LONG_DESCRIPTION
 
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "3")
-set(VERSION_PATCH "6")
+set(VERSION_PATCH "7")
 set(VERSION_TWEAK "0")
 set(VERSION_DATE "05/10/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
@@ -452,6 +452,9 @@ if(BUILD_TESTING AND TARGET environmental_grib_tests)
 endif()
 if(BUILD_TESTING AND TARGET environmental_grib_xtd_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_xtd_tests)
+endif()
+if(BUILD_TESTING AND TARGET environmental_grib_dateline_tests)
+  add_dependencies(${PACKAGE_NAME} environmental_grib_dateline_tests)
 endif()
 if(BUILD_TESTING AND TARGET environmental_grib_merge_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_merge_tests)
@@ -855,6 +858,17 @@ if (NOT OCPN_FLATPAK_CONFIG)
           --tonga)
       set_tests_properties(xgrib_tonga_reader_tests PROPERTIES
         FIXTURES_REQUIRED environmental_grib_combined_fixture)
+    endif()
+    if(XGRIB_EXTERNAL_GENERATOR_DIR)
+      add_test(NAME xgrib_dateline_reader_tests
+        COMMAND xgrib_reader_integration_tests
+          "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dateline-combined.grb" --dateline)
+    else()
+      add_test(NAME xgrib_dateline_reader_tests
+        COMMAND xgrib_reader_integration_tests
+          "${CMAKE_BINARY_DIR}/functional-fixtures/dateline/reader.grb" --dateline)
+      set_tests_properties(xgrib_dateline_reader_tests PROPERTIES
+        FIXTURES_REQUIRED environmental_grib_dateline_fixture)
     endif()
   endif()
 

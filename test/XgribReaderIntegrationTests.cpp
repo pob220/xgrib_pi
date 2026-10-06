@@ -36,6 +36,18 @@ public:
   }
 };
 
+class DatelineFixtureRecord : public GribRecord {
+public:
+  DatelineFixtureRecord(double west, double east, double value, double spacing=.25) {
+    ok = knownData = true; hasBMS = false; BMSbits = nullptr; isAdjacentI = true;
+    Lo1 = lonMin = west; Lo2 = lonMax = east;
+    La1 = latMin = -1; La2 = latMax = 1; Di = Dj = spacing;
+    Ni = static_cast<zuint>(std::lround((east-west)/Di))+1;
+    Nj = static_cast<zuint>(std::lround(2/spacing))+1;
+    data = new double[Ni*Nj]; std::fill(data,data+Ni*Nj,value);
+  }
+};
+
 void Expect(bool condition, const char* message) {
   if (condition) return;
   std::cerr << "FAIL: " << message << '\n';
@@ -121,9 +133,29 @@ int main(int argc, char** argv) {
   Expect(std::abs(offsetInterpolatedU->getValue(0, 0) - 3.0) < 1e-9,
          "misaligned-grid sampling should preserve the temporal blend");
 
+  DatelineFixtureRecord crossingU(170,190,2), crossingV(170,190,0);
+  DatelineFixtureRecord shiftedU(-190,-170,4), shiftedV(-190,-170,0);
+  DatelineFixtureRecord globalU(-180,179.75,4), globalV(-180,179.75,0);
+  DatelineFixtureRecord coarseU(170,190,4,.5), coarseV(170,190,0,.5);
+  for (const auto& pair : {std::pair<const GribRecord*,const GribRecord*>{&shiftedU,&shiftedV},
+                           std::pair<const GribRecord*,const GribRecord*>{&globalU,&globalV},
+                           std::pair<const GribRecord*,const GribRecord*>{&coarseU,&coarseV}}) {
+    interpolatedV = nullptr;
+    std::unique_ptr<GribRecord> u(GribRecord::Interpolated2DRecord(
+        interpolatedV,crossingU,crossingV,*pair.first,*pair.second,.5));
+    std::unique_ptr<GribRecord> v(interpolatedV);
+    Expect(u && v,"date-line timeline/provider handover interpolation");
+    for (double longitude : {179.75,180.0,-180.0,-179.75}) {
+      Expect(std::abs(u->getInterpolatedValue(longitude,0)-3)<1e-8,
+             "interpolated wind is available on both sides of the date line");
+      Expect(std::abs(v->getInterpolatedValue(longitude,0))<1e-8,
+             "paired vector interpolation retains both halves");
+    }
+  }
+
   Expect(argc == 2 || argc == 3,
          "usage: xgrib_reader_integration_tests FILE.grb "
-         "[--any|--combined|--combined-all|--long-current|--tonga|--jpeg|--malformed]");
+         "[--any|--combined|--combined-all|--long-current|--tonga|--dateline|--jpeg|--malformed]");
 
   GribReader reader(wxString::FromUTF8(argv[1]));
   const std::string mode = argc == 3 ? argv[2] : "";
@@ -153,6 +185,28 @@ int main(int argc, char** argv) {
              "JPEG field differs from ecCodes reference");
     }
     std::cout << "xGRIB JPEG field matches ecCodes reference\n";
+    return 0;
+  }
+  if (mode == "--dateline") {
+    std::set<int> sampled;
+    for (const auto& [key,records] : *reader.getGribMap()) {
+      (void)key;
+      if (!records) continue;
+      for (const auto* record : *records) {
+        const int type = record->getDataType();
+        if (type != GRB_WIND_VX && type != GRB_WIND_VY &&
+            type != GRB_UOGRD && type != GRB_VOGRD && type != GRB_HTSGW)
+          continue;
+        for (double longitude : {179.75,180.0,-180.0,-179.75}) {
+          const double value = record->getInterpolatedValue(longitude,0);
+          Expect(value != GRIB_NOTDEF && std::isfinite(value),
+                 "weather/current/waves sample continuously through 180 degrees");
+        }
+        sampled.insert(type);
+      }
+    }
+    Expect(sampled.size()==5,"crossing GRIB contains both wind/current components and waves");
+    std::cout << "xGRIB reader sampled wind, current and waves across the date line\n";
     return 0;
   }
   if (mode == "--tonga") {

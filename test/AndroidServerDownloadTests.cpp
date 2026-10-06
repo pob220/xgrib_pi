@@ -23,7 +23,9 @@ int main() {
       Require(xgrib::ServerGribUrl(box, "ecmwfaifs0p25", hours).find("ecmwfaifs0p25") != std::string::npos, "AIFS supported");
     Reject([&] { xgrib::ServerGribUrl(box, "untrusted&url=http://example.org", 24); }, "reject model injection");
     Reject([&] { xgrib::ServerGribUrl(box, "ecmwf0p25", 0); }, "reject unsupported duration");
-    Reject([&] { xgrib::ServerGribUrl({10, 50, -10, 60}, "ecmwf0p25", 24); }, "reject inverted area");
+    Require(xgrib::ServerGribUrl({179, 0, -179, 1}, "ecmwf0p25", 24).find("lonmin=179&lonmax=-179") != std::string::npos,
+            "server uses canonical crossing bounds");
+    Reject([&] { xgrib::ServerGribUrl({10, 50, 10, 60}, "ecmwf0p25", 24); }, "reject zero-width area");
     Reject([&] { xgrib::ServerGribUrl({-8, 50, std::numeric_limits<double>::quiet_NaN(), 60}, "ecmwf0p25", 24); }, "reject NaN");
     eg::EnvironmentRequest request;
     request.bbox = box;

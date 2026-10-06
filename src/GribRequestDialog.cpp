@@ -2643,7 +2643,8 @@ void GribRequestSetting::UpdateGribSizeEstimate() {
   double ymax = GetMaxLat();
   double ymin = GetMinLat();
 
-  int npts = (int)(ceil(fabs(xmax - xmin) / resolution) *
+  const double longitudeWidth = xmax >= xmin ? xmax - xmin : xmax + 360.0 - xmin;
+  int npts = (int)(ceil(longitudeWidth / resolution) *
                    ceil(fabs(ymax - ymin) / resolution));
 
   // Number of GribRecords
@@ -2724,19 +2725,19 @@ void GribRequestSetting::UpdateGribSizeEstimate() {
   if (m_xygribPanel->m_wavemodel_choice->GetStringSelection().IsSameAs(
           "WW3"))  // 0.5 deg
   {
-    npts = (int)(ceil(fabs(xmax - xmin) / 0.5) * ceil(fabs(ymax - ymin) / 0.5));
+    npts = (int)(ceil(longitudeWidth / 0.5) * ceil(fabs(ymax - ymin) / 0.5));
     nbrec = (int)fmin(8, days) * 24 / interval + 1;
   } else if (m_xygribPanel->m_wavemodel_choice->GetStringSelection().IsSameAs(
                  "GWAM"))  // 0.25 deg
   {
     npts =
-        (int)(ceil(fabs(xmax - xmin) / 0.25) * ceil(fabs(ymax - ymin) / 0.25));
+        (int)(ceil(longitudeWidth / 0.25) * ceil(fabs(ymax - ymin) / 0.25));
     nbrec = (int)fmin(8, days) * 24 / interval + 1;
   } else if (m_xygribPanel->m_wavemodel_choice->GetStringSelection().IsSameAs(
                  "EWAM"))  // 0.1 x 0.05 deg
   {
     npts =
-        (int)(ceil(fabs(xmax - xmin) / 0.05) * ceil(fabs(ymax - ymin) / 0.1));
+        (int)(ceil(longitudeWidth / 0.05) * ceil(fabs(ymax - ymin) / 0.1));
     nbrec = (int)fmin(4, days) * 24 / interval + 1;
   } else {
     npts = 0;

@@ -10,6 +10,27 @@ UKV regridding, current calculation and ecCodes writing therefore do not run
 inside OpenCPN. Generated files open directly in xGRIB after strict GRIB
 validation.
 
+### New in 0.3.7
+
+Download and generation boxes can cross the date line. Enter west greater than
+east, for example **W=170, E=-170**, to select the 20-degree
+Pacific strip. The chart-area selector, saved areas and size estimates use the
+same eastward interpretation. Output fields have continuous longitude columns
+and can be sampled on either side of 180 degrees.
+
+This applies to every viable combination of GFS (including hosted failover),
+ECMWF IFS/AIFS, GFS/Copernicus global waves, Copernicus global currents, TPXO,
+XTD and suitable imported GRIB/NetCDF data. Providers retain their native grids,
+fields and forecast cadence. Imported regular latitude/longitude fragments are
+stitched by field, level, cycle and valid time before combination; gaps and
+conflicting seam values fail explicitly. Timeline interpolation also handles
+longitude-convention and resolution changes at forecast handovers.
+
+Regional sources still require genuine geographical coverage: a Pacific box
+cannot be supplied by UKV, Nordic, ICON-EU, the exposed HRRR/RTOFS regions or
+European coastal-current products. Selecting an uncovered source produces a
+coverage error. Hosted GFS failover retains the cache's existing field support.
+
 ### New in 0.3.6
 
 GFS weather and waves automatically switch from NOAA NOMADS to the hosted
@@ -50,7 +71,7 @@ uses the grid width and scanning direction, so global fields and regional
 fields crossing 180 degrees retain their true coverage. This also applies to
 other providers and imported regular latitude/longitude GRIBs, with or without
 waves. Truly disjoint weather/current areas are still rejected. Request boxes
-which themselves cross the antimeridian remain unsupported.
+which themselves cross the antimeridian became supported in 0.3.7.
 
 ### Added in 0.2.5.2
 

@@ -264,7 +264,7 @@ struct AndroidGribGeneratorDialog::Impl {
     heading = new QLabel("xGRIB — Generate forecast"); layout->addWidget(heading);
     tabs = new QTabWidget(root); tabs->setUsesScrollButtons(true); layout->addWidget(tabs, 1);
     auto* area = Page("Area / time");
-    Note(area, "Coordinates are decimal degrees. West and south are negative. All times are UTC.");
+    Note(area, "Coordinates are decimal degrees. A west longitude greater than east crosses the date line. All times are UTC.");
     auto* useChart = new QPushButton("Use chart area"); area->addWidget(useChart);
     auto* areas = new QComboBox;
     areas->addItem("Choose a saved area...");
@@ -284,8 +284,12 @@ struct AndroidGribGeneratorDialog::Impl {
       fields["north"]->setText(QString::number(preset.north));
     });
     QObject::connect(useChart, &QPushButton::clicked, root, [this] {
-      fields["west"]->setText(QString::number(viewport.lon_min, 'f', 3));
-      fields["east"]->setText(QString::number(viewport.lon_max, 'f', 3));
+      double west = viewport.lon_min, east = viewport.lon_max;
+      if (!xgrib::NormalizeAreaLongitudes(&west, &east)) {
+        log->appendPlainText("The chart longitude bounds are invalid."); return;
+      }
+      fields["west"]->setText(QString::number(west, 'f', 3));
+      fields["east"]->setText(QString::number(east, 'f', 3));
       fields["south"]->setText(QString::number(viewport.lat_min, 'f', 3));
       fields["north"]->setText(QString::number(viewport.lat_max, 'f', 3));
     });
