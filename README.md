@@ -5,10 +5,10 @@ for OpenCPN. It retains the familiar GRIB timeline, overlays, cursor data,
 download tools and plugin-message protocol, while adding an integrated native
 generator for combined weather, wave and current GRIB files.
 
-The generator runs in a separate process. Provider downloads, NetCDF parsing,
-UKV regridding, current calculation and ecCodes writing therefore do not run
-inside OpenCPN. Generated files open directly in xGRIB after strict GRIB
-validation.
+Desktop builds run the shared generator in a separate process. Android runs
+that same engine on a background worker behind its native touch interface.
+Both paths use the same provider adapters, date-line geometry, UTC handling
+and output validation. Generated files open directly in xGRIB.
 
 ### New in 0.3.7
 
@@ -25,6 +25,16 @@ fields and forecast cadence. Imported regular latitude/longitude fragments are
 stitched by field, level, cycle and valid time before combination; gaps and
 conflicting seam values fail explicitly. Timeline interpolation also handles
 longitude-convention and resolution changes at forecast handovers.
+
+Forecast timestamps stay in UTC across the date line: different local
+calendar dates never add or subtract a day from a field. NetCDF origins with
+positive or negative UTC offsets are normalized before selection; unsupported
+noncivil calendars fail explicitly. Midnight, year-end and leap-day tests
+verify GRIB1 currents and GRIB2 weather/waves retain the same valid times.
+If weather/current coverage does not overlap, the shared merge error shows
+both UTC ranges and explains how to change duration or current start time.
+Global ARCO readers support both padded and clipped boundary chunks so that
+Copernicus currents and waves retain western cells next to the longitude seam.
 
 Regional sources still require genuine geographical coverage: a Pacific box
 cannot be supplied by UKV, Nordic, ICON-EU, the exposed HRRR/RTOFS regions or
