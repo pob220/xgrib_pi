@@ -103,6 +103,37 @@ const std::vector<ProviderPreferenceOption>& CurrentProviderOptions() {
   return options;
 }
 
+bool NormalizeAreaLongitudes(double* west, double* east) {
+  if (!west || !east || !std::isfinite(*west) || !std::isfinite(*east)) return false;
+  double span = *east - *west;
+  if (span < 0.0 && span > -360.0) span += 360.0;
+  if (span <= 0.0 || span > 360.0) return false;
+  if (std::abs(span - 360.0) < 1e-8) { *west = -180.0; *east = 180.0; return true; }
+  auto normalize = [](double value) {
+    double result = std::fmod(value + 180.0, 360.0);
+    if (result < 0.0) result += 360.0;
+    return result - 180.0;
+  };
+  *west = normalize(*west);
+  *east = normalize(*west + span);
+  return true;
+}
+
+bool AreaContains(const AreaPreset& coverage, const AreaPreset& requested) {
+  double west = coverage.west, east = coverage.east;
+  double requestedWest = requested.west, requestedEast = requested.east;
+  if (!NormalizeAreaLongitudes(&west, &east) ||
+      !NormalizeAreaLongitudes(&requestedWest, &requestedEast)) return false;
+  const double width = east > west ? east - west : east + 360.0 - west;
+  const double requestedWidth = requestedEast > requestedWest ? requestedEast - requestedWest
+                                                               : requestedEast + 360.0 - requestedWest;
+  double offset = std::fmod(requestedWest - west, 360.0);
+  if (offset < 0.0) offset += 360.0;
+  if (offset > 360.0 - 1e-8) offset = 0.0;
+  return (width >= 360.0 - 1e-8 || offset + requestedWidth <= width + 1e-8) &&
+         requested.south >= coverage.south && requested.north <= coverage.north;
+}
+
 wxString ValidateAreaPreset(const AreaPreset& preset) {
   const wxString name = NormalizedName(preset.name);
   if (preset.id.empty()) return "The preset has no internal ID.";
@@ -116,9 +147,9 @@ wxString ValidateAreaPreset(const AreaPreset& preset) {
   if (preset.south < -90.0 || preset.south > 90.0 || preset.north < -90.0 ||
       preset.north > 90.0)
     return "Latitudes must be between -90 and 90 degrees.";
-  if (preset.west >= preset.east)
-    return "West longitude must be less than east longitude. Areas crossing "
-           "the antimeridian are not yet supported.";
+  if (preset.west == preset.east ||
+      (preset.west == 180.0 && preset.east == -180.0))
+    return "The area must have a non-zero longitude width.";
   if (preset.south >= preset.north)
     return "South latitude must be less than north latitude.";
   if (!IsKnownProviderId(preset.weather_provider, WeatherProviderOptions()))

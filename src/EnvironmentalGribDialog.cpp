@@ -989,7 +989,7 @@ void EnvironmentalGribDialog::OnGenerate(wxCommandEvent&) {
                   m_east->GetValue().ToDouble(&east) &&
                   m_north->GetValue().ToDouble(&north);
     if (parsed && weatherProvider.Contains("HRRR") &&
-        (west < -130.0 || east > -60.0 || south < 20.0 || north > 55.0)) {
+        (west > east || west < -130.0 || east > -60.0 || south < 20.0 || north > 55.0)) {
       wxString message =
           "The requested bbox is outside the normal NOAA HRRR contiguous "
           "United States domain. "
@@ -1001,7 +1001,7 @@ void EnvironmentalGribDialog::OnGenerate(wxCommandEvent&) {
       return;
     }
     if (parsed && weatherProvider.Contains("ICON-EU") &&
-        (west < -32.5 || east > 42.5 || south < 20.0 || north > 72.5)) {
+        (west > east || west < -32.5 || east > 42.5 || south < 20.0 || north > 72.5)) {
       wxString message =
           "The requested bbox is outside the normal DWD ICON-EU Europe domain. "
           "Choose a European area or select a global provider that covers this "
@@ -1210,10 +1210,11 @@ void EnvironmentalGribDialog::ApplyPreset(int selection) {
       m_presetChoice->SetSelection(0);
       return;
     }
-    if (m_currentViewPort.lon_min >= m_currentViewPort.lon_max ||
+    double chartWest = m_currentViewPort.lon_min, chartEast = m_currentViewPort.lon_max;
+    if (!xgrib::NormalizeAreaLongitudes(&chartWest, &chartEast) ||
         m_currentViewPort.lat_min >= m_currentViewPort.lat_max) {
       AppendLog(
-          "Current chart area crosses an unsupported longitude boundary; enter "
+          "Current chart area has invalid bounds; enter "
           "bbox manually.");
       wxMessageBox(
           "The current chart area cannot be converted to a simple "
@@ -1223,9 +1224,9 @@ void EnvironmentalGribDialog::ApplyPreset(int selection) {
       return;
     }
     m_applyingAreaPreset = true;
-    m_west->ChangeValue(wxString::Format("%.6f", m_currentViewPort.lon_min));
+    m_west->ChangeValue(wxString::Format("%.6f", chartWest));
     m_south->ChangeValue(wxString::Format("%.6f", m_currentViewPort.lat_min));
-    m_east->ChangeValue(wxString::Format("%.6f", m_currentViewPort.lon_max));
+    m_east->ChangeValue(wxString::Format("%.6f", chartEast));
     m_north->ChangeValue(wxString::Format("%.6f", m_currentViewPort.lat_max));
     m_applyingAreaPreset = false;
     RefreshOutputFilenameDefault();
@@ -1264,7 +1265,7 @@ bool EnvironmentalGribDialog::AutoWouldUseMarineIe() const {
                 m_south->GetValue().ToDouble(&south) &&
                 m_east->GetValue().ToDouble(&east) &&
                 m_north->GetValue().ToDouble(&north);
-  return parsed && west >= -6.994 && east <= -4.006 && south >= 51.506 &&
+  return parsed && west < east && west >= -6.994 && east <= -4.006 && south >= 51.506 &&
          north <= 55.494 && m_durationHours->GetValue() <= 72;
 }
 
@@ -1386,8 +1387,8 @@ bool EnvironmentalGribDialog::ValidateOfflineTidalPackage() {
       m_east->GetValue().ToDouble(&requestedEast) &&
       m_north->GetValue().ToDouble(&requestedNorth);
   if (haveCoverage && haveRequestedArea &&
-      (requestedWest < coverageWest || requestedSouth < coverageSouth ||
-       requestedEast > coverageEast || requestedNorth > coverageNorth)) {
+      !xgrib::AreaContains({"", "", coverageWest, coverageSouth, coverageEast, coverageNorth},
+                          {"", "", requestedWest, requestedSouth, requestedEast, requestedNorth})) {
     m_offlineTidalStatus->SetValue(wxString::Format(
         _("Requested area outside coverage: package covers %.4f, %.4f to %.4f, "
           "%.4f"),
@@ -1796,7 +1797,7 @@ bool EnvironmentalGribDialog::ConfirmLargeCopernicusRequest() {
                 m_south->GetValue().ToDouble(&south) &&
                 m_east->GetValue().ToDouble(&east) &&
                 m_north->GetValue().ToDouble(&north);
-  double area = parsed ? (east - west) * (north - south) : 0.0;
+  double area = parsed ? (east > west ? east - west : east + 360.0 - west) * (north - south) : 0.0;
   if (m_durationHours->GetValue() <= 72 && area <= 12.0) {
     return true;
   }
@@ -1830,7 +1831,7 @@ bool EnvironmentalGribDialog::ValidateUkvRequest() {
       m_south->GetValue().ToDouble(&south) &&
       m_east->GetValue().ToDouble(&east) &&
       m_north->GetValue().ToDouble(&north)) {
-    if (west < -12.0 || east > 4.0 || south < 48.0 || north > 62.0) {
+    if (west > east || west < -12.0 || east > 4.0 || south < 48.0 || north > 62.0) {
       wxString message =
           "The requested bbox is outside the Met Office UKV UK/Ireland "
           "regional domain. Choose a UK/Ireland area or use GFS/ECMWF.";
@@ -1871,7 +1872,7 @@ bool EnvironmentalGribDialog::ValidateMetNoRequest() {
       m_south->GetValue().ToDouble(&south) &&
       m_east->GetValue().ToDouble(&east) &&
       m_north->GetValue().ToDouble(&north) &&
-      (west < -20.0 || east > 80.0 || south < 51.0 || north > 88.0)) {
+      (west > east || west < -20.0 || east > 80.0 || south < 51.0 || north > 88.0)) {
     const wxString message =
         "The requested bbox is outside the MET Norway Nordic forecast domain. "
         "Choose a Nordic/European area or use a global provider.";
@@ -2956,7 +2957,7 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
                   m_south->GetValue().ToDouble(&south) &&
                   m_east->GetValue().ToDouble(&east) &&
                   m_north->GetValue().ToDouble(&north);
-    if (parsed && west >= -20.0 && east <= 13.0 && south >= 40.0 &&
+    if (parsed && west < east && west >= -20.0 && east <= 13.0 && south >= 40.0 &&
         north <= 65.0) {
       return TimestampedFilename("copernicus_nws_current");
     }

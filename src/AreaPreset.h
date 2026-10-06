@@ -31,6 +31,9 @@ std::vector<AreaPreset> SuppliedAreaPresets();
 
 // Returns an empty string when the preset is valid.
 wxString ValidateAreaPreset(const AreaPreset& preset);
+// Accept conventional or unwrapped chart bounds; preserve the eastward span.
+bool NormalizeAreaLongitudes(double* west, double* east);
+bool AreaContains(const AreaPreset& coverage, const AreaPreset& requested);
 wxString ValidateAreaPresetCollection(const std::vector<AreaPreset>& presets);
 
 std::vector<AreaPreset> LoadAreaPresets(wxConfigBase* config);

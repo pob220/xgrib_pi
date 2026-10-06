@@ -23,6 +23,11 @@ test -x "$reader"
 
 mkdir -p "${fixture_dir}" "${test_dir}"
 
+"${build_dir}/generator/environmental_grib_dateline_tests" "${fixture_dir}" \
+  >"${test_dir}/dateline-generation.log" 2>&1
+"$reader" "${fixture_dir}/dateline/reader.grb" --dateline \
+  >"${test_dir}/dateline-reader-reopen.log" 2>&1
+
 sha256_files() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$@"

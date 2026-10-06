@@ -42,8 +42,27 @@ int main() {
          "Nordic waters must retain its optional provider recommendations");
 
   xgrib::AreaPreset invalid{"bad", "Bad", 10.0, 0.0, -10.0, 5.0};
+  Expect(xgrib::ValidateAreaPreset(invalid).empty(),
+         "crossing area must be accepted");
+  invalid.east = invalid.west;
   Expect(!xgrib::ValidateAreaPreset(invalid).empty(),
-         "west >= east must be rejected");
+         "zero-width area must be rejected");
+  double west = 170, east = 190;
+  Expect(xgrib::NormalizeAreaLongitudes(&west, &east) && west == 170 && east == -170,
+         "unwrapped chart bounds become a crossing selection");
+  west = -190; east = -170;
+  Expect(xgrib::NormalizeAreaLongitudes(&west, &east) && west == 170 && east == -170,
+         "shifted chart bounds describe the same crossing");
+  west = 0; east = 360;
+  Expect(xgrib::NormalizeAreaLongitudes(&west, &east) && west == -180 && east == 180,
+         "global chart bounds stay global");
+  const xgrib::AreaPreset crossing{"crossing", "Pacific", 170, -1, -170, 1};
+  Expect(xgrib::AreaContains({"global", "Global", 0, -90, 360, 90}, crossing),
+         "0..360 package coverage contains crossing area");
+  Expect(xgrib::AreaContains({"regional", "Pacific", 160, -5, -160, 5}, crossing),
+         "wrapped package coverage contains crossing area");
+  Expect(!xgrib::AreaContains({"regional", "Atlantic", -20, -5, 20, 5}, crossing),
+         "regional package coverage excludes crossing area");
   invalid = {"bad", "Bad", -10.0, -95.0, 10.0, 5.0};
   Expect(!xgrib::ValidateAreaPreset(invalid).empty(),
          "out-of-range latitude must be rejected");

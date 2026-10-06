@@ -49,6 +49,33 @@ static double interp_angle(double a0, double a1, double d, double p) {
   return a;
 }
 
+// Resolve overlap modulo 360, preserving a regional grid's entire wrapped
+// extent when the other record is cyclic. This is also used at model handovers.
+static bool longitude_intersection(const GribRecord& first, const GribRecord& second,
+                                   double& west, double& east) {
+  const auto cyclic = [](const GribRecord& record) {
+    const double step = std::abs(record.getDi());
+    return std::abs(step * record.getNi() - 360.0) < 1e-5 ||
+           std::abs(step * (record.getNi()-1) - 360.0) < 1e-5;
+  };
+  const bool a_global = cyclic(first), b_global = cyclic(second);
+  if (a_global && b_global) {
+    west = first.getLonMin();
+    east = west + 360.0 - std::max(std::abs(first.getDi()), std::abs(second.getDi()));
+    return true;
+  }
+  if (a_global) { west = second.getLonMin(); east = second.getLonMax(); return true; }
+  if (b_global) { west = first.getLonMin(); east = first.getLonMax(); return true; }
+  double best = -1.0;
+  const double base = 360.0 * std::round((first.getLonMin()-second.getLonMin())/360.0);
+  for (double shift : {base-360.0, base, base+360.0}) {
+    const double left = std::max(first.getLonMin(), second.getLonMin()+shift);
+    const double right = std::min(first.getLonMax(), second.getLonMax()+shift);
+    if (right-left > best) { best=right-left; west=left; east=right; }
+  }
+  return best >= 0.0;
+}
+
 //-------------------------------------------------------------------------------
 GribRecord::GribRecord()
 {
@@ -404,6 +431,13 @@ bool GribRecord::GetInterpolatedParameters(
     La1 = std::min(rec1.La1, rec2.La1), La2 = std::max(rec1.La2, rec2.La2);
 
   Lo1 = std::max(rec1.Lo1, rec2.Lo1), Lo2 = std::min(rec1.Lo2, rec2.Lo2);
+  double wrappedWest = 0.0, wrappedEast = 0.0;
+  if (!longitude_intersection(rec1, rec2, wrappedWest, wrappedEast)) return false;
+  // Direct array offsets cannot address a shifted/cyclic second record.
+  // The spatial fallback samples the equivalent longitude in each record.
+  if (std::abs(Lo1-wrappedWest) > 1e-7 || std::abs(Lo2-wrappedEast) > 1e-7)
+    return false;
+
 
   // align gribs on integer boundaries
   int i, j;
@@ -506,8 +540,8 @@ bool GribRecord::GetSpatialInterpolationGrid(
   if (Di <= 0.0 || absDj <= 0.0) return false;
   Dj = rec1.getDj() > 0.0 ? absDj : -absDj;
 
-  const double lonMin = std::max(rec1.getLonMin(), rec2.getLonMin());
-  const double lonMax = std::min(rec1.getLonMax(), rec2.getLonMax());
+  double lonMin = 0.0, lonMax = 0.0;
+  if (!longitude_intersection(rec1, rec2, lonMin, lonMax)) return false;
   const double latMin = std::max(rec1.getLatMin(), rec2.getLatMin());
   const double latMax = std::min(rec1.getLatMax(), rec2.getLatMax());
   if (lonMin > lonMax || latMin > latMax) return false;
