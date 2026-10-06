@@ -218,6 +218,8 @@ set(SRCS
     src/AreaPreset.cpp
     src/AreaPresetManagerDialog.cpp
     src/EnvironmentalGribDialog.cpp
+    src/ExternalEnvironmentProvider.cpp
+    src/FileDigest.cpp
     src/GeneratorJobJson.cpp
     src/ProcessCommand.cpp
     src/TimeZoneDisplay.cpp
@@ -255,6 +257,8 @@ set(HDRS
     src/AreaPreset.h
     src/AreaPresetManagerDialog.h
     src/EnvironmentalGribDialog.h
+    src/ExternalEnvironmentProvider.h
+    src/FileDigest.h
     src/GeneratorJobJson.h
     src/ProcessCommand.h
     src/TimeZoneDisplay.h
@@ -706,6 +710,17 @@ if (NOT OCPN_FLATPAK_CONFIG)
         -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
         -DTEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/test/WindowsEcCodesConfigureTests.cmake)
+
+    add_executable(xgrib_file_digest_tests
+      test/FileDigestTests.cpp src/FileDigest.cpp)
+    target_include_directories(xgrib_file_digest_tests PRIVATE
+      ${PROJECT_SOURCE_DIR}/src)
+    add_test(NAME xgrib_file_digest_tests COMMAND xgrib_file_digest_tests)
+
+    add_test(NAME xgrib_external_environment_provider_contract
+      COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/src/ExternalEnvironmentProvider.cpp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/ExternalEnvironmentProviderContract.cmake)
 
     add_test(NAME xgrib_environmental_process_output_contract
       COMMAND ${CMAKE_COMMAND}
