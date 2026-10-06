@@ -5,8 +5,8 @@
 The Android build starts from `630a04f`, the exact source of the tablet's
 installed 0.3.6 library. It retains the Android touch interface, encrypted
 credentials, private PNG-handler initialization and 16 KB LOAD/RELRO alignment.
-The 0.3.7 date-line changes are applied on top. Android and desktop use generator
-revision `891a8e865dabcc9e81448f63d6efa5e1876329ab`.
+The 0.3.7 date-line changes are applied on top. The release source pins generator
+revision `0e61b6b3b4b126503fddd1721d2bdd219c9956ee`.
 
 Device: Samsung SM-X210, Android 15, arm64. Host: OpenCPN
 `5.14.1-pob220-16k-test`, package `org.opencpn.opencpn.dev`.
@@ -14,7 +14,9 @@ The plugin was imported through Android's OpenCPN plugin manager, with final
 shared-engine changes installed as an atomic replacement of that imported
 library. The final installed library is identical to the import archive's
 payload: SHA-256 `c6f4cf517401a952c20b0450e3ee39f972e22dd8a79a825804f19f9b7a7872b9`.
-Other plugin binaries and the host APK are unchanged.
+Other plugin binaries and the host APK are unchanged. The initial tablet/library
+qualification below used generator `891a8e865dabcc9e81448f63d6efa5e1876329ab`;
+the subsequent release correction adds explicit wave surface levels.
 
 ## Shared fixes found during tablet testing
 
@@ -31,6 +33,11 @@ Other plugin binaries and the host APK are unchanged.
   A negative offset no longer acquires an erroneous trailing `Z`.
 - Gregorian dates are validated before time conversion. Unsupported noncivil
   NetCDF calendars produce an explicit error instead of incorrect timestamps.
+
+A Debian 12 release run also identified older ecCodes samples retaining
+`heightAboveGround` on generated wave fields. The shared writer now encodes
+surface levels explicitly. The production reader and 230-combination fixture
+suite pass with the older Debian 12 definitions as well as the laptop runtime.
 
 ## Date-line time rules
 
