@@ -10,11 +10,11 @@ that same engine on a background worker behind its native touch interface.
 Both paths use the same provider adapters, date-line geometry, UTC handling
 and output validation. Generated files open directly in xGRIB.
 
-### New in 0.3.7
+### Improved in 0.3.7
 
-Download and generation boxes can cross the date line. Enter west greater than
-east, for example **W=170, E=-170**, to select the 20-degree
-Pacific strip. The chart-area selector, saved areas and size estimates use the
+Date-line downloads and generation use a consistent eastward interpretation
+across supported providers. Enter west greater than east, for example
+**W=170, E=-170**, to select the 20-degree Pacific strip. The chart-area selector, saved areas and size estimates use the
 same eastward interpretation. Output fields have continuous longitude columns
 and can be sampled on either side of 180 degrees.
 
@@ -80,8 +80,7 @@ Tonga and elsewhere across the longitude seam. The shared GRIB coverage check
 uses the grid width and scanning direction, so global fields and regional
 fields crossing 180 degrees retain their true coverage. This also applies to
 other providers and imported regular latitude/longitude GRIBs, with or without
-waves. Truly disjoint weather/current areas are still rejected. Request boxes
-which themselves cross the antimeridian became supported in 0.3.7.
+waves. Truly disjoint weather/current areas are still rejected.
 
 ### Added in 0.2.5.2
 
