@@ -166,9 +166,9 @@ message(STATUS "${CMLOC}Build type: ${CMAKE_BUILD_TYPE}")
 project(${PACKAGE})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Android")
-  set(SHORT_DESCRIPTION "Display, download and combine GRIB files on Android.")
+  set(SHORT_DESCRIPTION "Display, download and generate GRIB files on Android.")
   set(LONG_DESCRIPTION
-      "An Android GRIB viewer with local file selection, forecast downloads and on-tablet combination of weather, wave and current GRIB files. Provider-based environmental generation is available on desktop platforms only.")
+      "An Android GRIB viewer with local file selection, forecast downloads and on-tablet generation and combination of weather, wave and current GRIB files using the shared native generator and provider adapters.")
   set(XML_SUMMARY ${SHORT_DESCRIPTION})
   set(XML_DESCRIPTION ${LONG_DESCRIPTION})
 endif()
