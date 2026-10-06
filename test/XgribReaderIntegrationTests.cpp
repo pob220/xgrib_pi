@@ -136,10 +136,10 @@ int main(int argc, char** argv) {
   DatelineFixtureRecord crossingU(170,190,2), crossingV(170,190,0);
   DatelineFixtureRecord shiftedU(-190,-170,4), shiftedV(-190,-170,0);
   DatelineFixtureRecord globalU(-180,179.75,4), globalV(-180,179.75,0);
-  DatelineFixtureRecord coarseU(170,190,4,.5), coarseV(170,190,0,.5);
+  DatelineFixtureRecord seamCoarseU(170,190,4,.5), seamCoarseV(170,190,0,.5);
   for (const auto& pair : {std::pair<const GribRecord*,const GribRecord*>{&shiftedU,&shiftedV},
                            std::pair<const GribRecord*,const GribRecord*>{&globalU,&globalV},
-                           std::pair<const GribRecord*,const GribRecord*>{&coarseU,&coarseV}}) {
+                           std::pair<const GribRecord*,const GribRecord*>{&seamCoarseU,&seamCoarseV}}) {
     interpolatedV = nullptr;
     std::unique_ptr<GribRecord> u(GribRecord::Interpolated2DRecord(
         interpolatedV,crossingU,crossingV,*pair.first,*pair.second,.5));
