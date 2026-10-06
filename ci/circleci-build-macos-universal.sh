@@ -32,6 +32,7 @@ export WX_VER=32
 # only a broken bottle from the same official formula source.
 msgfmt_smoke="${TMPDIR:-/tmp}/xgrib-msgfmt-smoke.mo"
 if ! msgfmt --check -o "$msgfmt_smoke" po/zh_TW.po; then
+  bash ci/cache-gettext-source.sh
   brew reinstall --build-from-source gettext </dev/null
   msgfmt --check -o "$msgfmt_smoke" po/zh_TW.po
 fi
