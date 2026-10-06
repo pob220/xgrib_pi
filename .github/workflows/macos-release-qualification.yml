@@ -1,0 +1,45 @@
+name: xGRIB 0.3.7 native macOS qualification
+
+on:
+  push:
+    branches: [ci/0.3.7-macos-qualification]
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: Apple Silicon API ${{ matrix.api }}
+    runs-on: macos-15
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        api: ['1.21', '1.22']
+    env:
+      XGRIB_API_HEADER_VERSION: ${{ matrix.api }}
+      CMAKE_BUILD_PARALLEL_LEVEL: '3'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: 1b55eddbcdd59de59fbee0cf9d2a6e8bacfb07d1
+          submodules: recursive
+          persist-credentials: false
+      - name: Verify native architecture and release source
+        run: |
+          test "$(uname -m)" = arm64
+          test "$(git rev-parse HEAD)" = 1b55eddbcdd59de59fbee0cf9d2a6e8bacfb07d1
+          test "$(git -C generator rev-parse HEAD)" = 0e61b6b3b4b126503fddd1721d2bdd219c9956ee
+      - name: Build, test, relocate, sign and inspect release package
+        run: |
+          chmod a+x ci/*.sh scripts/*.sh
+          bash ci/circleci-build-macos-universal.sh
+      - name: Retain qualification evidence and package
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: xgrib-037-macos-arm64-api-${{ matrix.api }}
+          path: artifacts/macos-arm64
+          if-no-files-found: error
+          retention-days: 30

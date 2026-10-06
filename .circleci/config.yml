@@ -360,7 +360,7 @@ workflows:
           build_env: debian
           filters: &std-filters
             branches:
-              ignore: [devel, tmp, windows-focused-validation]
+              ignore: [devel, tmp, windows-focused-validation, ci/0.3.7-macos-qualification]
             tags:
               ignore: /.*/
       - linux-catalogue:
