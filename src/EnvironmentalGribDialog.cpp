@@ -5,6 +5,7 @@
 #include "GeneratorJobJson.h"
 #include "ProcessCommand.h"
 #include "XgribPaths.h"
+#include "environmental_grib/area_validation.h"
 
 #include <wx/config.h>
 #include <wx/datetime.h>
@@ -35,6 +36,30 @@
 #endif
 
 namespace {
+
+bool ReadAreaCoordinates(wxTextCtrl* const controls[4], double values[4],
+                         wxString* error, wxTextCtrl** invalid = nullptr) {
+  for (int i = 0; i < 4; ++i) {
+    wxString text = controls[i]->GetValue();
+    text.Trim(true).Trim(false);
+    const wxString label = wxString::FromUTF8(environmental_grib::AreaCoordinateLabel(
+        static_cast<environmental_grib::AreaCoordinate>(i)));
+    if (text.empty() || !text.ToDouble(&values[i]) || !std::isfinite(values[i])) {
+      if (error) *error = text.empty() ? wxString("Enter ") + label + "."
+                                     : label + " must be a finite number.";
+      if (invalid) *invalid = controls[i];
+      return false;
+    }
+  }
+  const auto issue = environmental_grib::ValidateDownloadArea(
+      values[0], values[1], values[2], values[3]);
+  if (issue.message) {
+    if (error) *error = wxString::FromUTF8(issue.message);
+    if (invalid) *invalid = controls[static_cast<int>(issue.field)];
+    return false;
+  }
+  return true;
+}
 
 wxString DefaultOutputDirectory() {
   wxFileName path(wxStandardPaths::Get().GetUserDataDir(), "");
@@ -844,6 +869,7 @@ void EnvironmentalGribDialog::OnCheckTpxoModel(wxCommandEvent&) {
 }
 
 void EnvironmentalGribDialog::OnPrepareTpxoCache(wxCommandEvent&) {
+  if (!ValidateAreaInput()) return;
   wxFileName cachePath(m_tpxoCacheFile->GetPath());
   if (cachePath.GetFullPath().empty()) {
     wxString message =
@@ -915,11 +941,25 @@ bool EnvironmentalGribDialog::ChooseTimeOptions(const wxString& issue_json) {
   return true;
 }
 
+bool EnvironmentalGribDialog::ValidateAreaInput() {
+  wxTextCtrl* controls[] = {m_west, m_south, m_east, m_north};
+  double values[4]{};
+  wxString error;
+  wxTextCtrl* invalid = nullptr;
+  if (ReadAreaCoordinates(controls, values, &error, &invalid)) return true;
+  AppendLog("Invalid download area: " + error);
+  wxMessageBox(error + "\n\nEnter the four area coordinates, use the current chart area, or select a saved area preset.",
+               "Invalid download area", wxOK | wxICON_WARNING, this);
+  if (invalid) { invalid->SetFocus(); invalid->SelectAll(); }
+  return false;
+}
+
 void EnvironmentalGribDialog::OnGenerate(wxCommandEvent&) {
   struct ResetTimeConsent {
     wxString& policy;
     ~ResetTimeConsent() { policy = "review"; }
   } resetTimeConsent{m_timePolicy};
+  if (!ValidateAreaInput()) return;
   // Already computed alongside the debounced, offline size estimate. Never
   // wait for this cache: the generation worker repeats validation before HTTP.
   if (m_timeSettingsRevision == m_estimateRevision && !m_timeSettingsIssue.empty()) {
@@ -2512,17 +2552,13 @@ void EnvironmentalGribDialog::TryOpenGeneratedGrib() {
 
 bool EnvironmentalGribDialog::BuildGenerateJobText(wxString* text,
                                                   wxString* error) const {
-  double west = 0.0;
-  double south = 0.0;
-  double east = 0.0;
-  double north = 0.0;
+  wxTextCtrl* controls[] = {m_west, m_south, m_east, m_north};
+  double bounds[4]{};
+  if (!ReadAreaCoordinates(controls, bounds, error)) return false;
+  const double west = bounds[0], south = bounds[1], east = bounds[2], north = bounds[3];
   double currentSpacing = 0.0;
-  if (!m_west->GetValue().ToDouble(&west) ||
-      !m_south->GetValue().ToDouble(&south) ||
-      !m_east->GetValue().ToDouble(&east) ||
-      !m_north->GetValue().ToDouble(&north) ||
-      !m_tpxoGridSpacing->GetValue().ToDouble(&currentSpacing)) {
-    if (error) *error = "area coordinates and grid spacing must be numeric";
+  if (!m_tpxoGridSpacing->GetValue().ToDouble(&currentSpacing)) {
+    if (error) *error = "grid spacing must be numeric";
     return false;
   }
 

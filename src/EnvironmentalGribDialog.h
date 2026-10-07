@@ -31,6 +31,7 @@ private:
   void OnCheckTpxoModel(wxCommandEvent& event);
   void OnPrepareTpxoCache(wxCommandEvent& event);
   void OnGenerate(wxCommandEvent& event);
+  bool ValidateAreaInput();
   bool ChooseTimeOptions(const wxString& issue_json);
   void OnBrowseOutput(wxCommandEvent& event);
   void OnOutputFilenameChanged(wxCommandEvent& event);

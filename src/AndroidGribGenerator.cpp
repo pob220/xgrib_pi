@@ -18,6 +18,7 @@
 #include <QCalendarWidget>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QListWidget>
 #include <QGuiApplication>
 #include <QInputMethod>
@@ -37,6 +38,8 @@
 #include "environmental_grib/environment.h"
 #include "environmental_grib/estimate.h"
 #include "environmental_grib/preflight.h"
+#include "environmental_grib/area_validation.h"
+#include "environmental_grib/copernicus_auth.h"
 
 namespace eg = environmental_grib;
 namespace {
@@ -590,9 +593,38 @@ struct AndroidGribGeneratorDialog::Impl {
     log->appendPlainText("Time option selected: " + selected);
     return true;
   }
+  bool ValidateAreaInput() {
+    const char* keys[] = {"west", "south", "east", "north"};
+    double values[4]{};
+    QString message;
+    int invalid = 0;
+    for (int i = 0; i < 4; ++i) {
+      const auto text = fields[keys[i]]->text().trimmed();
+      bool ok = false;
+      values[i] = text.toDouble(&ok);
+      const auto label = QString::fromUtf8(eg::AreaCoordinateLabel(static_cast<eg::AreaCoordinate>(i)));
+      if (text.isEmpty() || !ok || !std::isfinite(values[i])) {
+        message = text.isEmpty() ? QString("Enter ") + label + "."
+                                 : label + " must be a finite number.";
+        invalid = i; break;
+      }
+    }
+    if (message.isEmpty()) {
+      const auto issue = eg::ValidateDownloadArea(values[0], values[1], values[2], values[3]);
+      if (!issue.message) return true;
+      message = QString::fromUtf8(issue.message); invalid = static_cast<int>(issue.field);
+    }
+    tabs->setCurrentIndex(0);
+    status->setText(message);
+    QMessageBox::warning(root, "Invalid download area", message +
+        "\n\nEnter the four area coordinates, use the current chart area, or select an area preset.");
+    fields[keys[invalid]]->setFocus(); fields[keys[invalid]]->selectAll();
+    return false;
+  }
   void Start(std::optional<eg::EnvironmentRequest> retry = std::nullopt) {
     if (running || credentialAction != CredentialAction::None) return;
     QGuiApplication::inputMethod()->hide();
+    if (!retry && !ValidateAreaInput()) return;
     try {
       cancelled = std::make_shared<std::atomic<bool>>(false);
       auto request = retry ? *retry : Request();
@@ -691,6 +723,11 @@ struct AndroidGribGeneratorDialog::Impl {
       if (!closeWhenFinished && open->isChecked() && ready) ready(wxString::FromUTF8(result.output.string().c_str()));
       // Keep repeated jobs convenient without ever overwriting a previous GRIB.
       fields["filename"]->setText("xgrib_" + QDateTime::currentDateTimeUtc().toString("yyyyMMdd_HHmmss") + ".grb2");
+    } catch (const eg::CopernicusAuthenticationError& error) {
+      const auto message = Text(std::string(error.what()));
+      status->setText(message); log->appendPlainText(message);
+      if (!cancelled->load() && !closeWhenFinished)
+        QMessageBox::warning(root, "Copernicus sign-in failed", message);
     } catch (const eg::PreflightError& error) {
       status->setText(Text(std::string(error.what())));
       if (!cancelled->load() && !closeWhenFinished && ChooseTimeOptions(error.issue(), lastRequest)) {

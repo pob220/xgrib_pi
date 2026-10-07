@@ -1,4 +1,5 @@
 #include "AreaPreset.h"
+#include "environmental_grib/area_validation.h"
 
 #include <algorithm>
 #include <cmath>
@@ -138,20 +139,9 @@ wxString ValidateAreaPreset(const AreaPreset& preset) {
   const wxString name = NormalizedName(preset.name);
   if (preset.id.empty()) return "The preset has no internal ID.";
   if (name.empty()) return "Enter a name for the area.";
-  if (!std::isfinite(preset.west) || !std::isfinite(preset.south) ||
-      !std::isfinite(preset.east) || !std::isfinite(preset.north))
-    return "All coordinates must be finite numbers.";
-  if (preset.west < -180.0 || preset.west > 180.0 || preset.east < -180.0 ||
-      preset.east > 180.0)
-    return "Longitudes must be between -180 and 180 degrees.";
-  if (preset.south < -90.0 || preset.south > 90.0 || preset.north < -90.0 ||
-      preset.north > 90.0)
-    return "Latitudes must be between -90 and 90 degrees.";
-  if (preset.west == preset.east ||
-      (preset.west == 180.0 && preset.east == -180.0))
-    return "The area must have a non-zero longitude width.";
-  if (preset.south >= preset.north)
-    return "South latitude must be less than north latitude.";
+  const auto issue = environmental_grib::ValidateDownloadArea(
+      preset.west, preset.south, preset.east, preset.north);
+  if (issue.message) return wxString::FromUTF8(issue.message);
   if (!IsKnownProviderId(preset.weather_provider, WeatherProviderOptions()))
     return "The preferred weather provider is not available.";
   if (!IsKnownProviderId(preset.current_provider, CurrentProviderOptions()))

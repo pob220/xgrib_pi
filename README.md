@@ -10,6 +10,19 @@ that same engine on a background worker behind its native touch interface.
 Both paths use the same provider adapters, date-line geometry, UTC handling
 and output validation. Generated files open directly in xGRIB.
 
+### Improved in 0.3.9
+
+Generate checks the area locally before any other prompts or downloads. Missing,
+non-numeric, out-of-range and zero-size coordinates show an immediate message
+and select the coordinate to correct. Custom areas do not need a saved preset;
+valid date-line crossings remain accepted. Desktop and Android use the same
+area rules as the shared generator.
+
+Copernicus sign-in failures distinguish rejected credentials, account actions,
+service outages and unsupported sign-in requests where the service supplies a
+recognised reason. Errors retain the HTTP status without displaying raw server
+responses, passwords or tokens.
+
 ### Improved in 0.3.8
 
 Forecast-time checks run locally before downloading, with options when the
