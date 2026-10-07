@@ -3,11 +3,11 @@ version: 2.1
 parameters:
   run_workflow_deploy:
     type: boolean
-    default: false
+    default: true
   publication_channel:
     type: enum
     enum: [alpha, master]
-    default: alpha
+    default: master
 
 commands:
   retain-linux-artifacts:
