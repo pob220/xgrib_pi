@@ -31,6 +31,7 @@ private:
   void OnCheckTpxoModel(wxCommandEvent& event);
   void OnPrepareTpxoCache(wxCommandEvent& event);
   void OnGenerate(wxCommandEvent& event);
+  bool ChooseTimeOptions(const wxString& issue_json);
   void OnBrowseOutput(wxCommandEvent& event);
   void OnOutputFilenameChanged(wxCommandEvent& event);
   void OnExistingGribFileChanged(wxFileDirPickerEvent& event);
@@ -74,7 +75,6 @@ private:
   bool ConfirmLargeCopernicusRequest();
   bool ValidateUkvRequest();
   bool ValidateMetNoRequest();
-  bool ValidateEcmwfRequest();
   bool AutoWouldUseMarineIe() const;
   bool NeedsCopernicusCredentials() const;
   bool IsOfflineTidalSelected() const;
@@ -185,6 +185,9 @@ private:
   unsigned long m_runningEstimateRevision{0};
   wxString m_estimateJobPath;
   wxString m_estimateOutput;
+  wxString m_timeSettingsIssue;
+  unsigned long m_timeSettingsRevision{0};
+  wxString m_timePolicy{"review"};
   wxString m_estimateDecoded;
   wxString m_estimateFile;
   wxString m_lastEstimateRequest;

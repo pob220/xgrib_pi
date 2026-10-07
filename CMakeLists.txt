@@ -73,9 +73,9 @@ set(LONG_DESCRIPTION
 
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "3")
-set(VERSION_PATCH "7")
+set(VERSION_PATCH "8")
 set(VERSION_TWEAK "0")
-set(VERSION_DATE "06/10/2026") # DD/MM/YYYY format
+set(VERSION_DATE "07/10/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -450,6 +450,7 @@ if(BUILD_TESTING AND TARGET environmental_grib_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_gfs_fallback_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_cancellation_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_estimate_tests)
+  add_dependencies(${PACKAGE_NAME} environmental_grib_preflight_tests)
   add_dependencies(${PACKAGE_NAME} environmental_grib_tests)
 endif()
 if(BUILD_TESTING AND TARGET environmental_grib_xtd_tests)

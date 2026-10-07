@@ -10,6 +10,21 @@ that same engine on a background worker behind its native touch interface.
 Both paths use the same provider adapters, date-line geometry, UTC handling
 and output validation. Generated files open directly in xGRIB.
 
+### Improved in 0.3.8
+
+Forecast-time checks run locally before downloading, with options when the
+selected duration or intervals cannot be supplied. Weather, waves and currents
+retain their independent native intervals. Sources without a usable common
+UTC period require a decision; valid partial coverage produces a completion
+note and keeps all records. Changing settings is the default choice, so a
+forecast is never shortened or a source omitted without an explicit selection.
+
+Extended forecasts assess preferred and fallback sources together. Equivalent
+Met Office and GFS mean sea-level pressure fields share one coverage timeline,
+preventing an unnecessary restriction to the shorter forecast. These checks
+use the shared generator on desktop and Android and retain the improved
+dateline and UTC handling described below.
+
 ### Improved in 0.3.7
 
 Date-line downloads and generation use a consistent eastward interpretation

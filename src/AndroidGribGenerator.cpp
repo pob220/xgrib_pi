@@ -36,6 +36,7 @@
 #include "AndroidServerDownload.h"
 #include "environmental_grib/environment.h"
 #include "environmental_grib/estimate.h"
+#include "environmental_grib/preflight.h"
 
 namespace eg = environmental_grib;
 namespace {
@@ -128,6 +129,7 @@ struct AndroidGribGeneratorDialog::Impl {
   std::mutex logMutex;
   std::string latestProgress;
   bool running{false};
+  eg::EnvironmentRequest lastRequest;
   bool hasLog{false};
   bool closeWhenFinished{false};
   QCheckBox* showPassword;
@@ -470,7 +472,8 @@ struct AndroidGribGeneratorDialog::Impl {
     request.start = eg::ParseUtcDateTime(Text((serverDownload ? QDateTime::currentDateTimeUtc() : startUtc).toString("yyyy-MM-ddTHH:mm:ssZ")));
     const double hours = serverDownload ? 24 : Number("hours");
     if (hours < 1 || hours > 384 || hours != std::floor(hours)) throw std::runtime_error("Duration must be a whole number from 1 to 384 hours");
-    request.hours = static_cast<int>(hours); request.step_hours = std::stoi(Selected("step")); request.wave_step_hours = request.step_hours;
+    request.hours = static_cast<int>(hours); request.step_hours = std::stoi(Selected("step")); request.wave_step_hours = 3;
+    request.time_policy = "review";
     request.weather_provider = Selected("weather"); request.weather_preset = Selected("preset");
     request.include_waves = Selected("wave") != "none"; request.wave_provider = Selected("wave"); request.current_source = Selected("current");
     request.weather_grid_spacing_deg = serverDownload ? 0.25 : Number("weatherGrid");
@@ -513,7 +516,7 @@ struct AndroidGribGeneratorDialog::Impl {
     rows["currentGrid"]->setVisible(current != "none" && current != "existing-file");
     const bool credentials = current.find("copernicus") == 0 || current == "auto" ||
         Selected("wave").find("copernicus") == 0 ||
-        (extend->isChecked() && Selected("fallbackCurrent").find("copernicus") == 0);
+        (current != "none" && extend->isChecked() && Selected("fallbackCurrent").find("copernicus") == 0);
     accountNote->setVisible(credentials);
     tabs->setTabText(4, credentials && !serverDownload ? "Account *" : "Account");
     for (const char* key : {"fallbackWeather", "fallbackWave", "fallbackCurrent"}) rows[key]->setVisible(!serverDownload && extend->isChecked());
@@ -531,14 +534,81 @@ struct AndroidGribGeneratorDialog::Impl {
       estimate->setText(message);
     } catch (const std::exception&) { estimate->setText("Size estimate available when the area, time and source inputs are valid."); }
   }
-  void Start() {
+  bool ChooseTimeOptions(const Json::Value& issue, eg::EnvironmentRequest& request) {
+    QStringList labels;
+    for (const auto& action : issue["actions"]) labels.append(Text(action["label"].asString()));
+    labels.append("Change settings");
+    QString message = Text(issue["message"].asString());
+    for (const auto& entry : issue["coverage"])
+      log->appendPlainText(Text(entry["component"].asString() + " " + entry["field"].asString() +
+          ": " + entry["fromUtc"].asString() + " to " + entry["throughUtc"].asString()));
+    if (issue.isMember("coverageSummary"))
+      message += Text("\n\nField coverage (UTC):\n" + issue["coverageSummary"].asString());
+    wxDialog dialog(owner, wxID_ANY, "Forecast time options", wxDefaultPosition,
+                    wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+    auto* panel = static_cast<QWidget*>(dialog.GetHandle());
+    panel->setStyleSheet("QWidget {font-size: 22px;} QPushButton {min-height: 56px;}");
+    auto* layout = new QVBoxLayout(panel);
+    auto* explanation = new QLabel(message);
+    explanation->setWordWrap(true);
+    layout->addWidget(explanation);
+    auto* list = new QListWidget(panel);
+    list->setWordWrap(true);
+    list->setTextElideMode(Qt::ElideNone);
+    list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    for (const auto& label : labels) {
+      auto* item = new QListWidgetItem(label, list);
+      item->setSizeHint(QSize(0, label.size() > 65 ? 112 : 72));
+    }
+    list->setCurrentRow(labels.size() - 1);
+    QScroller::grabGesture(list->viewport(), QScroller::TouchGesture);
+    layout->addWidget(list, 1);
+    auto* buttons = new QHBoxLayout;
+    auto* use = new QPushButton("Use selected option");
+    auto* cancelOption = new QPushButton("Cancel");
+    buttons->addWidget(use); buttons->addWidget(cancelOption); layout->addLayout(buttons);
+    QObject::connect(use, &QPushButton::clicked, panel, [&] { dialog.EndModal(wxID_OK); });
+    QObject::connect(cancelOption, &QPushButton::clicked, panel, [&] { dialog.EndModal(wxID_CANCEL); });
+    dialog.Bind(wxEVT_CLOSE_WINDOW, [&](wxCloseEvent&) { dialog.EndModal(wxID_CANCEL); });
+    auto* fit = new ResizeFollower(root, panel);
+    fit->Fit();
+    XgribAndroidBackFilter back(&dialog, [&dialog] { dialog.EndModal(wxID_CANCEL); });
+    if (dialog.ShowModal() != wxID_OK) return false;
+    const int index = list->currentRow();
+    if (index < 0 || index >= static_cast<int>(issue["actions"].size())) return false;
+    const auto selected = labels[index];
+    eg::ApplyPreflightAction(request, issue["actions"][index]);
+    fields["hours"]->setText(QString::number(request.hours));
+    auto select = [&](const char* key, const std::string& value) {
+      const int found = choices[key]->findData(Text(value));
+      if (found >= 0) choices[key]->setCurrentIndex(found);
+    };
+    select("step", std::to_string(request.step_hours));
+    select("weather", request.weather_provider);
+    select("current", request.current_source);
+    select("wave", request.include_waves ? request.wave_provider : "none");
+    log->appendPlainText("Time option selected: " + selected);
+    return true;
+  }
+  void Start(std::optional<eg::EnvironmentRequest> retry = std::nullopt) {
     if (running || credentialAction != CredentialAction::None) return;
     QGuiApplication::inputMethod()->hide();
     try {
-      cancelled = std::make_shared<std::atomic<bool>>(false); auto request = Request();
+      cancelled = std::make_shared<std::atomic<bool>>(false);
+      auto request = retry ? *retry : Request();
+      request.execution.cancelled = cancelled;
+      if (!serverDownload) {
+        auto check = eg::PreflightEnvironment(request);
+        while (!check["ready"].asBool()) {
+          if (!ChooseTimeOptions(check["issues"][0], request)) return;
+          check = eg::PreflightEnvironment(request);
+        }
+      }
       if (!serverDownload &&
-          (request.current_source.find("copernicus") == 0 || request.wave_provider.find("copernicus") == 0 ||
-           (request.extend_forecast && request.fallback_current_source.find("copernicus") == 0)) &&
+          (request.current_source.find("copernicus") == 0 ||
+           (request.include_waves && request.wave_provider.find("copernicus") == 0) ||
+           (request.current_source != "none" && request.extend_forecast &&
+            request.fallback_current_source.find("copernicus") == 0)) &&
           (request.copernicus_username.empty() || request.copernicus_password.empty())) {
         tabs->setCurrentIndex(4);
         throw std::runtime_error("Enter your Copernicus username and password on the Account tab.");
@@ -546,6 +616,7 @@ struct AndroidGribGeneratorDialog::Impl {
       QGuiApplication::inputMethod()->hide();
       latestProgress.clear(); log->clear(); hasLog = true; log->show();
       const auto model = Selected("serverModel"); const int duration = std::stoi(Selected("serverDuration"));
+      lastRequest = request;
       job = std::async(std::launch::async, [this, request = std::move(request), model, duration] {
         if (serverDownload) return xgrib::DownloadServerGrib(request, model, duration);
         auto result = eg::GenerateEnvironment(request, {}, std::nullopt,
@@ -605,6 +676,12 @@ struct AndroidGribGeneratorDialog::Impl {
       status->setText(QString("Ready: %1 messages, %2 MiB. %3").arg(static_cast<qulonglong>(result.message_count))
           .arg(result.byte_count / 1048576.0, 0, 'f', 2).arg(Text(result.output.filename().string())));
       log->appendPlainText(Text(result.output.string()));
+      for (const auto& warning : result.diagnostics["warnings"])
+        log->appendPlainText("Forecast note: " + Text(warning.asString()));
+      const auto& coverage = result.diagnostics["time_coverage"];
+      if (coverage["severity"] == "advisory" &&
+          (coverage["policy"] == "review" || coverage["policy"] == "keep-all"))
+        status->setText(status->text() + Text("\nCoverage note: " + coverage["message"].asString()));
       if (result.inspection.isMember("first_valid_time") &&
           result.inspection.isMember("last_valid_time"))
         log->appendPlainText(Text("File coverage (UTC): " +
@@ -614,6 +691,12 @@ struct AndroidGribGeneratorDialog::Impl {
       if (!closeWhenFinished && open->isChecked() && ready) ready(wxString::FromUTF8(result.output.string().c_str()));
       // Keep repeated jobs convenient without ever overwriting a previous GRIB.
       fields["filename"]->setText("xgrib_" + QDateTime::currentDateTimeUtc().toString("yyyyMMdd_HHmmss") + ".grb2");
+    } catch (const eg::PreflightError& error) {
+      status->setText(Text(std::string(error.what())));
+      if (!cancelled->load() && !closeWhenFinished && ChooseTimeOptions(error.issue(), lastRequest)) {
+        Start(lastRequest);
+        return;
+      }
     } catch (const std::exception& error) { status->setText(cancelled->load() ? "Generation cancelled." : Text(std::string(error.what()))); }
     if (closeWhenFinished) { closeWhenFinished = false; Close(); }
   }

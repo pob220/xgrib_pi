@@ -1,0 +1,27 @@
+{
+  "version": "0.3.8.0",
+  "generatorVersion": "0.3.3",
+  "date": "2026-10-07",
+  "scope": "Shared forecast-time preflight and improved dateline handling on desktop and Android",
+  "localRegressionTests": 41,
+  "nativeTemporalChecksPerPlatform": 76,
+  "settingsPreflightMeanMicroseconds": {
+    "linux": 1.19618,
+    "androidArm64": 5.07312
+  },
+  "realForecastReplay": {
+    "messages": 1768,
+    "outputByteIdentical": true,
+    "requiresDecision": false,
+    "partialCoverage": "advisory"
+  },
+  "installedPlatforms": [
+    "Working Linux OpenCPN through existing desktop wrapper",
+    "Samsung SM-X210 Android 15 arm64"
+  ],
+  "settingsPreserved": true,
+  "android16KBPages": "passed",
+  "androidTLSIsolation": "passed",
+  "guiEvidence": "User identified excessive prompting for a 360-hour UKV/GFS, Copernicus NWS/offline XTD, GFS wave request; matching pressure-alias and fifteen-day retention regressions now pass. Corrected GUI installation awaits the user retest.",
+  "platformReleaseQualification": "Must be verified by the 0.3.8 native release matrix before publication."
+}
