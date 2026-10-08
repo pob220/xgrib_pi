@@ -151,7 +151,7 @@ ConfigVersion=127
             $started = [DateTime]::UtcNow
             try {
                 if ($wrEnabled) {
-                    Wait-Until { (Read-Log $log).Contains('open_only ready') } $process | Out-Null
+                    Wait-Until { ([string](Read-Log $log)).Contains('open_only ready') } $process | Out-Null
                     $text = Read-Log $log
                     $a = [regex]::Match($text, '(?m)^(\d\d:\d\d:\d\d\.\d+) .*WR_HEADLESS_ROUTE_TEST timer_fire')
                     $b = [regex]::Match($text, '(?m)^(\d\d:\d\d:\d\d\.\d+) .*WR_HEADLESS_ROUTE_TEST open_only ready')
@@ -160,7 +160,7 @@ ConfigVersion=127
                     $results += [pscustomobject]@{mode=$mode;run=$run;screen='routing-main';elapsed_ms=$duration;basis='existing plugin log markers'}
                     Write-Host "$mode run $run routing constructor/show: $duration ms"
                 }
-                Wait-Until { (Read-Log $log).Contains('OnInitTimer...Finalize Canvases') } $process | Out-Null
+                Wait-Until { ([string](Read-Log $log)).Contains('OnInitTimer...Finalize Canvases') } $process | Out-Null
                 if ($gribEnabled) {
                     $button = Wait-Until { [DelayNative]::Windows($process.Id,$true) | Where-Object { $_.Id -eq 1011 -and $_.Visible -and [DelayNative]::IsWindowEnabled($_.Handle) } | Select-Object -First 1 } $process
                     foreach ($opening in 1..3) {
