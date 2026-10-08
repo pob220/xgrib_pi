@@ -13,7 +13,14 @@ $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvarsall.bat'
 $vcarch = if ($Architecture -eq 'x86') {'x86'} else {'amd64'}
 $probe = Join-Path $runtime 'time-zone-probe.exe'
 $probeSource = Join-Path $PSScriptRoot 'rick-time-zone-probe.cpp'
-& cmd.exe /d /s /c "`"`"$vcvars`" $vcarch >nul && cl /nologo /EHsc /std:c++20 /O2 /MD `"$probeSource`" /Fe:`"$probe`"`"" |
+$buildProbe = Join-Path $runtime 'build-probe.cmd'
+@"
+@call "$vcvars" $vcarch
+@if errorlevel 1 exit /b 1
+@cl /nologo /EHsc /std:c++20 /O2 /MD "$probeSource" /Fe:"$probe"
+@exit /b %errorlevel%
+"@ | Set-Content $buildProbe -Encoding ascii
+& cmd.exe /d /c $buildProbe |
     Set-Content (Join-Path $output 'time-zone-probe-build.log')
 if ($LASTEXITCODE -ne 0) { throw 'Cannot compile native time-zone probe' }
 & $probe | Tee-Object -FilePath (Join-Path $output 'time-zone-probe.log')
