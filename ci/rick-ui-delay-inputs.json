@@ -1,0 +1,30 @@
+{
+  "x86": {
+    "host": {
+      "url": "https://dl.cloudsmith.io/public/david-register/opencpn-unstable/raw/files/opencpn_5.14.2-0+4830.de7e706_setup.exe",
+      "sha256": "a3c572ce9677a67919a25e5a1bff5dda767ef7aa51a1e0552f5205a074ad18af"
+    },
+    "xgrib": {
+      "url": "https://dl.cloudsmith.io/public/pob220/xgrib-prod/raw/names/xgrib_pi-0.3.9.0-msvc-wx32-10.0.20348-tarball/versions/0.3.9.0+161.62f387c/xgrib_pi-0.3.9.0-msvc-x86-wx32-10.0.20348-MSVC.tar.gz",
+      "sha256": "cf0b1b87e87471d97ec9ad9fe725a98b7c4e266bd391e491bb568a633b1f42e9"
+    },
+    "xweather": {
+      "url": "https://github.com/pob220/xweather_routing_pi/releases/download/v1.27.0-alpha.1/xweather_routing_pi-1.27.0-msvc-x86-wx32-10.0.20348-MSVC.tar.gz",
+      "sha256": "bbe6ec3134a01b399e4a1490215664511f569c5a18f8a9f03df51f43d53f4507"
+    }
+  },
+  "x64": {
+    "host": {
+      "url": "https://dl.cloudsmith.io/public/david-register/opencpn-unstable/raw/files/opencpn_5.14.2-0+22.de7e706_setup_x64.exe",
+      "sha256": "0652feceaafb3a7037705599ff406b18e9413528d186e05615a57c0eb62a69cb"
+    },
+    "xgrib": {
+      "url": "https://dl.cloudsmith.io/public/pob220/xgrib-prod/raw/names/xgrib_pi-0.3.9.0-msvc-64-10-tarball/versions/0.3.9.0+161.62f387c/xgrib_pi-0.3.9.0-msvc-64-x86_64-10-MSVC-x64.tar.gz",
+      "sha256": "f2b265879d7bd9a537a229806e6554cf05786e4da69e851793980b0fce0822e8"
+    },
+    "xweather": {
+      "url": "https://github.com/pob220/xweather_routing_pi/releases/download/v1.27.0-alpha.1/xweather_routing_pi-1.27.0-msvc-64-x86_64-10.0-MSVC-x64.tar.gz",
+      "sha256": "b0009f5827fb64407099c8df030ae35ec62b5fcb076f1e0d271d60fb0a389e05"
+    }
+  }
+}
