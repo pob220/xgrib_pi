@@ -427,8 +427,8 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
                    WXSIZEOF(weatherPresets), weatherPresets);
   m_weatherPreset->SetSelection(1);
   m_weatherPreset->SetToolTip(
-      "Minimal: wind only. Routing: wind, pressure, and air temperature. "
-      "Marine: routing fields plus gusts, precipitation, cloud cover, and "
+      "Minimal: wind only. Routing: wind, gusts where available, pressure, and air temperature. "
+      "Marine: routing fields plus precipitation, cloud cover, and "
       "optional waves. All available: every xGRIB-displayable field supplied "
       "by the selected provider; waves and currents remain separate choices.");
   m_includeWaves = new wxCheckBox(scrolled, wxID_ANY, "Include wave fields");

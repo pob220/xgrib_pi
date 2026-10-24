@@ -22,7 +22,7 @@ Cached fields:
 
 | Product | Fields |
 | --- | --- |
-| Weather | 10 m wind U/V, mean sea-level pressure, 2 m temperature |
+| Weather | 10 m wind U/V, surface gusts, mean sea-level pressure, 2 m temperature |
 | Waves | Significant height, primary-wave period, primary-wave direction |
 
 These cover xGRIB's minimal/routing weather presets and its GFS wave fields.
@@ -30,9 +30,10 @@ The marine and all-displayable weather presets require additional fields and
 cache sizing to support failover. The service caches the full global forecast horizon
 for the selected fields, rather than every atmospheric variable/pressure level.
 
-The measured 2026-10-04 12 UTC run uses 1,096,656,942 bytes for these seven
-fields. Two complete runs use about 2.19 GB; an incoming run temporarily brings
-the data to about 3.29 GB. A complete-run marker is published only after all
+The previous seven-field cache measured 1,096,656,942 bytes for the
+2026-10-04 12 UTC run. The eight-field cache adds gusts and needs fresh disk
+measurements before deployment. The existing disk admission limits still apply.
+A complete-run marker is published only after all
 418 files are validated. The oldest complete run is then removed. File locks
 pin runs used by active crops so they cannot disappear during a request.
 
@@ -94,7 +95,7 @@ client sends `xGRIBHostedCheck/0.1` and succeeds without changing zone protectio
   "hours": [0, 3, 6, 9, 12],
   "bbox": {"west": -8.5, "south": 50.5, "east": -2.5, "north": 56.5},
   "fields": {
-    "weather": ["10u", "10v", "prmsl", "2t"],
+    "weather": ["10u", "10v", "prmsl", "2t", "gust"],
     "waves": ["swh", "perpw", "dirpw"]
   },
   "stride": 1
@@ -133,6 +134,13 @@ packing precision. Cold generation took 31 seconds; cached retrieval took
 1.43 seconds. Client failover also passed through the public HTTPS endpoint.
 
 ## Operations
+
+For xGRIB 0.4.0, deploy service 0.2.2 and warm a current cycle with the
+five weather fields before publishing the client. Older four-field weather
+files and their completion markers are not reused as gust-capable forecasts;
+wave files can still be reused. Routing requests to an older service fail
+explicitly rather than returning a successful file without gusts. Recheck
+the disk budget against the larger cache before deployment.
 
 First installation: `sh deploy/start-private.sh`. This builds the image and
 starts the API and persistent ingestion worker with automatic Docker restart.

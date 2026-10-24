@@ -317,7 +317,7 @@ struct AndroidGribGeneratorDialog::Impl {
       {"ukmo_ukv","Met Office UKV 2 km"}, {"metno_nordic","MET Norway Nordic"}, {"dwd_icon_eu","DWD ICON-EU"},
       {"ecmwf_ifs_open","ECMWF IFS Open Data"}, {"ecmwf_aifs_open","ECMWF AIFS Open Data"},
       {"existing-file","Existing weather GRIB"}, {"none","None"}});
-    Choice(weather, "preset", "Weather fields", {{"minimal","Wind only"}, {"routing","Routing: wind, pressure, temperature"},
+    Choice(weather, "preset", "Weather fields", {{"minimal","Wind only"}, {"routing","Routing: wind, gusts where available, pressure, temperature"},
       {"marine","Marine"}, {"all","All supported fields"}})->setCurrentIndex(1);
     Choice(weather, "wave", "Waves", {{"none","None"},{"gfs_wave","NOAA GFS Wave"},{"copernicus_global_waves","Copernicus Global Waves"}});
     File(weather, "weatherFile", "weather GRIB");

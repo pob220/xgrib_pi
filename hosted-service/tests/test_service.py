@@ -40,6 +40,12 @@ def fixture(path, cycle="2026100412", hour=0, northward=False, short_name="10u")
 
 
 class Validation(unittest.TestCase):
+    def test_routing_surface_gust_is_supported(self):
+        request = copy.deepcopy(REQUEST)
+        request["fields"]["weather"] = ["10u", "10v", "prmsl", "2t", "gust"]
+        self.assertIn("gust", service.validate_request(request)["fields"]["weather"])
+        self.assertEqual(service.FIELDS["weather"]["gust"], "GUST:surface")
+
     def test_valid_request_is_canonical(self):
         request = copy.deepcopy(REQUEST)
         request["hours"] = [3, 0, 3]
@@ -103,19 +109,31 @@ class CacheTests(unittest.TestCase):
     def test_two_complete_runs_and_one_incoming(self):
         for cycle in ("2026100400", "2026100406", "2026100412"):
             run = self.cache.root / "runs" / cycle; run.mkdir()
-            (run / "complete.json").write_text("{}")
+            (run / "complete.json").write_text(json.dumps({"fields": service.FIELDS}))
         self.cache.prune("2026100418")
         self.assertEqual(self.cache.runs(), ["2026100406", "2026100412"])
         incoming = self.cache.root / "runs" / "2026100418"; incoming.mkdir()
         self.cache.prune("2026100418")
         self.assertEqual(len(self.cache.runs()), 3)
-        (incoming / "complete.json").write_text("{}")
+        (incoming / "complete.json").write_text(json.dumps({"fields": service.FIELDS}))
         self.cache.prune()
         self.assertEqual(self.cache.complete(), ["2026100412", "2026100418"])
 
+    def test_legacy_weather_cache_cannot_claim_gust_coverage(self):
+        run = self.cache.root / "runs" / "2026100412"
+        run.mkdir()
+        old_fields = copy.deepcopy(service.FIELDS)
+        del old_fields["weather"]["gust"]
+        (run / "complete.json").write_text(json.dumps({"fields": old_fields}))
+        (run / "weather-000.grib2").write_bytes(b"legacy four-field forecast")
+        request = copy.deepcopy(REQUEST)
+        request["fields"]["weather"] = ["gust"]
+        self.assertEqual(self.cache.complete(), [])
+        self.assertEqual(self.cache.coverage(service.validate_request(request)), ["weather:0"])
+
     def test_active_cycle_cannot_be_evicted(self):
         for cycle in ("2026100400", "2026100406", "2026100412"):
-            p = self.cache.root / "runs" / cycle; p.mkdir(); (p / "complete.json").write_text("{}")
+            p = self.cache.root / "runs" / cycle; p.mkdir(); (p / "complete.json").write_text(json.dumps({"fields": service.FIELDS}))
         with self.cache.lock("2026100400"):
             self.cache.prune()
             self.assertTrue((self.cache.root / "runs" / "2026100400").exists())
@@ -148,7 +166,7 @@ class CacheTests(unittest.TestCase):
 
     def test_partial_cycle_serves_weather_without_waiting_for_full_horizon_or_waves(self):
         for cycle in ("2026100400", "2026100406"):
-            run = self.cache.root / "runs" / cycle; run.mkdir(); (run / "complete.json").write_text("{}")
+            run = self.cache.root / "runs" / cycle; run.mkdir(); (run / "complete.json").write_text(json.dumps({"fields": service.FIELDS}))
         def download(cycle, product, hour):
             if product == "waves" or hour > 3:
                 raise service.Problem("not yet published", 503)
@@ -167,6 +185,18 @@ class CacheTests(unittest.TestCase):
 class CropTests(unittest.TestCase):
     def setUp(self):
         CacheTests.setUp(self)
+
+    def test_surface_gust_survives_regional_crop(self):
+        path = self.cache.source("2026100412", "weather", 0)
+        path.parent.mkdir()
+        fixture(path, short_name="gust")
+        request = copy.deepcopy(REQUEST)
+        request["fields"]["weather"] = ["gust"]
+        result = self.cache.make_result(service.validate_request(request))
+        output = decoded(self.cache.root / "results" / (result["id"] + ".grib2"))
+        self.assertEqual(len(output), 1)
+        self.assertEqual(output[0]["name"], "gust")
+        self.assertEqual(output[0]["typeOfLevel"], "surface")
 
     def source(self, northward=False):
         path = self.cache.source("2026100412", "weather", 0)

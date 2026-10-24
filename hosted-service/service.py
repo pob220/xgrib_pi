@@ -33,11 +33,12 @@ UTC = dt.timezone.utc
 HOURS = tuple(range(121)) + tuple(range(123, 385, 3))
 FIELDS = {
     "weather": {"10u": "UGRD:10 m above ground", "10v": "VGRD:10 m above ground",
-                "prmsl": "PRMSL:mean sea level", "2t": "TMP:2 m above ground"},
+                "prmsl": "PRMSL:mean sea level", "2t": "TMP:2 m above ground",
+                "gust": "GUST:surface"},
     "waves": {"swh": "HTSGW:surface", "perpw": "PERPW:surface", "dirpw": "DIRPW:surface"},
 }
 BASE = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
-VERSION = "0.2.1"
+VERSION = "0.2.2"
 
 
 class Problem(Exception):
@@ -209,10 +210,21 @@ class Cache:
                       if p.is_dir() and re.fullmatch(r"[0-9]{10}", p.name))
 
     def complete(self):
-        return [c for c in self.runs() if (self.root / "runs" / c / "complete.json").is_file()]
+        complete = []
+        for cycle in self.runs():
+            try:
+                marker = json.loads((self.root / "runs" / cycle / "complete.json").read_text())
+                if isinstance(marker, dict) and marker.get("fields") == FIELDS:
+                    complete.append(cycle)
+            except (OSError, ValueError):
+                pass
+        return complete
 
     def source(self, cycle, product, hour):
-        return self.root / "runs" / cycle / f"{product}-{hour:03d}.grib2"
+        # Old weather files contain four fields. Never advertise or reuse
+        # them as a complete five-field routing forecast after this upgrade.
+        inventory = "weather-gust" if product == "weather" else product
+        return self.root / "runs" / cycle / f"{inventory}-{hour:03d}.grib2"
 
     def bytes_used(self):
         return sum(p.stat().st_size for p in self.root.rglob("*") if p.is_file())

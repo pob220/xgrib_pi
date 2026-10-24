@@ -1,8 +1,8 @@
 # Weather providers and display-data presets
 
-xGRIB 0.2.3 offers four weather presets. `Minimal wind` requests 10 m wind
-only. `Routing` adds mean-sea-level pressure and 2 m air temperature. `Marine
-comfort` adds the provider's available gust, precipitation and total-cloud
+xGRIB 0.4.0 offers four weather presets. `Minimal wind` requests 10 m wind
+only. `Routing` adds gusts where the provider supplies them, mean-sea-level
+pressure and 2 m air temperature. `Marine comfort` adds precipitation and total-cloud
 fields. `All available display data` adds every further field from that
 provider which xGRIB can classify and display. Waves and currents remain
 separate selections.

@@ -10,6 +10,13 @@ that same engine on a background worker behind its native touch interface.
 Both paths use the same provider adapters, date-line geometry, UTC handling
 and output validation. Generated files open directly in xGRIB.
 
+### Improved in 0.4.0
+
+The **Routing** preset includes wind gusts wherever the selected weather
+provider publishes them. This applies to both desktop and Android generation,
+forecast extension and the matching hosted GFS fallback. AIFS does not supply
+gusts. Existing files must be regenerated to gain newly requested fields.
+
 ### Improved in 0.3.9
 
 Generate checks the area locally before any other prompts or downloads. Missing,
