@@ -351,7 +351,7 @@ std::chrono::sys_seconds ToSysSeconds(const wxDateTime& value) {
 
 }  // namespace
 
-std::vector<wxString> AvailableTimeZones() {
+wxArrayString AvailableTimeZones() {
   std::set<wxString> names;
 #if MARINE_TIME_HAS_CHRONO_TZDB
   try {
@@ -367,10 +367,10 @@ std::vector<wxString> AvailableTimeZones() {
 #endif
   for (const wxString& name : TzifZoneNames())
     if (name != "UTC") names.insert(name);
-  std::vector<wxString> result;
-  result.reserve(names.size() + 1);
-  result.emplace_back("UTC");
-  result.insert(result.end(), names.begin(), names.end());
+  wxArrayString result;
+  result.Alloc(names.size() + 1);
+  result.Add("UTC");
+  for (const auto& name : names) result.Add(name);
   return result;
 }
 
