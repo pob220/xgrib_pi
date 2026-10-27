@@ -1379,7 +1379,7 @@ void GRIBUICtrlBar::OnSize(wxSizeEvent& event) {
 }
 
 void GRIBUICtrlBar::OnPaint(wxPaintEvent& event) {
-  wxWindowListNode* node = this->GetChildren().GetFirst();
+  auto node = this->GetChildren().GetFirst();
   wxPaintDC dc(this);
   while (node) {
     wxWindow* win = node->GetData();

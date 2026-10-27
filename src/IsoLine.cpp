@@ -206,7 +206,7 @@ IsoLine::IsoLine(double val, double coeff, double offset,
 
     m_SegListList.Append(ps);
 
-    MySegList::Node *node;
+    MySegList::compatibility_iterator node;
     Segment *seg;
 
     // recreate the master list, removing used segs
@@ -244,7 +244,7 @@ IsoLine::~IsoLine() {
 }
 
 MySegList *IsoLine::BuildContinuousSegment(void) {
-  MySegList::Node *node;
+  MySegList::compatibility_iterator node;
   Segment *seg;
 
   MySegList *ret_list = new MySegList;
