@@ -288,7 +288,7 @@ const TzifType* TypeAt(const TzifZone& zone, std::int64_t utcSeconds) {
   return &zone.types.front();
 }
 
-std::vector<wxString> TzifZoneNames() {
+wxArrayString TzifZoneNames() {
   std::set<std::string> names;
   const std::set<std::string> excluded = {
       "iso3166.tab", "leap-seconds.list", "leapseconds", "localtime",
@@ -327,10 +327,10 @@ std::vector<wxString> TzifZoneNames() {
     }
     error.clear();
   }
-  std::vector<wxString> result;
-  result.reserve(names.size());
+  wxArrayString result;
+  result.Alloc(names.size());
   for (const auto& name : names)
-    result.push_back(wxString::FromUTF8(name.c_str()));
+    result.Add(wxString::FromUTF8(name.c_str()));
   return result;
 }
 
@@ -365,8 +365,9 @@ wxArrayString AvailableTimeZones() {
   } catch (const std::runtime_error&) {
   }
 #endif
-  for (const wxString& name : TzifZoneNames())
-    if (name != "UTC") names.insert(name);
+  const auto tzifNames = TzifZoneNames();
+  for (size_t i = 0; i < tzifNames.GetCount(); ++i)
+    if (tzifNames[i] != "UTC") names.insert(tzifNames[i]);
   wxArrayString result;
   result.Alloc(names.size() + 1);
   result.Add("UTC");
