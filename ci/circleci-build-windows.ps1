@@ -296,7 +296,13 @@ Invoke-NativeLogged `
     (Join-Path $logDir "install-generator-x64.log") `
     "x64 generator staged installation"
 
-$wxVersion = $(if ($PluginArchitecture -eq "x64") { "3.2.9" } else { "3.2.8" })
+$sdkPin = $null
+$wxVersion = "3.2.8"
+if ($PluginArchitecture -eq "x64") {
+    $sdkPin = Get-Content (Join-Path $repo "ci\windows64-sdk.json") -Raw | ConvertFrom-Json
+    $wxVersion = $sdkPin.wx_version
+    $env:WX_VER = "33"
+}
 $wxRoot = Join-Path $repo "cache\wxWidgets-$wxVersion"
 New-Item -ItemType Directory -Force $wxRoot | Out-Null
 $wxBase = "https://github.com/wxWidgets/wxWidgets/releases/download/v$wxVersion"
@@ -309,7 +315,6 @@ $wxHashAlgorithm = "SHA1"
 $wxLibraryDirectory = "lib\vc14x_dll"
 $hostCmakeArgs = @()
 if ($PluginArchitecture -eq "x64") {
-    $sdkPin = Get-Content (Join-Path $repo "ci\windows64-sdk.json") -Raw | ConvertFrom-Json
     $hostInstaller = Join-Path $repo "cache\opencpn-$($sdkPin.host_version)-x64.exe"
     if (-not (Test-Path $hostInstaller)) {
         Invoke-WebRequest $sdkPin.host_url -OutFile $hostInstaller
@@ -365,9 +370,19 @@ foreach ($entry in $downloads.GetEnumerator()) {
     Assert-NativeSuccess "Extracting $archive"
 }
 $wxLib = Join-Path $wxRoot $wxLibraryDirectory
-$wxRuntimeDlls = @(Get-ChildItem $wxLib -Filter "wxbase32u_*.dll" -File)
+$wxRuntimeDlls = @(Get-ChildItem $wxLib -Filter "wxbase*u_*.dll" -File)
 if ($wxRuntimeDlls.Count -eq 0) {
     throw "The wxWidgets release archive did not provide runtime DLLs"
+}
+if ($PluginArchitecture -eq "x64") {
+    foreach ($dll in Get-ChildItem $wxLib -Filter "*.dll" -File) {
+        $hostDll = Join-Path $hostRoot $dll.Name
+        if ((Test-Path $hostDll) -and
+            (Get-FileHash -Algorithm SHA256 $dll.FullName).Hash -ne
+            (Get-FileHash -Algorithm SHA256 $hostDll).Hash) {
+            throw "Pinned host/toolkit DLL mismatch: $($dll.Name)"
+        }
+    }
 }
 # CTest launches the standalone x86 test executables before OpenCPN is
 # installed. Make their wxWidgets runtime explicit so a missing-DLL loader
@@ -609,6 +624,12 @@ $result = [ordered]@{
     blocker_or_failure_details = ""
 }
 $result | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $artifact "result.json")
+if ($PluginArchitecture -eq "x64") {
+    python (Join-Path $repo "ci\test-windows-x64-host.py") $hostRoot xgrib_pi `
+        $packagedArchive (Join-Path $artifact "installed-host")
+    Assert-NativeSuccess "Normal installed x64 host shutdown and reinstall"
+}
+
 $environment = [ordered]@{
     target = $result.target
     operating_system = $result.operating_system

@@ -178,7 +178,7 @@ jobs:
           keys:
             - windows-vcpkg-2026-06-24-mixed-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
       - run:
-          name: Native Windows x64 OpenCPN 5.14.2 build, tests and package
+          name: Native Windows x64 OpenCPN 5.15.0 wxWidgets 3.3.4 build, tests and package
           command: .\ci\circleci-build-windows.ps1 -PluginArchitecture x64
           no_output_timeout: 45m
       - run:

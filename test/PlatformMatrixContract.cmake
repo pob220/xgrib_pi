@@ -8,8 +8,8 @@ string(JSON host_url GET "${sdk_pin}" host_url)
 string(JSON host_hash GET "${sdk_pin}" host_sha256)
 string(JSON host_version GET "${sdk_pin}" host_version)
 string(LENGTH "${host_hash}" host_hash_length)
-if(NOT host_version STREQUAL "5.14.2" OR
-   NOT host_url MATCHES "opencpn_5\\.14\\.2.*setup_x64\\.exe$" OR
+if(NOT host_version STREQUAL "5.15.0" OR
+   NOT host_url MATCHES "opencpn_5\\.15\\.0.*setup_x64\\.exe$" OR
    NOT host_hash MATCHES "^[0-9a-f]+$" OR
    NOT host_hash_length EQUAL 64)
   message(FATAL_ERROR "Native x64 host pin is invalid")
