@@ -207,8 +207,8 @@ $runtimeResultPath = Join-Path $testDirectory "windows-opencpn-runtime.json"
 New-Item -ItemType Directory -Force $logDirectory,$testDirectory,
     $screenshotDirectory,$runtimeRoot,$downloadDirectory,$packageExtract | Out-Null
 
-$installerUrl = "https://dl.cloudsmith.io/public/david-register/opencpn-unstable/raw/files/opencpn_5.14.2-0+4830.de7e706_setup.exe"
-$installerSha256 = "a3c572ce9677a67919a25e5a1bff5dda767ef7aa51a1e0552f5205a074ad18af"
+$installerUrl = "https://github.com/OpenCPN/OpenCPN/releases/download/Release_5.14.2/opencpn_5.14.2-0%2B4828.37fcbab_setup.exe"
+$installerSha256 = "ef43f23018c1577b05b6e7333bcf89becc8f3cdad2051c958a5fc778ca9de25d"
 Invoke-WebRequest $installerUrl -OutFile $installer
 $actualInstallerHash = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLowerInvariant()
 if ($actualInstallerHash -ne $installerSha256) {
