@@ -566,6 +566,11 @@ if (-not (Select-String -Quiet -Path $metadata.FullName `
         -SimpleMatch "<source> https://github.com/pob220/xgrib_pi </source>")) {
     throw "Windows metadata source repository is invalid"
 }
+# Stock Plugin Manager import reads metadata.xml from the archive itself.
+# Test the same complete package that will be published, before checksumming it.
+python (Join-Path $repo "ci\embed-package-metadata.py") `
+    $archive.FullName $metadata.FullName $archive.FullName
+Assert-NativeSuccess "Embedding Windows package metadata"
 Get-ChildItem $packageDir -File | Where-Object {
     $_.Name -like "xgrib_pi-*.tar.gz" -or
     $_.Name -like "xgrib_pi-*.xml" -or $_.Name -eq "checksums.txt"
@@ -628,6 +633,13 @@ if ($PluginArchitecture -eq "x64") {
     python (Join-Path $repo "ci\test-windows-x64-host.py") $hostRoot xgrib_pi `
         $packagedArchive (Join-Path $artifact "installed-host")
     Assert-NativeSuccess "Normal installed x64 host shutdown and reinstall"
+    $result.opencpn_version = $sdkPin.host_version
+    $result.installation_status = "passed"
+    $result.plugin_discovery_status = "passed"
+    $result.plugin_load_status = "passed"
+    $result.result_classification = "installed-host-lifecycle-tested"
+    $result.log_paths = @($result.log_paths) + @("installed-host/provenance.json")
+    $result | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $artifact "result.json")
 }
 
 $environment = [ordered]@{

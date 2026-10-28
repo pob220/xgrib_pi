@@ -11,9 +11,9 @@ import sys
 import time
 
 
-def run(*args, **kwargs):
+def run(*args, check=True, **kwargs):
     print('+', ' '.join(map(str, args)), flush=True)
-    return subprocess.run(list(map(str, args)), check=True, **kwargs)
+    return subprocess.run(list(map(str, args)), check=check, **kwargs)
 
 
 def installed_host(host, identity, package, receipt, out):
@@ -37,8 +37,10 @@ def installed_host(host, identity, package, receipt, out):
     (profile / 'opencpn.ini').write_text(config)
     for cycle in range(2):
         imported = run(host / 'opencpn-cmd.exe', 'import-plugin', package, cwd=host,
-                       capture_output=True, text=True, timeout=90)
+                       capture_output=True, text=True, timeout=90, check=False)
         (out / ('import-' + str(cycle) + '.log')).write_text(imported.stdout + imported.stderr)
+        if imported.returncode:
+            raise RuntimeError('Stock CLI package import failed: ' + imported.stdout + imported.stderr)
         log = profile / 'opencpn.log'
         if log.exists():
             log.unlink()
