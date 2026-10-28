@@ -756,8 +756,9 @@ GribSettingsDialog::GribSettingsDialog(GRIBUICtrlBar &parent,
   m_rbCurDataAttaWoCap->SetValue(m_Settings.m_iCtrlandDataStyle == 1);
   m_rbCurDataIsolHoriz->SetValue(m_Settings.m_iCtrlandDataStyle == 2);
   m_rbCurDataIsolVertic->SetValue(m_Settings.m_iCtrlandDataStyle == 3);
-  for (const wxString& zone : marine_time::AvailableTimeZones())
-    m_cTimeZone->Append(zone);
+  const auto zones = marine_time::AvailableTimeZones();
+  for (size_t i = 0; i < zones.GetCount(); ++i)
+    m_cTimeZone->Append(zones[i]);
   if (!m_cTimeZone->SetStringSelection(m_Settings.m_sDisplayTimeZone)) {
     m_Settings.m_sDisplayTimeZone = marine_time::SystemTimeZone();
     if (!m_cTimeZone->SetStringSelection(m_Settings.m_sDisplayTimeZone)) {

@@ -10,8 +10,7 @@
 #ifndef XGRIB_TIME_ZONE_DISPLAY_H
 #define XGRIB_TIME_ZONE_DISPLAY_H
 
-#include <vector>
-
+#include <wx/arrstr.h>
 #include <wx/datetime.h>
 #include <wx/string.h>
 
@@ -24,7 +23,7 @@ struct WallClockConversion {
   WallClockStatus status = WallClockStatus::Invalid;
 };
 
-std::vector<wxString> AvailableTimeZones();
+wxArrayString AvailableTimeZones();
 wxString SystemTimeZone();
 bool IsTimeZoneAvailable(const wxString& zoneName);
 wxDateTime ToWallClock(const wxDateTime& utc, const wxString& zoneName);
