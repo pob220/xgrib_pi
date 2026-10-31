@@ -73,9 +73,9 @@ set(LONG_DESCRIPTION
 
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "4")
-set(VERSION_PATCH "1")
+set(VERSION_PATCH "2")
 set(VERSION_TWEAK "0")
-set(VERSION_DATE "27/10/2026") # DD/MM/YYYY format
+set(VERSION_DATE "31/10/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -704,6 +704,14 @@ if (NOT OCPN_FLATPAK_CONFIG)
       ${wxWidgets_LIBRARIES})
     add_test(NAME xgrib_process_command_tests
              COMMAND xgrib_process_command_tests)
+    if(UNIX AND NOT ANDROID)
+      find_package(Python3 COMPONENTS Interpreter QUIET)
+      if(Python3_Interpreter_FOUND)
+        add_test(NAME xgrib_hosted_deployment_tests
+          COMMAND ${Python3_EXECUTABLE}
+            ${PROJECT_SOURCE_DIR}/hosted-service/tests/test_deployment.py)
+      endif()
+    endif()
     add_test(NAME xgrib_windows_eccodes_configure
       COMMAND ${CMAKE_COMMAND}
         -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt

@@ -15,6 +15,11 @@ case "$channel" in
   master) repo=${CLOUDSMITH_PROD_REPO:-pob220/xgrib-prod}; label=Master ;;
   *) echo "Unsupported xGRIB publication channel: $channel" >&2; exit 2 ;;
 esac
+
+# A new client must not be published against a four-field or cold cache.
+python3 hosted-service/check_deployment.py \
+  --url https://grib.agentracert.com --check-crop
+
 artifact_root=${XGRIB_DEPLOY_ARTIFACT_ROOT:-artifacts}
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT HUP INT TERM

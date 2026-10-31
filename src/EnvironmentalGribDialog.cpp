@@ -2492,10 +2492,16 @@ void EnvironmentalGribDialog::FinishCommand(long exit_code, bool launched,
       }
       return;
     }
-    wxMessageBox(nativeError.empty()
-                     ? wxString("Environmental GRIB generation failed. See the log/details area for command output.")
-                     : Redact(nativeError),
-                 "Generation failed", wxOK | wxICON_ERROR, this);
+    // Completion has already released the process and enabled Close. Keep
+    // failures in this window: a native modal message containing a long
+    // download URL can put its dismissal button outside the display and
+    // prevent the generator window from closing.
+    if (nativeError.empty())
+      AppendLog("Environmental GRIB generation failed. See the command output above.");
+    else
+      wxLogMessage("xGRIB environmental generation failed: %s", Redact(nativeError));
+    m_processStatus->SetLabel(_("Generation failed. Details are in the log above."));
+    m_closeButton->SetFocus();
   }
 }
 

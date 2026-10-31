@@ -10,6 +10,19 @@ that same engine on a background worker behind its native touch interface.
 Both paths use the same provider adapters, date-line geometry, UTC handling
 and output validation. Generated files open directly in xGRIB.
 
+### Fixed in 0.4.2
+
+Failed generation now reports its status and full details in the generator
+window and OpenCPN log. It leaves Close available instead of opening a blocking
+native error dialog whose long download URLs could put its buttons off-screen.
+
+Hosted-service deployment scripts use the version of the service source for
+the image build, API and ingester. Package publication checks the deployed
+five-field routing contract, warm same-cycle weather/wave coverage and a small
+regional result before uploading. This catches the older four-field deployment
+which rejects the gusts required by xGRIB 0.4.x. Updating the desktop client alone
+does not upgrade the separately deployed service.
+
 ### Improved in 0.4.0
 
 The **Routing** preset includes wind gusts wherever the selected weather

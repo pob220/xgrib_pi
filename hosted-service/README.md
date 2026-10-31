@@ -142,6 +142,21 @@ wave files can still be reused. Routing requests to an older service fail
 explicitly rather than returning a successful file without gusts. Recheck
 the disk budget against the larger cache before deployment.
 
+The deployment scripts derive their image tag from `service.VERSION`, so the
+image build, API and ingester cannot silently retain the old `0.2.1` tag.
+`XGRIB_IMAGE` can explicitly select a tested image for operations or rollback.
+Before publishing a client, verify the running deployment, its matching weather
+and wave coverage, and a small eight-field regional crop:
+
+```sh
+python3 check_deployment.py --url https://grib.agentracert.com --check-crop
+```
+
+The check requires all five routing weather fields, including surface gusts,
+and matching cached forecast times through hour 96. A four-field service or an
+unwarmed replacement fails before any crop job is submitted. The publication
+workflow runs this same check before uploading packages.
+
 First installation: `sh deploy/start-private.sh`. This builds the image and
 starts the API and persistent ingestion worker with automatic Docker restart.
 Secrets and data are outside the source/image build context. The connector uses
