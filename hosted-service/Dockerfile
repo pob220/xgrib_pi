@@ -7,7 +7,9 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends python3 ca-certificates libeccodes0 libeccodes-tools && rm -rf /var/lib/apt/lists/*
 COPY --from=build /build/grib-crop /app/grib-crop
 COPY service.py /app/service.py
+RUN chmod 0555 /app/grib-crop && chmod 0444 /app/service.py
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 XGRIB_CACHE=/data XGRIB_CROP=/app/grib-crop
 USER 1000:1000
+RUN test -x /app/grib-crop && python3 -c 'import service'
 ENTRYPOINT ["python3", "/app/service.py"]
