@@ -231,9 +231,11 @@ message(
     "${CMLOC}BUILD_ENV: $ENV{BUILD_ENV}, BUILD_ENV_TEMP ${BUILD_ENV_TEMP}, OCPN_TARGET: $ENV{OCPN_TARGET}"
 )
 message(STATUS "${CMLOC}Doing build_gtk3: $ENV{BUILD_GTK3}")
+# OpenCPN uses the gtk3 ABI suffix only on Ubuntu releases before 22.04.
+# Newer hosts use ubuntu[-wx32]-<arch>; a gtk3 suffix hides a valid package.
 if ("$ENV{BUILD_GTK3}" STREQUAL "TRUE"
-    AND (("${BUILD_ENV_TEMP}" STREQUAL "UBUNTU" AND NOT "$ENV{OCPN_TARGET}"
-                                                    MATCHES "^jammy(-|$)")
+    AND (("${BUILD_ENV_TEMP}" STREQUAL "UBUNTU"
+          AND PKG_TARGET_VERSION VERSION_LESS "22.04")
          OR "$ENV{OCPN_TARGET}" STREQUAL "buster-armhf")
 )
   set(PKG_TARGET_GTK "gtk3")

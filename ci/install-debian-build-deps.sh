@@ -3,6 +3,11 @@ set -eu
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
+eccodes_package=libeccodes-dev
+if [ "$(dpkg --print-architecture)" = armhf ] &&
+   ! apt-cache show libeccodes-dev >/dev/null 2>&1; then
+  eccodes_package=
+fi
 apt-get install -y --no-install-recommends \
   build-essential \
   ca-certificates \
@@ -13,10 +18,13 @@ apt-get install -y --no-install-recommends \
   jq \
   lsb-release \
   pkg-config \
+  libaec-dev \
+  libopenjp2-7-dev \
+  libpng-dev \
   libblosc-dev \
   libbz2-dev \
   libcurl4-openssl-dev \
-  libeccodes-dev \
+  $eccodes_package \
   libgl1-mesa-dev \
   libglew-dev \
   libglu1-mesa-dev \
@@ -32,4 +40,7 @@ apt-get install -y --no-install-recommends \
   libzstd-dev \
   zlib1g-dev
 
+if [ -z "$eccodes_package" ]; then
+  sh /usr/local/bin/build-armhf-eccodes.sh
+fi
 rm -rf /var/lib/apt/lists/*

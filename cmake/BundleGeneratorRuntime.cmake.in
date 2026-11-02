@@ -63,6 +63,12 @@ foreach(_dependency IN LISTS _dependencies)
   endif()
 endforeach()
 
+# Source-built ARMHF ecCodes has no dpkg ownership record.
+if(EXISTS "/usr/local/share/licenses/eccodes")
+  file(COPY "/usr/local/share/licenses/eccodes/"
+    DESTINATION "${_runtime_licenses}/eccodes")
+endif()
+
 list(LENGTH _dependencies _dependency_count)
 message(STATUS
   "Bundled ${_dependency_count} Environmental GRIB helper libraries")

@@ -25,5 +25,92 @@
   "auxiliary_jobs": [
     "windows-vcpkg-dependencies",
     "windows-opencpn-runtime"
-  ]
+  ],
+  "catalogue": {
+    "debian13-x86_64": {
+      "target": "debian-x86_64",
+      "target-version": "13",
+      "target-arch": "x86_64"
+    },
+    "debian12-x86_64": {
+      "target": "debian-x86_64",
+      "target-version": "12",
+      "target-arch": "x86_64"
+    },
+    "ubuntu22.04-x86_64": {
+      "target": "ubuntu-wx32-x86_64",
+      "target-version": "22.04",
+      "target-arch": "x86_64"
+    },
+    "ubuntu24.04-x86_64": {
+      "target": "ubuntu-x86_64",
+      "target-version": "24.04",
+      "target-arch": "x86_64"
+    },
+    "debian12-arm64": {
+      "target": "debian-arm64",
+      "target-version": "12",
+      "target-arch": "arm64"
+    },
+    "flatpak25.08-x86_64": {
+      "target": "flatpak-x86_64",
+      "target-version": "25.08",
+      "target-arch": "x86_64"
+    },
+    "flatpak25.08-arm64": {
+      "target": "flatpak-aarch64",
+      "target-version": "25.08",
+      "target-arch": "aarch64"
+    },
+    "windows-x86": {
+      "target": "msvc-wx32",
+      "target-version": "10.0.20348",
+      "target-arch": "x86"
+    },
+    "windows-x64": {
+      "target": "msvc-64",
+      "target-version": "10",
+      "target-arch": "x86_64"
+    },
+    "macos-arm64": {
+      "target": "darwin-wx32",
+      "target-version": "*",
+      "target-arch": "arm64"
+    },
+    "android-arm64": {
+      "target": "android-arm64",
+      "target-version": "16",
+      "target-arch": "arm64"
+    },
+    "debian13-arm64": {
+      "target": "debian-arm64",
+      "target-version": "13",
+      "target-arch": "arm64"
+    },
+    "debian12-armhf": {
+      "target": "debian-armhf",
+      "target-version": "12",
+      "target-arch": "armhf"
+    },
+    "debian13-armhf": {
+      "target": "debian-armhf",
+      "target-version": "13",
+      "target-arch": "armhf"
+    },
+    "ubuntu22.04-arm64": {
+      "target": "ubuntu-wx32-arm64",
+      "target-version": "22.04",
+      "target-arch": "arm64"
+    },
+    "ubuntu24.04-arm64": {
+      "target": "ubuntu-arm64",
+      "target-version": "24.04",
+      "target-arch": "arm64"
+    },
+    "macos-x86_64": {
+      "target": "darwin-wx32",
+      "target-version": "*",
+      "target-arch": "x86_64"
+    }
+  }
 }

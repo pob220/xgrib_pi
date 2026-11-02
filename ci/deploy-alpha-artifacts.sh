@@ -21,6 +21,7 @@ python3 hosted-service/check_deployment.py \
   --url https://grib.agentracert.com --check-crop
 
 artifact_root=${XGRIB_DEPLOY_ARTIFACT_ROOT:-artifacts}
+python3 ci/validate-platform-artifacts.py "$artifact_root"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT HUP INT TERM
 
@@ -31,6 +32,8 @@ find "$artifact_root" -mindepth 3 -maxdepth 3 -type f -path '*/package/*.tar.gz'
     metadata=$(printf '%s\n' "$pair" | sed -n '2p')
     target=$(sed -n 's:.*<target>[[:space:]]*\([^[:space:]<]*\)[[:space:]]*</target>.*:\1:p' "$metadata")
     target_version=$(sed -n 's:.*<target-version>[[:space:]]*\([^[:space:]<]*\)[[:space:]]*</target-version>.*:\1:p' "$metadata")
+    target_arch=$(sed -n 's:.*<target-arch>[[:space:]]*\([^[:space:]<]*\)[[:space:]]*</target-arch>.*:\1:p' "$metadata")
+    test -n "$target_arch"
     plugin_version=$(sed -n 's:.*<version>[[:space:]]*\([^[:space:]<]*\)[[:space:]]*</version>.*:\1:p' "$metadata")
     test -n "$target"
     test -n "$target_version"
@@ -40,8 +43,8 @@ find "$artifact_root" -mindepth 3 -maxdepth 3 -type f -path '*/package/*.tar.gz'
     fi
     cloudsmith_version="${plugin_version}+${CIRCLE_BUILD_NUM:-0}.$(git rev-parse --short=7 HEAD)"
     filename=$(basename "$archive")
-    package_name="xgrib_pi-${plugin_version}-${target}-${target_version}-tarball"
-    metadata_name="xgrib_pi-${plugin_version}-${target}-${target_version}-metadata"
+    package_name="xgrib_pi-${plugin_version}-${target}-${target_version}-${target_arch}-tarball"
+    metadata_name="xgrib_pi-${plugin_version}-${target}-${target_version}-${target_arch}-metadata"
     staged_xml="$stage/$(basename "$metadata")"
     staged_archive="$stage/$filename"
     sed -e "s|--pkg_repo--|$repo|g" \

@@ -172,8 +172,7 @@ elseif (UNIX)
     )
   elseif (
     ("$ENV{BUILD_ENV}" STREQUAL "ubuntu" OR "$ENV{BUILD_ENV}" STREQUAL "UBUNTU")
-    AND (("$ENV{OCPN_TARGET}" STREQUAL "jammy" OR "$ENV{OCPN_TARGET}" STREQUAL
-                                                  "JAMMY"))
+    AND ("$ENV{OCPN_TARGET}" MATCHES "^[Jj][Aa][Mm][Mm][Yy](-|$)")
   )
     set(PKG_TARGET "ubuntu")
     if (NOT "$ENV{WX_VER}" STREQUAL "")

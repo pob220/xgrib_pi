@@ -707,6 +707,9 @@ if (NOT OCPN_FLATPAK_CONFIG)
     if(UNIX AND NOT ANDROID)
       find_package(Python3 COMPONENTS Interpreter QUIET)
       if(Python3_Interpreter_FOUND)
+        add_test(NAME xgrib_platform_artifacts_tests
+          COMMAND ${Python3_EXECUTABLE}
+            ${PROJECT_SOURCE_DIR}/test/PlatformArtifactsTests.py)
         add_test(NAME xgrib_hosted_deployment_tests
           COMMAND ${Python3_EXECUTABLE}
             ${PROJECT_SOURCE_DIR}/hosted-service/tests/test_deployment.py)

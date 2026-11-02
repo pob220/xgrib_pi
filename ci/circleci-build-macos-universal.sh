@@ -22,13 +22,8 @@ if [[ $macos_arch == x86_64 ]]; then
   # the Intel plugin/helper. Tests and the relocated helper also run in Rosetta.
   export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
   unset PKG_CONFIG_PATH CMAKE_PREFIX_PATH CPATH LIBRARY_PATH
-  if [[ ! -x /usr/local/bin/brew ]]; then
-    installer=$(mktemp)
-    curl --fail --location --retry 3 \
-      https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$installer"
-    NONINTERACTIVE=1 /bin/bash "$installer"
-    rm -f "$installer"
-  fi
+  export HOMEBREW_NO_INSTALL_FROM_API=1
+  bash ci/setup-intel-homebrew.sh
 fi
 export OCPN_TARGET="macos-${macos_arch}"
 
