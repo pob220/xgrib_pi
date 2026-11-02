@@ -46,6 +46,7 @@ jobs:
       build_env: {type: string}
       dockerfile: {type: string, default: ci/Dockerfile.linux}
       resource_class: {type: string, default: medium}
+      emulate_armhf: {type: boolean, default: false}
     machine:
       image: ubuntu-2404:current
     resource_class: << parameters.resource_class >>
@@ -55,6 +56,7 @@ jobs:
       DOCKER_IMAGE: << parameters.image >>
       BUILD_ENV: << parameters.build_env >>
       DOCKERFILE: << parameters.dockerfile >>
+      XGRIB_EMULATE_ARMHF: << parameters.emulate_armhf >>
       BUILD_GTK3: "true"
       WX_VER: "32"
       CMAKE_BUILD_PARALLEL_LEVEL: "3"
@@ -257,6 +259,7 @@ jobs:
   macos-arm64:
     parameters:
       api_headers: {type: string, default: "1.21"}
+      arch: {type: enum, enum: [arm64, x86_64], default: arm64}
     macos:
       xcode: 16.4.0
     resource_class: m4pro.medium
@@ -264,11 +267,12 @@ jobs:
       XGRIB_API_HEADER_VERSION: << parameters.api_headers >>
       CMAKE_BUILD_PARALLEL_LEVEL: "3"
       HOMEBREW_NO_AUTO_UPDATE: "1"
+      XGRIB_MACOS_ARCH: << parameters.arch >>
     steps:
       - checkout
       - run: chmod a+x ci/*.sh scripts/*.sh
       - run:
-          name: Native Apple-Silicon build, tests and package
+          name: macOS architecture build, tests and package
           command: ci/circleci-build-macos-universal.sh
           no_output_timeout: 45m
       - run:
@@ -479,6 +483,92 @@ workflows:
           name: android-arm64-api122
           api_headers: "1.22"
           filters: *std-filters
+      - linux-catalogue:
+          name: debian13-arm64
+          target: trixie-arm64
+          image: arm64v8/debian:trixie
+          build_env: debian
+          resource_class: arm.medium
+          filters: *std-filters
+      - linux-catalogue:
+          name: debian12-armhf
+          target: bookworm-armhf
+          image: arm32v7/debian:bookworm
+          build_env: debian
+          emulate_armhf: true
+          filters: *std-filters
+      - linux-catalogue:
+          name: debian13-armhf
+          target: trixie-armhf
+          image: arm32v7/debian:trixie
+          build_env: debian
+          emulate_armhf: true
+          filters: *std-filters
+      - linux-catalogue:
+          name: ubuntu22.04-arm64
+          target: jammy-arm64
+          image: arm64v8/ubuntu:22.04
+          build_env: ubuntu
+          resource_class: arm.medium
+          dockerfile: ci/Dockerfile.jammy
+          filters: *std-filters
+      - linux-catalogue:
+          name: ubuntu24.04-arm64
+          target: noble-arm64
+          image: arm64v8/ubuntu:24.04
+          build_env: ubuntu
+          resource_class: arm.medium
+          filters: *std-filters
+      - macos-arm64:
+          name: macos-x86_64
+          arch: x86_64
+          filters: *std-filters
+      - linux-catalogue:
+          name: debian13-arm64-api122
+          api_headers: "1.22"
+          target: trixie-arm64
+          image: arm64v8/debian:trixie
+          build_env: debian
+          resource_class: arm.medium
+          filters: *std-filters
+      - linux-catalogue:
+          name: debian12-armhf-api122
+          api_headers: "1.22"
+          target: bookworm-armhf
+          image: arm32v7/debian:bookworm
+          build_env: debian
+          emulate_armhf: true
+          filters: *std-filters
+      - linux-catalogue:
+          name: debian13-armhf-api122
+          api_headers: "1.22"
+          target: trixie-armhf
+          image: arm32v7/debian:trixie
+          build_env: debian
+          emulate_armhf: true
+          filters: *std-filters
+      - linux-catalogue:
+          name: ubuntu22.04-arm64-api122
+          api_headers: "1.22"
+          target: jammy-arm64
+          image: arm64v8/ubuntu:22.04
+          build_env: ubuntu
+          resource_class: arm.medium
+          dockerfile: ci/Dockerfile.jammy
+          filters: *std-filters
+      - linux-catalogue:
+          name: ubuntu24.04-arm64-api122
+          api_headers: "1.22"
+          target: noble-arm64
+          image: arm64v8/ubuntu:24.04
+          build_env: ubuntu
+          resource_class: arm.medium
+          filters: *std-filters
+      - macos-arm64:
+          name: macos-x86_64-api122
+          arch: x86_64
+          api_headers: "1.22"
+          filters: *std-filters
 
   windows-focused:
     when:
@@ -601,6 +691,80 @@ workflows:
       - android-arm64:
           name: release-android-arm64-api122
           api_headers: "1.22"
+      - linux-catalogue:
+          name: release-debian13-arm64
+          target: trixie-arm64
+          image: arm64v8/debian:trixie
+          build_env: debian
+          resource_class: arm.medium
+      - linux-catalogue:
+          name: release-debian12-armhf
+          target: bookworm-armhf
+          image: arm32v7/debian:bookworm
+          build_env: debian
+          emulate_armhf: true
+      - linux-catalogue:
+          name: release-debian13-armhf
+          target: trixie-armhf
+          image: arm32v7/debian:trixie
+          build_env: debian
+          emulate_armhf: true
+      - linux-catalogue:
+          name: release-ubuntu22.04-arm64
+          target: jammy-arm64
+          image: arm64v8/ubuntu:22.04
+          build_env: ubuntu
+          resource_class: arm.medium
+          dockerfile: ci/Dockerfile.jammy
+      - linux-catalogue:
+          name: release-ubuntu24.04-arm64
+          target: noble-arm64
+          image: arm64v8/ubuntu:24.04
+          build_env: ubuntu
+          resource_class: arm.medium
+      - macos-arm64:
+          name: release-macos-x86_64
+          arch: x86_64
+      - linux-catalogue:
+          name: release-debian13-arm64-api122
+          api_headers: "1.22"
+          target: trixie-arm64
+          image: arm64v8/debian:trixie
+          build_env: debian
+          resource_class: arm.medium
+      - linux-catalogue:
+          name: release-debian12-armhf-api122
+          api_headers: "1.22"
+          target: bookworm-armhf
+          image: arm32v7/debian:bookworm
+          build_env: debian
+          emulate_armhf: true
+      - linux-catalogue:
+          name: release-debian13-armhf-api122
+          api_headers: "1.22"
+          target: trixie-armhf
+          image: arm32v7/debian:trixie
+          build_env: debian
+          emulate_armhf: true
+      - linux-catalogue:
+          name: release-ubuntu22.04-arm64-api122
+          api_headers: "1.22"
+          target: jammy-arm64
+          image: arm64v8/ubuntu:22.04
+          build_env: ubuntu
+          resource_class: arm.medium
+          dockerfile: ci/Dockerfile.jammy
+      - linux-catalogue:
+          name: release-ubuntu24.04-arm64-api122
+          api_headers: "1.22"
+          target: noble-arm64
+          image: arm64v8/ubuntu:24.04
+          build_env: ubuntu
+          resource_class: arm.medium
+      - macos-arm64:
+          name: release-macos-x86_64-api122
+          arch: x86_64
+          api_headers: "1.22"
       - hold-for-alpha-approval:
           type: approval
           requires:
@@ -626,6 +790,18 @@ workflows:
             - release-windows-x64-api122
             - release-macos-arm64-api122
             - release-android-arm64-api122
+            - release-debian13-arm64
+            - release-debian13-arm64-api122
+            - release-debian12-armhf
+            - release-debian12-armhf-api122
+            - release-debian13-armhf
+            - release-debian13-armhf-api122
+            - release-ubuntu22.04-arm64
+            - release-ubuntu22.04-arm64-api122
+            - release-ubuntu24.04-arm64
+            - release-ubuntu24.04-arm64-api122
+            - release-macos-x86_64
+            - release-macos-x86_64-api122
       - deploy-alpha:
           channel: << pipeline.parameters.publication_channel >>
           context: xgrib-deployment

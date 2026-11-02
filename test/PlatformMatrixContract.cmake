@@ -27,10 +27,11 @@ foreach(platform IN ITEMS windows-x64 android-arm64)
     message(FATAL_ERROR "Alpha approval must depend on ${platform}")
   endif()
 endforeach()
-foreach(platform IN ITEMS
-    debian13-x86_64 debian12-x86_64 ubuntu22.04-x86_64
-    ubuntu24.04-x86_64 debian12-arm64 flatpak25.08-x86_64
-    flatpak25.08-arm64 windows-x86 windows-x64 macos-arm64 android-arm64)
+file(READ "${SOURCE_DIR}/ci/catalogue-platforms.json" matrix)
+string(JSON platform_count LENGTH "${matrix}" platforms)
+math(EXPR last_platform "${platform_count} - 1")
+foreach(index RANGE ${last_platform})
+  string(JSON platform GET "${matrix}" platforms ${index})
   if(NOT config MATCHES "name: release-${platform}-api122" OR
      NOT config MATCHES "- release-${platform}-api122[\r\n]")
     message(FATAL_ERROR "API 1.22 ${platform} build must gate alpha approval")

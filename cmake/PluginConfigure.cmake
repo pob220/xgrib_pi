@@ -233,7 +233,7 @@ message(
 message(STATUS "${CMLOC}Doing build_gtk3: $ENV{BUILD_GTK3}")
 if ("$ENV{BUILD_GTK3}" STREQUAL "TRUE"
     AND (("${BUILD_ENV_TEMP}" STREQUAL "UBUNTU" AND NOT "$ENV{OCPN_TARGET}"
-                                                    STREQUAL "jammy")
+                                                    MATCHES "^jammy(-|$)")
          OR "$ENV{OCPN_TARGET}" STREQUAL "buster-armhf")
 )
   set(PKG_TARGET_GTK "gtk3")
