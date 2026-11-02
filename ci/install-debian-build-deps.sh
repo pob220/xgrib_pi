@@ -5,7 +5,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 eccodes_package=libeccodes-dev
 if [ "$(dpkg --print-architecture)" = armhf ] &&
-   ! apt-cache show libeccodes-dev >/dev/null 2>&1; then
+   ! apt-cache show libeccodes-dev 2>/dev/null | grep -q '^Version: '; then
   eccodes_package=
 fi
 apt-get install -y --no-install-recommends \

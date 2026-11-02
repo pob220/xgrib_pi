@@ -10,6 +10,7 @@ sudo install -d -o "$(id -un)" \
   /usr/local/Homebrew /usr/local/Cellar /usr/local/Caskroom \
   /usr/local/bin /usr/local/etc /usr/local/Frameworks /usr/local/include \
   /usr/local/lib /usr/local/opt /usr/local/sbin /usr/local/share \
+  /usr/local/var/homebrew /usr/local/var/homebrew/locks \
   /usr/local/var/homebrew/linked
 checkout() {
   local dir=$1 repo=$2 commit=$3
