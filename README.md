@@ -10,6 +10,31 @@ that same engine on a background worker behind its native touch interface.
 Both paths use the same provider adapters, date-line geometry, UTC handling
 and output validation. Generated files open directly in xGRIB.
 
+### Platform coverage in 0.4.3
+
+The catalogue build suite covers Debian 12/13 (x86_64, ARM64 and ARMHF),
+Ubuntu 22.04/24.04 (x86_64 and ARM64), Flatpak 25.08 (x86_64 and ARM64),
+Windows x86/x64, macOS Intel/Apple Silicon, and Android ARM64.
+Each of the 17 targets builds against both OpenCPN API 1.21 and 1.22.
+Catalogue packages retain the API 1.21 baseline.
+
+Linux and macOS checks run the generator tests and deterministic GRIB merge,
+then extract and relocate the delivered helper and exercise it with its bundled
+runtime data and libraries. ARMHF executes under QEMU; Intel macOS executes
+under Rosetta with separate Intel dependencies. These checks do not replace
+OpenCPN GUI acceptance tests on the destination devices. The Android build
+checks its native runtime and 16 KB page layout; an attached-device test is
+separate. Android ARMHF is not currently a qualified package target.
+
+Debian 13 ARMHF builds ecCodes 2.28 from checksum-pinned official sources,
+since newer ecCodes releases dropped 32-bit support. Intel macOS uses a pinned
+official Homebrew/core snapshot retaining Intel bottles. Ubuntu metadata matches
+the host ABI (including Jammy's wx32 suffix); current Ubuntu packages do not
+carry the obsolete gtk3 suffix. Publication refuses a missing, duplicate,
+mislabelled or stale package, and identifies Intel and ARM Mac uploads separately.
+The platform list and expected catalogue identities live in
+[`ci/catalogue-platforms.json`](ci/catalogue-platforms.json).
+
 ### Fixed in 0.4.2
 
 Failed generation now reports its status and full details in the generator

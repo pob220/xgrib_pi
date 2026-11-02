@@ -84,6 +84,10 @@ function Find-Dumpbin {
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repo
+. (Join-Path $PSScriptRoot 'windows-toolchain.ps1')
+$visualStudio = Get-XgribVisualStudio2022
+$env:VCPKG_VISUAL_STUDIO_PATH = $visualStudio.installationPath
+Write-Host "Using VS 2022 for vcpkg and CMake: $env:VCPKG_VISUAL_STUDIO_PATH"
 $build = Join-Path $repo "build"
 $generatorBuild = Join-Path $repo "build-generator-x64"
 $generatorStage = Join-Path $repo "stage-generator-x64"
@@ -268,6 +272,7 @@ if ($diagnosticsOnly) {
 Invoke-NativeLogged {
     cmake -S (Join-Path $repo "generator") -B $generatorBuild `
         -G "Visual Studio 17 2022" -A x64 `
+        "-DCMAKE_GENERATOR_INSTANCE=$env:VCPKG_VISUAL_STUDIO_PATH" `
         "-DCMAKE_TOOLCHAIN_FILE=$toolchain" `
         "-DVCPKG_TARGET_TRIPLET=$generatorTriplet" `
         "-DVCPKG_OVERLAY_TRIPLETS=$overlayTriplets" `
@@ -412,6 +417,7 @@ foreach ($package in $generatorPackages) {
 
 Invoke-NativeLogged {
     cmake -S $repo -B $build -G "Visual Studio 17 2022" -A $pluginPlatform `
+        "-DCMAKE_GENERATOR_INSTANCE=$env:VCPKG_VISUAL_STUDIO_PATH" `
         "-DCMAKE_TOOLCHAIN_FILE=$toolchain" `
         "-DVCPKG_TARGET_TRIPLET=$pluginTriplet" `
         "-DVCPKG_OVERLAY_TRIPLETS=$overlayTriplets" `

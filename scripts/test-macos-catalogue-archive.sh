@@ -24,6 +24,12 @@ fi
 helper=${helpers[0]}
 frameworks="$(dirname "$helper")/../Frameworks"
 test -x "$helper"
+# Check every delivered binary, including transitive helper libraries.
+expected_arch=${XGRIB_MACOS_ARCH:-arm64}
+while IFS= read -r -d '' binary; do
+  lipo "$binary" -verify_arch "$expected_arch"
+done < <(find "$tmp/Application Support" -type f \
+  \( -name '*.dylib' -o -name environmental-grib \) -print0)
 test -f "$frameworks/libeccodes.dylib"
 test -f "$(dirname "$helper")/share/eccodes/definitions/grib1/boot.def"
 test -f "$(dirname "$helper")/share/eccodes/samples/regular_ll_sfc_grib1.tmpl"

@@ -24,6 +24,8 @@ foreach(pattern IN ITEMS
     "package_name=.*plugin_version.*target.*target_version.*tarball"
     "metadata_name=.*plugin_version.*target.*target_version.*metadata"
     "embed-package-metadata.py"
+    "validate-platform-artifacts.py"
+    "target_arch=.*<target-arch>"
     "staged_archive")
   if(NOT deploy_script MATCHES "${pattern}")
     message(FATAL_ERROR "Alpha deployment contract is missing: ${pattern}")

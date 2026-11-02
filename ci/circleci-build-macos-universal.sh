@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Native Apple-Silicon validation build.  The historical filename is retained
+# Architecture-specific macOS validation build.  The historical filename is retained
 # because it is part of the Frontend2 CI interface.
 set -euo pipefail
 set -x
@@ -7,6 +7,25 @@ set -x
 repo=$(cd "$(dirname "$0")/.." && pwd)
 cd "$repo"
 git submodule update --init --recursive
+
+macos_arch=${XGRIB_MACOS_ARCH:-arm64}
+case "$macos_arch" in
+  arm64|x86_64) ;;
+  *) echo "Unsupported macOS architecture: $macos_arch" >&2; exit 2 ;;
+esac
+if [[ $macos_arch == x86_64 ]]; then
+  if [[ $(uname -m) != x86_64 ]]; then
+    softwareupdate --install-rosetta --agree-to-license
+    exec arch -x86_64 /bin/bash "$0"
+  fi
+  # Use an independent Intel Homebrew prefix; never link ARM libraries into
+  # the Intel plugin/helper. Tests and the relocated helper also run in Rosetta.
+  export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  unset PKG_CONFIG_PATH CMAKE_PREFIX_PATH CPATH LIBRARY_PATH
+  export HOMEBREW_NO_INSTALL_FROM_API=1
+  bash ci/setup-intel-homebrew.sh
+fi
+export OCPN_TARGET="macos-${macos_arch}"
 
 export HOMEBREW_NO_AUTO_UPDATE=1
 while IFS= read -r package; do
@@ -24,7 +43,6 @@ export PATH="${wx_prefix}/bin:${brew_prefix}/opt/gettext/bin:${brew_prefix}/bin:
 export PKG_CONFIG_PATH="${wx_prefix}/lib/pkgconfig:${brew_prefix}/lib/pkgconfig:${brew_prefix}/opt/curl/lib/pkgconfig:${brew_prefix}/opt/openssl@3/lib/pkgconfig"
 export CMAKE_PREFIX_PATH="${wx_prefix};${brew_prefix}"
 export WX_CONFIG="${wx_prefix}/bin/wx-config-3.2"
-export OCPN_TARGET=macos-arm64
 export WX_VER=32
 
 # Some Apple-Silicon Homebrew images have shipped a gettext bottle whose
@@ -40,7 +58,7 @@ rm -f "$msgfmt_smoke"
 
 build="$repo/build"
 stage="$repo/stage"
-artifact="$repo/artifacts/macos-arm64"
+artifact="$repo/artifacts/$OCPN_TARGET"
 log_dir="$artifact/logs"
 test_dir="$artifact/tests"
 package_dir="$artifact/package"
@@ -54,7 +72,7 @@ done <build-deps/macos-deps >"$log_dir/dependencies.log"
 
 cmake -S . -B "$build" \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_OSX_ARCHITECTURES="$macos_arch" \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
   -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH" \
   -DwxWidgets_CONFIG_EXECUTABLE="$WX_CONFIG" \
@@ -97,6 +115,8 @@ bash scripts/test-macos-catalogue-archive.sh "$archive" \
   2>&1 | tee "$log_dir/packaged-helper.log"
 
 jq -n \
+  --arg target "$OCPN_TARGET" \
+  --arg arch "$macos_arch" \
   --arg commit "$(git rev-parse HEAD)" \
   --arg os "$(sw_vers -productVersion)" \
   --arg compiler "$(c++ --version | head -1)" \
@@ -109,10 +129,10 @@ jq -n \
   --arg version "$package_version" \
   --arg package "$(basename "$archive")" \
   --arg checksum "$(shasum -a 256 "$archive" | awk '{print $1}')" \
-  '{schema: "xgrib-target-result-v1", target: "macos-arm64",
+  '{schema: "xgrib-target-result-v1", target: $target,
     xgrib_repository_commit: $commit, xgrib_version: $version,
     opencpn_version: "not installed by build job", operating_system: "macOS",
-    operating_system_version: $os, architecture: "arm64", compiler: $compiler,
+    operating_system_version: $os, architecture: $arch, compiler: $compiler,
     cmake_version: $cmake, wxwidgets_version: $wx,
     grib_library_versions:
       {eccodes: $eccodes, netcdf: $netcdf, blosc: $blosc, proj: $proj},
@@ -131,7 +151,7 @@ jq -n \
     elapsed_time_seconds: null,
     result_classification: "build-and-package-only",
     blocker_or_failure_details:
-      "Genuine Apple-Silicon build and deterministic merge ran; OpenCPN GUI runtime was not installed by this job"}' \
+      "Architecture-specific build and deterministic merge ran; OpenCPN GUI runtime was not installed by this job"}' \
   >"$artifact/result.json"
 jq '{target, operating_system, operating_system_version, architecture,
      compiler, cmake_version, wxwidgets_version, grib_library_versions}' \

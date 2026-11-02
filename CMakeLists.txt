@@ -73,9 +73,9 @@ set(LONG_DESCRIPTION
 
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "4")
-set(VERSION_PATCH "2")
+set(VERSION_PATCH "3")
 set(VERSION_TWEAK "0")
-set(VERSION_DATE "31/10/2026") # DD/MM/YYYY format
+set(VERSION_DATE "02/11/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -707,6 +707,9 @@ if (NOT OCPN_FLATPAK_CONFIG)
     if(UNIX AND NOT ANDROID)
       find_package(Python3 COMPONENTS Interpreter QUIET)
       if(Python3_Interpreter_FOUND)
+        add_test(NAME xgrib_platform_artifacts_tests
+          COMMAND ${Python3_EXECUTABLE}
+            ${PROJECT_SOURCE_DIR}/test/PlatformArtifactsTests.py)
         add_test(NAME xgrib_hosted_deployment_tests
           COMMAND ${Python3_EXECUTABLE}
             ${PROJECT_SOURCE_DIR}/hosted-service/tests/test_deployment.py)
