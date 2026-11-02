@@ -27,7 +27,7 @@ test -x "$helper"
 # Check every delivered binary, including transitive helper libraries.
 expected_arch=${XGRIB_MACOS_ARCH:-arm64}
 while IFS= read -r -d '' binary; do
-  lipo -verify_arch "$expected_arch" "$binary"
+  lipo "$binary" -verify_arch "$expected_arch"
 done < <(find "$tmp/Application Support" -type f \
   \( -name '*.dylib' -o -name environmental-grib \) -print0)
 test -f "$frameworks/libeccodes.dylib"

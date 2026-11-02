@@ -20,6 +20,7 @@ test -f "$dockerfile"
 docker_platform=()
 if [[ ${XGRIB_EMULATE_ARMHF:-false} == true ]]; then
   docker_platform=(--platform linux/arm/v7)
+  export CMAKE_BUILD_PARALLEL_LEVEL="$(nproc)"
   docker run --privileged --rm \
     tonistiigi/binfmt@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0 \
     --install arm
@@ -27,7 +28,7 @@ fi
 
 mkdir -p build
 source_commit=$(git rev-parse HEAD)
-docker build "${docker_platform[@]}" --build-arg "BASE_IMAGE=${DOCKER_IMAGE}" \
+docker build --progress plain "${docker_platform[@]}" --build-arg "BASE_IMAGE=${DOCKER_IMAGE}" \
   -f "$dockerfile" -t xgrib-linux-build ci
 docker run --rm "${docker_platform[@]}" \
   -e "BUILD_ENV=${BUILD_ENV}" \

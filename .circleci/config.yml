@@ -10,6 +10,12 @@ parameters:
     default: alpha
 
 commands:
+  windows-toolchain-cache-key:
+    steps:
+      - run:
+          name: Identify Windows compiler for the dependency cache
+          command: .\ci\windows-cache-key.ps1
+
   retain-linux-artifacts:
     parameters:
       api_headers: {type: string, default: "1.21"}
@@ -105,16 +111,17 @@ jobs:
       XGRIB_WINDOWS_DEPS_ONLY: "1"
     steps:
       - checkout
+      - windows-toolchain-cache-key
       - restore_cache:
           keys:
-            - windows-vcpkg-2026-06-24-mixed-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
+            - windows-vcpkg-2026-06-24-mixed-release-v4-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}-{{ checksum "cache/windows-toolchain-id.txt" }}
             - windows-vcpkg-2026-06-24-mixed-release-v3-
       - run:
           name: Prepare cached Release-only Windows dependencies
           command: .\ci\circleci-build-windows.ps1
           no_output_timeout: 45m
       - save_cache:
-          key: windows-vcpkg-2026-06-24-mixed-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
+          key: windows-vcpkg-2026-06-24-mixed-release-v4-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}-{{ checksum "cache/windows-toolchain-id.txt" }}
           paths:
             - cache/vcpkg-binary
       - store_artifacts:
@@ -134,9 +141,10 @@ jobs:
       WX_VER: "32"
     steps:
       - checkout
+      - windows-toolchain-cache-key
       - restore_cache:
           keys:
-            - windows-vcpkg-2026-06-24-mixed-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
+            - windows-vcpkg-2026-06-24-mixed-release-v4-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}-{{ checksum "cache/windows-toolchain-id.txt" }}
       - run:
           name: Native Windows build, tests and package
           command: .\ci\circleci-build-windows.ps1
@@ -176,9 +184,10 @@ jobs:
       WX_VER: "32"
     steps:
       - checkout
+      - windows-toolchain-cache-key
       - restore_cache:
           keys:
-            - windows-vcpkg-2026-06-24-mixed-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
+            - windows-vcpkg-2026-06-24-mixed-release-v4-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}-{{ checksum "cache/windows-toolchain-id.txt" }}
       - run:
           name: Native Windows x64 OpenCPN 5.15.0 wxWidgets 3.3.4 build, tests and package
           command: .\ci\circleci-build-windows.ps1 -PluginArchitecture x64
@@ -242,9 +251,10 @@ jobs:
       XGRIB_WINDOWS_DIAGNOSTICS_ONLY: "1"
     steps:
       - checkout
+      - windows-toolchain-cache-key
       - restore_cache:
           keys:
-            - windows-vcpkg-2026-06-24-mixed-release-v3-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}
+            - windows-vcpkg-2026-06-24-mixed-release-v4-{{ checksum "ci/windows-vcpkg-deps.txt" }}-{{ checksum "ci/vcpkg-triplets/x64-windows-release.cmake" }}-{{ checksum "ci/vcpkg-triplets/x86-windows-release.cmake" }}-{{ checksum "cache/windows-toolchain-id.txt" }}
       - run:
           name: Capture Windows generator crash dumps and stack traces
           command: .\ci\circleci-build-windows.ps1
@@ -495,6 +505,7 @@ workflows:
           target: bookworm-armhf
           image: arm32v7/debian:bookworm
           build_env: debian
+          resource_class: large
           emulate_armhf: true
           filters: *std-filters
       - linux-catalogue:
@@ -502,6 +513,7 @@ workflows:
           target: trixie-armhf
           image: arm32v7/debian:trixie
           build_env: debian
+          resource_class: large
           emulate_armhf: true
           filters: *std-filters
       - linux-catalogue:
@@ -537,6 +549,7 @@ workflows:
           target: bookworm-armhf
           image: arm32v7/debian:bookworm
           build_env: debian
+          resource_class: large
           emulate_armhf: true
           filters: *std-filters
       - linux-catalogue:
@@ -545,6 +558,7 @@ workflows:
           target: trixie-armhf
           image: arm32v7/debian:trixie
           build_env: debian
+          resource_class: large
           emulate_armhf: true
           filters: *std-filters
       - linux-catalogue:
@@ -702,12 +716,14 @@ workflows:
           target: bookworm-armhf
           image: arm32v7/debian:bookworm
           build_env: debian
+          resource_class: large
           emulate_armhf: true
       - linux-catalogue:
           name: release-debian13-armhf
           target: trixie-armhf
           image: arm32v7/debian:trixie
           build_env: debian
+          resource_class: large
           emulate_armhf: true
       - linux-catalogue:
           name: release-ubuntu22.04-arm64
@@ -738,6 +754,7 @@ workflows:
           target: bookworm-armhf
           image: arm32v7/debian:bookworm
           build_env: debian
+          resource_class: large
           emulate_armhf: true
       - linux-catalogue:
           name: release-debian13-armhf-api122
@@ -745,6 +762,7 @@ workflows:
           target: trixie-armhf
           image: arm32v7/debian:trixie
           build_env: debian
+          resource_class: large
           emulate_armhf: true
       - linux-catalogue:
           name: release-ubuntu22.04-arm64-api122

@@ -23,7 +23,7 @@ cmake -S eccodes-2.28.0 -B build \
   -DENABLE_JPG_LIBJASPER=OFF -DENABLE_JPG_LIBOPENJPEG=ON \
   -DENABLE_PNG=ON -DENABLE_AEC=ON -DENABLE_MEMFS=OFF \
   -DENABLE_BUILD_TOOLS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_TESTS=OFF
-cmake --build build --parallel 3
+cmake --build build --parallel "$(nproc)"
 cmake --install build
 mkdir -p /usr/local/share/licenses/eccodes
 cp eccodes-2.28.0/LICENSE eccodes-2.28.0/NOTICE /usr/local/share/licenses/eccodes/
