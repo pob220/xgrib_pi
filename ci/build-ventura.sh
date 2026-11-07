@@ -18,7 +18,7 @@ set -x
 
 # Homebrew provides build tools and the host's wxWidgets ABI. Every library
 # delivered with the generator is built from source by the pinned triplet.
-for tool in cmake ninja pkg-config autoconf automake libtool gettext wxwidgets@3.2 jq; do
+for tool in cmake ninja pkg-config autoconf autoconf-archive automake libtool gettext wxwidgets@3.2 jq; do
   brew list --versions "$tool" >/dev/null 2>&1 || brew install "$tool" </dev/null
 done
 wx_prefix=$(brew --prefix wxwidgets@3.2)
@@ -35,7 +35,7 @@ if ! "$vcpkg/vcpkg" install --triplet "$triplet" \
     --x-install-root="$repo/build-ventura-deps" \
     --overlay-triplets="$repo/ci/ventura/triplets" \
     --overlay-ports="$repo/ci/ventura/ports"; then
-  find "$vcpkg/buildtrees" -name '*-out.log' -o -name '*-err.log' | while IFS= read -r log; do
+  find "$vcpkg/buildtrees" -name '*-err.log' | while IFS= read -r log; do
     echo "$log"
     tail -70 "$log"
   done
