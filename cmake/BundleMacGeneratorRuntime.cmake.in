@@ -7,10 +7,15 @@ if(NOT EXISTS "${_helper}")
 endif()
 
 set(_configured_prefixes "@CMAKE_PREFIX_PATH@")
-set(_search_dirs "/opt/homebrew/lib" "/usr/local/lib")
+set(_search_dirs "")
 foreach(_prefix IN LISTS _configured_prefixes)
   list(APPEND _search_dirs "${_prefix}/lib")
 endforeach()
+# Identical dylib basenames can exist in Homebrew and the Ventura prefix.
+# Ventura packages must use only their source-built dependency tree.
+if(NOT "@XGRIB_MACOS_MINIMUM_VERSION@")
+  list(APPEND _search_dirs "/opt/homebrew/lib" "/usr/local/lib")
+endif()
 fixup_bundle("${_helper}" "" "${_search_dirs}")
 
 # This must be the last operation that changes the installed Mach-O files,
