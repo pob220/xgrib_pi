@@ -144,6 +144,9 @@ elseif (APPLE)
   execute_process(
     COMMAND "sw_vers" "-productVersion" OUTPUT_VARIABLE PKG_TARGET_VERSION
   )
+  if(XGRIB_MACOS_MINIMUM_VERSION)
+    set(PKG_TARGET_VERSION "${XGRIB_MACOS_MINIMUM_VERSION}")
+  endif()
 elseif (_wx_selected_config MATCHES "androideabi-qt-arm64")
   set(PKG_TARGET "Android")
   set(PKG_TARGET_VERSION 16)

@@ -374,7 +374,7 @@ workflows:
           build_env: debian
           filters: &std-filters
             branches:
-              ignore: [devel, tmp, windows-focused-validation]
+              ignore: [devel, tmp, windows-focused-validation, ventura-0.4.3.1-20261107]
             tags:
               ignore: /.*/
       - linux-catalogue:

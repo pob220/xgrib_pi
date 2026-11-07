@@ -1,0 +1,41 @@
+name: Ventura compatibility packages
+on:
+  push:
+    branches: [ventura-0.4.3.1-20261107]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    env:
+      XGRIB_MACOS_ARCH: ${{ matrix.arch }}
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      CMAKE_BUILD_PARALLEL_LEVEL: '3'
+      VCPKG_MAX_CONCURRENCY: '3'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/xgrib-ventura-vcpkg
+          key: ventura-v1-${{ matrix.arch }}-${{ hashFiles('ci/ventura/vcpkg.json', 'ci/ventura/triplets/*', 'ci/ventura/ports/**') }}
+      - name: Build source dependencies, plugin, helper and package
+        run: bash ci/build-ventura.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: xgrib-ventura-${{ matrix.arch }}
+          path: artifacts/ventura-${{ matrix.arch }}/
+          if-no-files-found: error
