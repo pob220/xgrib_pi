@@ -3,6 +3,12 @@ on:
   push:
     branches: [ventura-0.4.3.1-20261107]
   workflow_dispatch:
+    inputs:
+      architecture:
+        description: Architecture to validate
+        type: choice
+        options: [both, arm64, x86_64]
+        default: both
 permissions:
   contents: read
 jobs:
@@ -10,11 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: macos-15
-            arch: arm64
-          - runner: macos-15-intel
-            arch: x86_64
+        include: ${{ fromJSON(inputs.architecture == 'arm64' && '[{"runner":"macos-15","arch":"arm64"}]' || inputs.architecture == 'x86_64' && '[{"runner":"macos-15-intel","arch":"x86_64"}]' || '[{"runner":"macos-15","arch":"arm64"},{"runner":"macos-15-intel","arch":"x86_64"}]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     env:
