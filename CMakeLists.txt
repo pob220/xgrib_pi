@@ -165,6 +165,12 @@ message(STATUS "${CMLOC}Build type: ${CMAKE_BUILD_TYPE}")
 
 project(${PACKAGE})
 
+if(APPLE AND XGRIB_MACOS_MINIMUM_VERSION)
+  # vcpkg dylibs use @rpath. Build-tree tests need the dependency prefix;
+  # installed helpers use their adjacent Frameworks directory instead.
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Android")
   set(SHORT_DESCRIPTION "Display, download and generate GRIB files on Android.")
   set(LONG_DESCRIPTION

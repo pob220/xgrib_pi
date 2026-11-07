@@ -55,9 +55,12 @@ cmake -S . -B "$build" -G Ninja \
   -DCMAKE_OSX_ARCHITECTURES="$arch" \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
   -DXGRIB_MACOS_MINIMUM_VERSION=13.0 \
+  -DCMAKE_BUILD_RPATH="$deps/lib" \
+  -DCMAKE_INSTALL_RPATH='@executable_path/../Frameworks' \
   -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH" \
   -DwxWidgets_CONFIG_EXECUTABLE="$WX_CONFIG" \
   -DBZIP2_LIBRARY="$sdk/usr/lib/libbz2.tbd" \
+  -DBZIP2_LIBRARY_RELEASE="$sdk/usr/lib/libbz2.tbd" \
   -DBZIP2_INCLUDE_DIR="$sdk/usr/include" \
   -DZLIB_LIBRARY="$sdk/usr/lib/libz.tbd" \
   -DZLIB_INCLUDE_DIR="$sdk/usr/include" \

@@ -456,7 +456,11 @@ find_program(
   NAMES ld.so ld-linux.so.1 ld-linux.so.2
 )
 
-set(CMAKE_SKIP_BUILD_RPATH true)
+if(APPLE AND XGRIB_MACOS_MINIMUM_VERSION)
+  set(CMAKE_SKIP_BUILD_RPATH FALSE)
+else()
+  set(CMAKE_SKIP_BUILD_RPATH true)
+endif()
 if (HAVE_LD_SO) # linux.
   message(STATUS "${CMLOC}Setting RPATH: \$ORIGIN:\$ORIGIN/..")
   set(CMAKE_BUILD_RPATH "\$ORIGIN;\$ORIGIN/..")
