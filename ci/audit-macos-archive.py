@@ -21,7 +21,7 @@ def macho(data):
     endian = '<' if magic[:1] in (b'\xcf', b'\xce') else '>'
     is64 = magic in (b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf')
     cpu, subtype, kind, count, size, flags = struct.unpack_from(endian + '6I', data, 4)
-    result = {'architecture': {0x1000007:'x86_64', 0x100000c:'arm64'}[cpu], 'loads': []}
+    result = {'architecture': {0x1000007:'x86_64', 0x100000c:'arm64'}[cpu], 'loads': [], 'rpaths': []}
     offset = 32 if is64 else 28
     for _ in range(count):
         command, size = struct.unpack_from(endian + '2I', data, offset)
@@ -36,6 +36,9 @@ def macho(data):
         elif command in (0xc, 0x80000018, 0x8000001f, 0x80000023, 0x20):
             start = struct.unpack_from(endian + 'I', data, offset + 8)[0]
             result['loads'].append(data[offset + start:offset + size].split(b'\0')[0].decode())
+        elif command == 0x8000001c:
+            start = struct.unpack_from(endian + 'I', data, offset + 8)[0]
+            result['rpaths'].append(data[offset + start:offset + size].split(b'\0')[0].decode())
         offset += size
     assert 'minimum_macos' in result, 'Missing minimum macOS load command'
     return result
@@ -65,6 +68,8 @@ def audit(path, arch, maximum):
     names = collections.Counter(PurePosixPath(binary['path']).name for binary in binaries)
     assert names['libxgrib_pi.dylib'] == 1 and names['environmental-grib'] == 1
     for binary in binaries:
+        for rpath in binary['rpaths']:
+            assert rpath.startswith(('@executable_path', '@loader_path', '/usr/lib/', '/System/Library/')), (binary['path'], rpath)
         for load in binary['loads']:
             if load.startswith(('/usr/lib/', '/System/Library/')):
                 continue
