@@ -2,6 +2,7 @@
 #include "AndroidSecureCredentials.h"
 #include "AndroidDialogBack.h"
 #include "OpenCPNAndroidFileSelector.h"
+#include "GeneratorTimeValidation.h"
 
 #include <atomic>
 #include <chrono>
@@ -479,6 +480,10 @@ struct AndroidGribGeneratorDialog::Impl {
     request.time_policy = "review";
     request.weather_provider = Selected("weather"); request.weather_preset = Selected("preset");
     request.include_waves = Selected("wave") != "none"; request.wave_provider = Selected("wave"); request.current_source = Selected("current");
+    if (!serverDownload && xgrib::NonHourlyNwsStart(request.current_source,
+            std::chrono::duration_cast<std::chrono::seconds>(
+                request.start.time_since_epoch()).count()))
+      throw std::runtime_error(xgrib::kNwsHourlyStartError);
     request.weather_grid_spacing_deg = serverDownload ? 0.25 : Number("weatherGrid");
     request.current_grid_spacing_deg = serverDownload ? 0.05 : Number("currentGrid");
     if (request.weather_grid_spacing_deg <= 0 || request.current_grid_spacing_deg <= 0) throw std::runtime_error("Grid spacing must be positive");

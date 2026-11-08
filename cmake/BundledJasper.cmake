@@ -33,6 +33,7 @@ set(JAS_INCLUDE_RAS_CODEC OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
   xgrib_jasper
   URL
+    https://codeload.github.com/jasper-software/jasper/tar.gz/63e106c80eb72af9fd4fa28772499ab0138b9994
     https://github.com/jasper-software/jasper/archive/63e106c80eb72af9fd4fa28772499ab0138b9994.tar.gz
   URL_HASH
     SHA256=b4354e819341dfe43824af3cc59b9e8c0963c000ca5e38ca6cf05b9b9479208c

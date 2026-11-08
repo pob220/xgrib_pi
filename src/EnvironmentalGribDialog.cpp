@@ -3,6 +3,7 @@
 #include "AreaPresetManagerDialog.h"
 #include "TimeZoneDisplay.h"
 #include "GeneratorJobJson.h"
+#include "GeneratorTimeValidation.h"
 #include "ProcessCommand.h"
 #include "XgribPaths.h"
 #include "environmental_grib/area_validation.h"
@@ -960,6 +961,15 @@ void EnvironmentalGribDialog::OnGenerate(wxCommandEvent&) {
     ~ResetTimeConsent() { policy = "review"; }
   } resetTimeConsent{m_timePolicy};
   if (!ValidateAreaInput()) return;
+  wxString preview, inputError;
+  if (!BuildGenerateJobText(&preview, &inputError)) {
+    AppendLog(inputError);
+    wxMessageBox(inputError, _("Review generator settings"),
+                 wxOK | wxICON_WARNING, this);
+    if (inputError == wxString::FromUTF8(xgrib::kNwsHourlyStartError))
+      m_startUtc->SetFocus();
+    return;
+  }
   // Already computed alongside the debounced, offline size estimate. Never
   // wait for this cache: the generation worker repeats validation before HTTP.
   if (m_timeSettingsRevision == m_estimateRevision && !m_timeSettingsIssue.empty()) {
@@ -2644,6 +2654,11 @@ bool EnvironmentalGribDialog::BuildGenerateJobText(wxString* text,
     return false;
   }
   request["start"] = startUtc;
+  if (xgrib::NonHourlyNwsStart(currentSource.ToStdString(),
+                              DisplayedStartUtc().GetTicks())) {
+    if (error) *error = wxString::FromUTF8(xgrib::kNwsHourlyStartError);
+    return false;
+  }
   request["hours"] = m_durationHours->GetValue();
   request["stepHours"] = m_stepHours->GetValue();
   request["timePolicy"] = m_timePolicy;

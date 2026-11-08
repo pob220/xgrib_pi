@@ -1,4 +1,5 @@
 #include "GeneratorJobJson.h"
+#include "GeneratorTimeValidation.h"
 
 #include <iostream>
 
@@ -6,6 +7,19 @@
 #include <wx/jsonwriter.h>
 
 int main() {
+  constexpr std::int64_t hour = 1794153600;  // 8 Nov 2026, 16:00 UTC.
+  if (xgrib::NonHourlyNwsStart("copernicus_nws", hour) ||
+      !xgrib::NonHourlyNwsStart("copernicus_nws", hour + 60) ||
+      !xgrib::NonHourlyNwsStart("copernicus_nws", hour + 1) ||
+      !xgrib::NonHourlyNwsStart("copernicus_nws", hour + 3599) ||
+      xgrib::NonHourlyNwsStart("copernicus_nws", hour + 3600) ||
+      xgrib::NonHourlyNwsStart("synthetic", hour + 60) ||
+      xgrib::NonHourlyNwsStart("offline-tidal", hour + 60) ||
+      xgrib::NonHourlyNwsStart("copernicus_global", hour + 60)) {
+    std::cerr << "NWS input validation must reject fractional UTC hours "
+                 "without restricting other providers\n";
+    return 9;
+  }
   wxJSONValue envelope = CreateGeneratorJobEnvelope();
   envelope["request"]["waveProvider"] = wxString("gfs_wave");
 
