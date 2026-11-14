@@ -5,9 +5,11 @@
 #include <wx/fileconf.h>
 #include <wx/init.h>
 #include <wx/sstream.h>
+#include <wx/jsonwriter.h>
 
 #include "XgribPluginPolicy.h"
 #include "GribVectorPolicy.h"
+#include "GribOpenRequest.h"
 
 namespace {
 
@@ -71,6 +73,30 @@ int main() {
          "implausible wave heights must be rejected before symbol scaling");
   Expect(!xgrib::IsRenderableDirectionVector(8.0, 361.0, true),
          "out-of-range wave directions must not reach the renderer");
+  const wxString externalPath = wxString("C:\\Weather files\\pr") +
+                                wxUniChar(0x00e9) + "visions.grb";
+  wxJSONValue openRequest;
+  openRequest["grib_file"] = externalPath;
+  openRequest["show"] = true;
+  wxJSONWriter writer;
+  wxString openBody;
+  writer.Write(openRequest, openBody);
+  const auto external = xgrib::ParseGribOpenRequest(openBody);
+  Expect(external.RequestsDisplay(), "explicit open-and-show must activate");
+  Expect(external.file == externalPath,
+         "external Unicode paths must survive JSON writer/reader handoff");
+  for (const auto& json : {R"({"grib_file":"forecast.grb"})",
+                          R"({"grib_file":"forecast.grb","show":false})",
+                          R"({"grib_file":"forecast.grb","show":"true"})",
+                          R"({"show":true})", R"({"grib_file":"","show":true})"})
+    Expect(!xgrib::ParseGribOpenRequest(json).RequestsDisplay(),
+           "legacy, false, invalid-type and fileless requests must not activate");
+  for (const auto& json : {"{", "[]", "true", R"({"grib_file":12,"show":true})"})
+    Expect(!xgrib::ParseGribOpenRequest(json).valid,
+           "malformed or wrongly typed requests must be rejected");
+  Expect(xgrib::ParseGribOpenRequest(R"({"WindBarbedArrows":false})").valid,
+         "legacy settings-only messages must remain valid");
+
   std::cout << "xGRIB plugin policy tests passed\n";
   return 0;
 }

@@ -43,6 +43,7 @@
 #include <jasper/jasper.h>
 
 #include "GribProtocolVersion.h"
+#include "GribOpenRequest.h"
 #include "grib_pi.h"
 
 #ifdef __WXQT__
@@ -236,18 +237,57 @@ int grib_pi::Init(void) {
   const bool openSmokeGenerator =
       wxGetEnv("XGRIB_TEST_OPEN_GENERATOR", &smokeTestGenerator) &&
       smokeTestGenerator == "1";
+  wxString openMessageFlag;
+  const bool openSmokeViaMessage =
+      wxGetEnv("XGRIB_TEST_OPEN_FILE_MESSAGE", &openMessageFlag) &&
+      openMessageFlag == "1";
   if (openSmokeFile || openSmokeGenerator) {
     wxTheApp->CallAfter([this, smokeTestFile, openSmokeFile,
-                         openSmokeGenerator]() {
+                         openSmokeGenerator, openSmokeViaMessage]() {
       if (m_bBundledGribConflict) {
         wxLogWarning(
             "xGRIB smoke test skipped because bundled GRIB is enabled");
         return;
       }
-      OnToolbarToolCallback(m_leftclick_tool_id);
-      if (m_pGribCtrlBar && openSmokeFile) {
-        m_pGribCtrlBar->OpenGeneratedGrib(smokeTestFile);
-        wxLogMessage("xGRIB smoke test opened: %s", smokeTestFile);
+      if (openSmokeFile && openSmokeViaMessage) {
+        // Exercise the public handler from a genuinely unopened viewer in
+        // disposable native runtime tests, including Unicode file paths.
+        wxJSONValue request;
+        wxJSONWriter writer;
+        wxString id = "GRIB_APPLY_JSON_CONFIG", body;
+        request["grib_file"] = smokeTestFile + ".missing";
+        request["show"] = true;
+        writer.Write(request, body);
+        SetPluginMessage(id, body);
+        bool passed = m_pGribCtrlBar == nullptr;
+        request["grib_file"] = smokeTestFile;
+        request["show"] = false;
+        writer.Write(request, body);
+        SetPluginMessage(id, body);
+        passed &= m_pGribCtrlBar == nullptr;
+        request["show"] = true;
+        writer.Write(request, body);
+        SetPluginMessage(id, body);
+        passed &= m_pGribCtrlBar && m_pGribCtrlBar->IsShown();
+        if (m_pGribCtrlBar) {
+          const bool wind = m_pGribCtrlBar->m_bDataPlot[GribOverlaySettings::WIND];
+          m_pGribCtrlBar->m_bDataPlot[GribOverlaySettings::WIND] = false;
+          SetPluginMessage(id, body);
+          passed &= m_pGribCtrlBar->IsShown() &&
+              !m_pGribCtrlBar->m_bDataPlot[GribOverlaySettings::WIND] &&
+              m_pGribCtrlBar->m_bGRIBActiveFile &&
+              m_pGribCtrlBar->m_bGRIBActiveFile->IsOK() &&
+              m_pGribCtrlBar->m_bGRIBActiveFile->GetFileNames()[0] == smokeTestFile;
+          m_pGribCtrlBar->m_bDataPlot[GribOverlaySettings::WIND] = wind;
+          m_pGribCtrlBar->UpdateTrackingControl();
+        }
+        wxLogMessage("XGRIB_EXTERNAL_OPEN_CONTRACT passed=%d cold=1 repeated=1 preferences=1", passed ? 1 : 0);
+      } else {
+        OnToolbarToolCallback(m_leftclick_tool_id);
+        if (m_pGribCtrlBar && openSmokeFile) {
+          m_pGribCtrlBar->OpenGeneratedGrib(smokeTestFile);
+          wxLogMessage("xGRIB smoke test opened: %s", smokeTestFile);
+        }
       }
       if (m_pGribCtrlBar && openSmokeGenerator) {
         m_pGribCtrlBar->ShowEnvironmentalGenerator();
@@ -906,14 +946,40 @@ void grib_pi::SetPluginMessage(wxString& message_id, wxString& message_body) {
   }
 
   else if (message_id == "GRIB_APPLY_JSON_CONFIG") {
+    const auto request = xgrib::ParseGribOpenRequest(message_body);
+    if (!request.valid) return;
+    const bool display = request.RequestsDisplay();
+    if (display) {
+      // A missing file must not create a viewer or replace its current data.
+      if (!wxFileExists(request.file)) {
+        wxLogWarning("xGRIB: requested GRIB does not exist: %s", request.file);
+        return;
+      }
+      if (!m_pGribCtrlBar) OnToolbarToolCallback(-1);
+    }
+    if (!m_pGribCtrlBar) return;
+
     wxLogMessage("Got GRIB_APPLY_JSON_CONFIG");
-
-    if (m_pGribCtrlBar) {
-      m_pGribCtrlBar->OpenFileFromJSON(message_body);
-
-      m_pGribCtrlBar->m_OverlaySettings.JSONToSettings(message_body);
-      m_pGribCtrlBar->m_OverlaySettings.Write();
-      m_pGribCtrlBar->SetDialogsStyleSizePosition(true);
+    m_pGribCtrlBar->OpenFileFromJSON(message_body);
+    m_pGribCtrlBar->m_OverlaySettings.JSONToSettings(message_body);
+    m_pGribCtrlBar->m_OverlaySettings.Write();
+    const bool loaded = display && m_pGribCtrlBar->m_bGRIBActiveFile &&
+                        m_pGribCtrlBar->m_bGRIBActiveFile->IsOK();
+    if (loaded) {
+      // Do not use the toolbar toggle here: repeated requests must stay on,
+      // and its newest-file behavior must not replace the requested file.
+      m_bShowGrib = true;
+      m_pGribCtrlBar->Show();
+    }
+    m_pGribCtrlBar->SetDialogsStyleSizePosition(true);
+    if (loaded) {
+      m_pGribCtrlBar->UpdateTrackingControl();
+      SetToolbarItemState(m_leftclick_tool_id, true);
+      const auto* records =
+          m_pGribCtrlBar->m_bGRIBActiveFile->GetRecordSetArrayPtr();
+      SetCanvasContextMenuItemViz(m_MenuItem, records->GetCount() > 1);
+      RequestRefresh(m_parent_window);
+      wxLogMessage("xGRIB: displayed requested GRIB: %s", request.file);
     }
   }
 }

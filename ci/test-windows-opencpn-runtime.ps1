@@ -266,6 +266,8 @@ bEnabled=1
 $config | Set-Content -Encoding ascii (Join-Path $opencpnRoot "opencpn.ini")
 
 $env:XGRIB_TEST_OPEN_GENERATOR = "1"
+$env:XGRIB_TEST_OPEN_FILE = $weatherPath
+$env:XGRIB_TEST_OPEN_FILE_MESSAGE = "1"
 $env:XGRIB_TEST_WEATHER_FILE = $weatherPath
 $env:XGRIB_TEST_CURRENT_FILE = $currentPath
 $env:XGRIB_TEST_OUTPUT_FILE = $outputPath
@@ -310,6 +312,11 @@ try {
     }
     if (-not (Wait-FileContains $opencpnLog "xGRIB smoke test accepted current path:" 10)) {
         throw "xGRIB did not log acceptance of both deterministic paths"
+    }
+
+    if (-not (Wait-FileContains $opencpnLog `
+            "XGRIB_EXTERNAL_OPEN_CONTRACT passed=1 cold=1 repeated=1 preferences=1" 10)) {
+        throw "External open/display message contract did not pass in native OpenCPN"
     }
 
     $editValues = Get-VisibleEditValues

@@ -73,9 +73,9 @@ set(LONG_DESCRIPTION
 
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "4")
-set(VERSION_PATCH "4")
+set(VERSION_PATCH "5")
 set(VERSION_TWEAK "0")
-set(VERSION_DATE "08/11/2026") # DD/MM/YYYY format
+set(VERSION_DATE "14/11/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -665,6 +665,7 @@ if (NOT OCPN_FLATPAK_CONFIG)
     target_include_directories(xgrib_plugin_policy_tests PRIVATE
       ${PROJECT_SOURCE_DIR}/src)
     target_link_libraries(xgrib_plugin_policy_tests PRIVATE
+      ocpn::wxjson
       ${wxWidgets_LIBRARIES})
     add_test(NAME xgrib_plugin_policy_tests COMMAND xgrib_plugin_policy_tests)
 
