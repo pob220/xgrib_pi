@@ -44,6 +44,8 @@
 
 #include "GribProtocolVersion.h"
 #include "GribOpenRequest.h"
+#include <array>
+#include <algorithm>
 #include "grib_pi.h"
 
 #ifdef __WXQT__
@@ -960,7 +962,14 @@ void grib_pi::SetPluginMessage(wxString& message_id, wxString& message_body) {
     if (!m_pGribCtrlBar) return;
 
     wxLogMessage("Got GRIB_APPLY_JSON_CONFIG");
+    std::array<bool, GribOverlaySettings::GEO_ALTITUDE> plots;
+    std::copy(std::begin(m_pGribCtrlBar->m_bDataPlot),
+              std::end(m_pGribCtrlBar->m_bDataPlot), plots.begin());
     m_pGribCtrlBar->OpenFileFromJSON(message_body);
+    // OpenFile normally enables available layers when every layer is off.
+    // An explicit display handoff must respect the user's saved choices.
+    if (display)
+      std::copy(plots.begin(), plots.end(), m_pGribCtrlBar->m_bDataPlot);
     m_pGribCtrlBar->m_OverlaySettings.JSONToSettings(message_body);
     m_pGribCtrlBar->m_OverlaySettings.Write();
     const bool loaded = display && m_pGribCtrlBar->m_bGRIBActiveFile &&
