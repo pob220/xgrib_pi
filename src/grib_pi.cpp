@@ -962,13 +962,18 @@ void grib_pi::SetPluginMessage(wxString& message_id, wxString& message_body) {
     if (!m_pGribCtrlBar) return;
 
     wxLogMessage("Got GRIB_APPLY_JSON_CONFIG");
+    const bool sameFile = m_pGribCtrlBar->m_bGRIBActiveFile &&
+        m_pGribCtrlBar->m_bGRIBActiveFile->GetFileNames().GetCount() == 1 &&
+        m_pGribCtrlBar->m_bGRIBActiveFile->GetFileNames()[0] == request.file;
     std::array<bool, GribOverlaySettings::GEO_ALTITUDE> plots;
     std::copy(std::begin(m_pGribCtrlBar->m_bDataPlot),
               std::end(m_pGribCtrlBar->m_bDataPlot), plots.begin());
     m_pGribCtrlBar->OpenFileFromJSON(message_body);
     // OpenFile normally enables available layers when every layer is off.
-    // An explicit display handoff must respect the user's saved choices.
-    if (display)
+    // Repeating a display request must respect deliberate layer choices.
+    // A different file keeps the normal fallback if none of the previously
+    // selected parameters are present, so the new forecast is visible.
+    if (display && sameFile)
       std::copy(plots.begin(), plots.end(), m_pGribCtrlBar->m_bDataPlot);
     m_pGribCtrlBar->m_OverlaySettings.JSONToSettings(message_body);
     m_pGribCtrlBar->m_OverlaySettings.Write();
