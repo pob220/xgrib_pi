@@ -3,12 +3,15 @@ FROM ${BASE_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive
 # The OpenCPN PPA provides the host's wxWidgets 3.2 ABI on Jammy.
-RUN printf '%s\n' 'Acquire::Retries "6";' 'Acquire::https::Timeout "30";' \
+RUN printf '%s\n' 'Acquire::Retries "6";' 'Acquire::http::Timeout "30";' \
     'APT::Update::Error-Mode "any";' > /etc/apt/apt.conf.d/90-ci-downloads
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+# Launchpad's legacy endpoint serves the same signed archive. Restrict trust
+# to the PPA's key (Launchpad archive fingerprint 5F35EA0636CED80D5C6D604DF9066567FF7CB0D5).
+COPY opencpn-ppa.asc /usr/share/keyrings/opencpn-ppa.asc
 RUN printf '%s\n' \
-    'deb [trusted=yes] https://ppa.launchpadcontent.net/opencpn/opencpn/ubuntu jammy main' \
+    'deb [signed-by=/usr/share/keyrings/opencpn-ppa.asc] http://ppa.launchpad.net/opencpn/opencpn/ubuntu jammy main' \
     > /etc/apt/sources.list.d/opencpn.list
 COPY install-debian-build-deps.sh /usr/local/bin/
 RUN /usr/local/bin/install-debian-build-deps.sh
