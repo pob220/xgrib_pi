@@ -4,6 +4,8 @@ file(READ "${SOURCE_FILE}" source)
 # 64-bit integer overloads are disabled) to bool.  The external protocol must
 # therefore use explicit wxString and unambiguous numeric assignments.
 set(required_literals
+  "wxString::FromUTF8(start.data(), start.size())"
+  "wxString::FromUTF8(checksum.data(), checksum.size())"
   "envelope[\"operation\"] = wxString(\"generateEnvironment\")"
   "envelope[\"credentials\"][\"copernicusPasswordEnvironment\"]"
   "wxString(\"ENVIRONMENTAL_GRIB_COPERNICUS_PASSWORD\")"

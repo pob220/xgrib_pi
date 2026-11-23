@@ -400,7 +400,7 @@ int ExternalEnvironmentProvider::RunRequest(
   request["bbox"]["south"] = south;
   request["bbox"]["east"] = east;
   request["bbox"]["north"] = north;
-  request["start"] = wxString::FromUTF8(start);
+  request["start"] = wxString::FromUTF8(start.data(), start.size());
   request["hours"] = hours;
   request["stepHours"] = step;
   request["weatherProvider"] = weather;
@@ -482,8 +482,10 @@ int ExternalEnvironmentProvider::RunRequest(
   }
   if (fields.Size() == 0) fields.Append(wxString("environmental-grib"));
   wxJSONValue response;
+  const std::string checksum_prefix = checksum.substr(0, 20);
   response["identity"] = wxString("xgrib-") +
-                         wxString::FromUTF8(checksum.substr(0, 20));
+                         wxString::FromUTF8(checksum_prefix.data(),
+                                            checksum_prefix.size());
   response["providerHandle"] = output.GetFullPath();
   const wxString wave_model =
       include_waves ? wxString("+") + wave : wxString();
@@ -492,7 +494,7 @@ int ExternalEnvironmentProvider::RunRequest(
   response["model"] = weather + wave_model + current_model;
   response["cycle"] = helper_result.HasMember("selected_cycle")
                             ? helper_result["selected_cycle"].AsString()
-                            : wxString::FromUTF8(start);
+                            : wxString::FromUTF8(start.data(), start.size());
   auto& coverage = inspection["coverage"];
   response["coverage"]["south"] =
       coverage.HasMember("south") ? coverage["south"].AsDouble() : south;
@@ -510,7 +512,8 @@ int ExternalEnvironmentProvider::RunRequest(
   response["validFromEpochSeconds"] = static_cast<double>(valid_from);
   response["validToEpochSeconds"] = static_cast<double>(valid_to);
   response["fields"] = fields;
-  response["checksumSha256"] = wxString::FromUTF8(checksum);
+  response["checksumSha256"] =
+      wxString::FromUTF8(checksum.data(), checksum.size());
   response["byteSize"] = static_cast<double>(
       helper_result["byte_count"].AsUInt64());
   response["provenance"].Append(
