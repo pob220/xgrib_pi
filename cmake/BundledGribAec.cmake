@@ -9,14 +9,17 @@ set_target_properties(grib_aec_decoder PROPERTIES
   C_VISIBILITY_PRESET hidden
   POSITION_INDEPENDENT_CODE ON)
 
+set(GRIB_AEC_LICENSE "${_grib_aec_source}/LICENSE.txt")
+# Android installs this in the platform data directory after PluginInstall.
 if(QT_ANDROID OR ANDROID)
-  set(_grib_aec_licenses "${PREFIX_PARENTDATA}/plugins/${PACKAGE_NAME}/data/android-licenses")
-elseif(WIN32)
+  return()
+endif()
+if(WIN32)
   set(_grib_aec_licenses "plugins/${PACKAGE_NAME}/runtime/licenses")
 elseif(APPLE)
   set(_grib_aec_licenses "OpenCPN.app/Contents/SharedSupport/plugins/${PACKAGE_NAME}/runtime/licenses")
 else()
   set(_grib_aec_licenses "share/opencpn/plugins/${PACKAGE_NAME}/runtime/licenses")
 endif()
-install(FILES "${_grib_aec_source}/LICENSE.txt"
+install(FILES "${GRIB_AEC_LICENSE}"
   DESTINATION "${_grib_aec_licenses}/libaec")

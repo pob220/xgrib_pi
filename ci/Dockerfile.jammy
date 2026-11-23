@@ -2,6 +2,9 @@ ARG BASE_IMAGE=ubuntu:22.04
 FROM ${BASE_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive
+# The OpenCPN PPA provides the host's wxWidgets 3.2 ABI on Jammy.
+RUN printf '%s\n' 'Acquire::Retries "6";' 'Acquire::https::Timeout "30";' \
+    'APT::Update::Error-Mode "any";' > /etc/apt/apt.conf.d/90-ci-downloads
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN printf '%s\n' \

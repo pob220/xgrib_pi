@@ -958,6 +958,8 @@ endif (QT_ANDROID)
 
 include("PluginInstall")
 if(QT_ANDROID)
+  install(FILES "${GRIB_AEC_LICENSE}" DESTINATION
+    "${PREFIX_PARENTDATA}/plugins/${PACKAGE_NAME}/data/android-licenses/libaec")
   file(GLOB android_dependency_licenses
     "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/*/copyright")
   foreach(license IN LISTS android_dependency_licenses)
