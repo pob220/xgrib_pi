@@ -41,6 +41,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <vector>
 #include <limits>
 #include <algorithm>
+#include <libaec.h>
 #include "GribDecodeLimits.h"
 
 #include "GribV2Record.h"
@@ -147,6 +148,7 @@ public:
     } spatial_diff;
   } complex_pack;
   int drs_templ_num;
+  unsigned ccsds_flags, ccsds_block_size, ccsds_rsi;
   int precision;
   float R;
   int E, D, num_packed, pack_width, orig_val_type;
@@ -634,6 +636,7 @@ static bool unpackDRS(GRIBMessage *grib_msg) {
     case 0:  // Grid Point Data - Simple Packing
     case 2:  // Grid Point Data - Complex Packing
     case 3:  // Grid Point Data - Complex Packing and Spatial Differencing
+    case 42:  // Grid Point Data - CCSDS Lossless Compression
 #ifdef JASPER
     case 40:  // Grid Point Data - JPEG2000 Compression
     case 40000:
@@ -645,7 +648,14 @@ static bool unpackDRS(GRIBMessage *grib_msg) {
       grib_msg->md.R = ieee2flt(b + 11);
       grib_msg->md.E = int2(b + 15);
       grib_msg->md.D = int2(b + 17);
-      grib_msg->md.R /= pow(10., grib_msg->md.D);
+      if (grib_msg->md.drs_templ_num == 42) {
+        if (length != 25) return false;
+        grib_msg->md.ccsds_flags = b[21];
+        grib_msg->md.ccsds_block_size = b[22];
+        grib_msg->md.ccsds_rsi = uint2(b + 23);
+      } else {
+        grib_msg->md.R /= pow(10., grib_msg->md.D);
+      }
 
       grib_msg->md.pack_width = b[19];
       grib_msg->md.orig_val_type = b[20];
@@ -726,6 +736,56 @@ static bool unpackBMS(GRIBMessage *msg) {
   return true;
 }
 
+// AEC yields the packed integers. Use a fixed byte order and the same
+// unsigned representation for all platforms, then apply GRIB's scales.
+static bool unpackCcsds(const GRIBMetadata& md, const unsigned char* bytes,
+                        std::size_t size, const unsigned char* bitmap,
+                        std::size_t count, std::size_t packed, double scale,
+                        double divisor, double* values) {
+  const unsigned width = md.pack_width;
+  if (width == 0 || packed == 0) {
+    if (size != 0) return false;
+    for (std::size_t i = 0; i < count; ++i)
+      values[i] = !bitmap || bitmap[i] ? md.R : GRIB_MISSING_VALUE;
+    return true;
+  }
+  constexpr unsigned flags = AEC_DATA_SIGNED | AEC_DATA_3BYTE | AEC_DATA_MSB |
+                             AEC_DATA_PREPROCESS | AEC_RESTRICTED | AEC_PAD_RSI;
+  if (size == 0 || (md.ccsds_flags & ~flags) ||
+      (md.ccsds_block_size != 8 && md.ccsds_block_size != 16 &&
+       md.ccsds_block_size != 32 && md.ccsds_block_size != 64) ||
+      md.ccsds_rsi == 0 || md.ccsds_rsi > 4096) return false;
+
+  const unsigned stride = width <= 8 ? 1 : (width <= 16 ? 2 : 4);
+  if (packed > std::numeric_limits<std::size_t>::max() / stride) return false;
+  std::vector<unsigned char> decoded(packed * stride);
+  aec_stream stream{};
+  stream.next_in = bytes;
+  stream.avail_in = size;
+  stream.next_out = decoded.data();
+  stream.avail_out = decoded.size();
+  stream.bits_per_sample = width;
+  stream.block_size = md.ccsds_block_size;
+  stream.rsi = md.ccsds_rsi;
+  stream.flags = (md.ccsds_flags & ~AEC_DATA_3BYTE) | AEC_DATA_MSB;
+  const int result = aec_buffer_decode(&stream);
+  if (result == AEC_MEM_ERROR) throw std::bad_alloc();
+  if (result != AEC_OK || stream.total_out != decoded.size()) return false;
+
+  const auto* sample = decoded.data();
+  for (std::size_t i = 0; i < count; ++i) {
+    if (bitmap && !bitmap[i]) {
+      values[i] = GRIB_MISSING_VALUE;
+      continue;
+    }
+    std::uint32_t integer = 0;
+    for (unsigned j = 0; j < stride; ++j)
+      integer = (integer << 8) | *sample++;
+    values[i] = (md.R + integer * scale) / divisor;
+  }
+  return true;
+}
+
 // Section 7: validate blocks once, then decode with unchecked fast bit loads.
 // All temporary arrays have automatic ownership, including on allocation failure.
 static bool unpackDS(GRIBMessage *msg) {
@@ -751,6 +811,10 @@ static bool unpackDS(GRIBMessage *msg) {
     const double scale = E / D;
     for (std::size_t i = 0; i < count; ++i)
       values[i] = !bitmap || bitmap[i] ? msg->md.R + cursor.take(width) * scale : GRIB_MISSING_VALUE;
+  } else if (templ == 42) {
+    values.reset(new double[count]);
+    if (!unpackCcsds(msg->md, bytes, length - 5, bitmap, count, packed, E, D,
+                     values.get())) return false;
   } else if (templ == 4) {
     const unsigned precision = msg->md.precision;
     if ((precision != 1 && precision != 2) ||

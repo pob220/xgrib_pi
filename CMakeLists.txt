@@ -73,9 +73,9 @@ set(LONG_DESCRIPTION
 
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "4")
-set(VERSION_PATCH "5")
+set(VERSION_PATCH "6")
 set(VERSION_TWEAK "0")
-set(VERSION_DATE "14/11/2026") # DD/MM/YYYY format
+set(VERSION_DATE "23/11/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -616,7 +616,9 @@ if (NOT OCPN_FLATPAK_CONFIG)
     set(XGRIB_BZIP2_TARGET BZip2::BZip2)
   endif()
   find_package(ZLIB REQUIRED)
+  include(BundledGribAec)
   target_link_libraries(${PACKAGE_NAME} ${XGRIB_JASPER_TARGET} ${XGRIB_BZIP2_TARGET}
+                        grib_aec_decoder
                         ZLIB::ZLIB)
   target_compile_definitions(${PACKAGE_NAME} PRIVATE JASPER)
   if(XGRIB_USE_BUNDLED_JASPER)
@@ -811,7 +813,7 @@ if (NOT OCPN_FLATPAK_CONFIG)
     target_include_directories(xgrib_reader_integration_tests PRIVATE
       ${PROJECT_SOURCE_DIR}/src)
     target_link_libraries(xgrib_reader_integration_tests PRIVATE
-      ${XGRIB_JASPER_TARGET} BZip2::BZip2 ZLIB::ZLIB
+      ${XGRIB_JASPER_TARGET} BZip2::BZip2 ZLIB::ZLIB grib_aec_decoder
       ${wxWidgets_LIBRARIES})
     target_compile_definitions(xgrib_reader_integration_tests PRIVATE JASPER)
     if(XGRIB_USE_BUNDLED_JASPER)
@@ -819,6 +821,15 @@ if (NOT OCPN_FLATPAK_CONFIG)
         "${xgrib_jasper_BINARY_DIR}/src/libjasper/include"
         "${xgrib_jasper_SOURCE_DIR}/src/libjasper/include")
     endif()
+
+    add_test(NAME xgrib_reader_ccsds
+      COMMAND xgrib_reader_integration_tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/hardening/farallon-ccsds.grb2
+        --ccsds)
+    add_test(NAME xgrib_reader_truncated_ccsds
+      COMMAND xgrib_reader_integration_tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/hardening/farallon-ccsds-truncated.grb2
+        --malformed)
 
     add_test(NAME xgrib_reader_jpeg_hardening
       COMMAND xgrib_reader_integration_tests

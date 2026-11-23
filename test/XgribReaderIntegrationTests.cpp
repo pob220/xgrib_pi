@@ -6,6 +6,7 @@
 #include <iostream>
 #include <memory>
 #include <set>
+#include <sstream>
 #include <string>
 
 #include <wx/string.h>
@@ -155,7 +156,7 @@ int main(int argc, char** argv) {
 
   Expect(argc == 2 || argc == 3,
          "usage: xgrib_reader_integration_tests FILE.grb "
-         "[--any|--combined|--combined-all|--long-current|--tonga|--dateline|--jpeg|--malformed]");
+         "[--any|--combined|--combined-all|--long-current|--tonga|--dateline|--jpeg|--ccsds|--malformed]");
 
   GribReader reader(wxString::FromUTF8(argv[1]));
   const std::string mode = argc == 3 ? argv[2] : "";
@@ -164,6 +165,44 @@ int main(int argc, char** argv) {
     return 0;
   }
   Expect(reader.isOk(), "xGRIB reader rejected native generator output");
+  if (mode == "--ccsds") {
+    Expect(reader.getTotalNumberOfGribRecords() == 7,
+           "all CCSDS fixture fields are readable");
+    const auto fixture = std::string(argv[1]);
+    std::ifstream expected(fixture.substr(0, fixture.rfind('.')) + "-values.txt");
+    Expect(bool(expected), "CCSDS fixture reference opens");
+    std::string line;
+    int checked = 0, missing = 0;
+    while (std::getline(expected, line)) {
+      if (line.empty() || line[0] == '#') continue;
+      std::istringstream row(line);
+      int type;
+      time_t time;
+      double lat, lon, reference;
+      Expect(bool(row >> type >> time >> lat >> lon >> reference),
+             "CCSDS reference row");
+      const bool wind = type == GRB_WIND_VX || type == GRB_WIND_VY;
+      const auto* record = reader.getGribRecord(
+          type, wind ? LV_ABOV_GND : LV_GND_SURF, wind ? 10 : 0, time);
+      Expect(record != nullptr, "CCSDS parameter and forecast time");
+      lon -= 360 * std::round((lon - record->getX(0)) / 360);
+      const int x = std::lround((lon - record->getX(0)) / record->getDi());
+      const int y = std::lround((lat - record->getY(0)) / record->getDj());
+      Expect(x >= 0 && y >= 0 && x < record->getNi() && y < record->getNj(),
+             "CCSDS grid geometry");
+      const double actual = record->getValue(x, y);
+      if (reference == GRIB_NOTDEF) {
+        Expect(actual == GRIB_NOTDEF, "CCSDS bitmap marks missing values");
+        ++missing;
+      } else {
+        Expect(std::abs(actual - reference) < 1e-7,
+               "CCSDS value matches ecCodes");
+      }
+      ++checked;
+    }
+    Expect(checked == 1260 && missing == 204, "complete CCSDS field comparison");
+    return 0;
+  }
   if (mode == "--jpeg") {
     Expect(reader.getTotalNumberOfGribRecords() == 1,
            "JPEG fixture should decode to one wind field");
