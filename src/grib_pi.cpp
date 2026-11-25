@@ -975,6 +975,23 @@ void grib_pi::SetPluginMessage(wxString& message_id, wxString& message_body) {
     v["GribVersionMajor"] = xgrib::kGribProtocolVersionMajor;
     v["GribVersionMinor"] = xgrib::kGribProtocolVersionMinor;
     v["TimelineSetPtr"] = wxString::From8BitData(ptr);
+    v.Remove("WindForecastEndEpochSeconds");
+    if (m_pGribCtrlBar && m_pGribCtrlBar->m_bGRIBActiveFile &&
+        (!set || !set->m_GribRecordPtrArray[Idx_WIND_VX] ||
+         !set->m_GribRecordPtrArray[Idx_WIND_VY])) {
+      const auto& records =
+          *m_pGribCtrlBar->m_bGRIBActiveFile->GetRecordSetArrayPtr();
+      for (auto remaining = records.GetCount(); remaining > 0; --remaining) {
+        const auto& record = records.Item(remaining - 1);
+        if (record.m_GribRecordPtrArray[Idx_WIND_VX] &&
+            record.m_GribRecordPtrArray[Idx_WIND_VY]) {
+          v["WindForecastEndEpochSeconds"] =
+              wxString::Format("%lld",
+                               static_cast<long long>(record.m_Reference_Time));
+          break;
+        }
+      }
+    }
 
     wxJSONWriter w;
     wxString out;
