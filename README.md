@@ -10,6 +10,19 @@ that same engine on a background worker behind its native touch interface.
 Both paths use the same provider adapters, date-line geometry, UTC handling
 and output validation. Generated files open directly in xGRIB.
 
+### New in 0.5.0
+
+**Download GRIB → World** uses OpenCPN's expanded
+[world forecast catalogue](https://github.com/OpenCPN/OpenCPN/commit/750ac70538691ef1c226c3c428228e4aa2e4904c).
+It includes ECMWF IFS at 0.1° and 0.25°, AIFS, GFS, ICON, GDPS, ARPEGE,
+NOAA RTOFS currents and Copernicus SMOC surface currents. Forecast length
+is measured in hours from the model run and capped at the selected model's
+limit. **Update Models** refreshes the list.
+
+World downloads use CCSDS compression and open in the viewer. The downloader
+reports plain-text server errors and cleans up incomplete transfers. Use
+**Generate GRIB** to combine fields from several providers into one file.
+
 ### Platform coverage in 0.4.3
 
 The catalogue build suite covers Debian 12/13 (x86_64, ARM64 and ARMHF),

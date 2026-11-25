@@ -17,31 +17,32 @@ int main() {
     std::string directory = (std::filesystem::temp_directory_path() / "xgrib-server-test-XXXXXX").string();
     Require(mkdtemp(directory.data()) != nullptr, "create isolated test directory");
     const eg::BoundingBox box{-8.5, 50.5, -2.5, 56.5};
-    Require(xgrib::ServerGribUrl(box, "ecmwf0p25", 24) ==
-      "https://grib.bosun.io/grib?model=ecmwf0p25&latmin=50.5&latmax=56.5&lonmin=-8.5&lonmax=-2.5&length=24", "desktop server request parity");
-    for (int hours : {24, 72, 999})
-      Require(xgrib::ServerGribUrl(box, "ecmwfaifs0p25", hours).find("ecmwfaifs0p25") != std::string::npos, "AIFS supported");
-    Reject([&] { xgrib::ServerGribUrl(box, "untrusted&url=http://example.org", 24); }, "reject model injection");
-    Reject([&] { xgrib::ServerGribUrl(box, "ecmwf0p25", 0); }, "reject unsupported duration");
-    Require(xgrib::ServerGribUrl({179, 0, -179, 1}, "ecmwf0p25", 24).find("lonmin=179&lonmax=-179") != std::string::npos,
+    const xgrib::WorldGribModel model{"ecmwf0p25", "ECMWF IFS", 360};
+    const xgrib::WorldGribModel current{"smoc0p083", "CMEMS SMOC", 239};
+    Require(xgrib::ServerGribUrl(box, model, 37) ==
+      "https://grib.bosun.io/grib?model=ecmwf0p25&latmin=50.5&latmax=56.5&lonmin=-8.5&lonmax=-2.5&length=37&encoding=ccsds", "desktop server request parity");
+    Require(xgrib::ServerGribUrl(box, current, 72).find("smoc0p083") !=
+                std::string::npos, "World current model supported");
+    Reject([&] { xgrib::ServerGribUrl(box, current, 240); }, "reject model-specific maximum");
+    Require(xgrib::ServerGribUrl({179, 0, -179, 1}, model, 24).find("lonmin=179&lonmax=-179") != std::string::npos,
             "server uses canonical crossing bounds");
-    Reject([&] { xgrib::ServerGribUrl({10, 50, 10, 60}, "ecmwf0p25", 24); }, "reject zero-width area");
-    Reject([&] { xgrib::ServerGribUrl({-8, 50, std::numeric_limits<double>::quiet_NaN(), 60}, "ecmwf0p25", 24); }, "reject NaN");
+    Reject([&] { xgrib::ServerGribUrl({10, 50, 10, 60}, model, 24); }, "reject zero-width area");
+    Reject([&] { xgrib::ServerGribUrl({-8, 50, std::numeric_limits<double>::quiet_NaN(), 60}, model, 24); }, "reject NaN");
     eg::EnvironmentRequest request;
     request.bbox = box;
     request.output = std::filesystem::path(directory) / "untouched.grb2";
     request.execution.cancelled = std::make_shared<std::atomic<bool>>(true);
-    Reject([&] { xgrib::DownloadServerGrib(request, "ecmwf0p25", 24); }, "cancel before network/files");
+    Reject([&] { xgrib::DownloadServerGrib(request, model, 24); }, "cancel before network/files");
     Require(!std::filesystem::exists(request.output) && !std::filesystem::exists(request.output.string() + ".part"), "cancel must leave no partial files");
     const auto partial = request.output.string() + ".part";
     { std::ofstream out(partial); out << "sentinel"; }
     request.execution.cancelled->store(false);
-    Reject([&] { xgrib::DownloadServerGrib(request, "ecmwf0p25", 24); }, "reject existing partial before network");
+    Reject([&] { xgrib::DownloadServerGrib(request, model, 24); }, "reject existing partial before network");
     std::ifstream in(partial); std::string value; in >> value;
     Require(value == "sentinel", "must not alter an existing partial file");
     in.close(); std::filesystem::remove(partial);
     { std::ofstream out(request.output); out << "existing forecast"; }
-    Reject([&] { xgrib::DownloadServerGrib(request, "ecmwf0p25", 24); }, "reject existing forecast before network");
+    Reject([&] { xgrib::DownloadServerGrib(request, model, 24); }, "reject existing forecast before network");
     Require(!std::filesystem::exists(partial), "existing forecast must not create partial file");
     std::ifstream original(request.output); std::getline(original, value);
     Require(value == "existing forecast", "must never overwrite original forecast");

@@ -36,6 +36,8 @@
 #include "GribOverlayFactory.h"
 #include <wx/wfstream.h>
 #include "grib_pi.h"
+#include "XgribPaths.h"
+#include <algorithm>
 
 #include <unordered_map>
 #include <regex>
@@ -77,7 +79,9 @@ GribRequestSetting::GribRequestSetting(GRIBUICtrlBar &parent)
   InitRequestConfig();
   m_connected = false;
   m_downloading = false;
-  m_bTransferSuccess = true;
+  m_bTransferSuccess = false;
+  m_canceled = false;
+  m_download_handle = 0;
   m_downloadType = GribDownloadType::NONE;
 
   auto bg = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)
@@ -95,35 +99,15 @@ GribRequestSetting::GribRequestSetting(GRIBUICtrlBar &parent)
       fg +
       ""
       ">" +
-      _("<h1>OpenCPN ECMWF forecast</h1>"
-        "<p>Free service based on ECMWF Open Data published under the terms of "
-        "Creative Commons CC-4.0-BY license</p>"
-        "<p>The IFS model GRIB files include information about surface "
-        "temperature, "
-        "atmospheric pressure, wind strength, wind direction, wave height and "
-        "direction for the whole world on a 0.25 degree resolution "
-        "grid with 3 hour "
-        "step in the first 144 hours and 6 hour step up to 10 days.</p>"
-        "The AIFS model contains data for wind, pressure and temperature on a "
-        "0.25 degree grid with 6 hour step for up to 15 days"
-        "<p>The data is updated twice a day as soon as the 00z and 12z model "
-        "runs finish and the "
-        "results are published by ECMWF, which usually means new forecast data "
-        "is available shortly after 8AM and 8PM UTC.</p>"
-        "<p>The grib downloaded covers the area of the primary chart "
-        "canvas.</p>"
-        "<p>The service is provided on best effort basis and comes with no "
-        "guarantees. The server is hosted by a volunteer and the service is "
-        "provided free of charge and without accepting any liability "
-        "whatsoever for its continuous availability, or for any loss or damage "
-        "arising from its use. If you find the service useful, please "
-        "consider making a donation to the OpenCPN project.</p>"
-        "<p>This service is based on data and products of the European Centre "
-        "for Medium-Range Weather Forecasts (ECMWF).</p>"
-        "<p>Source: www.ecmwf.int</p>"
-        "<p>Disclaimer: ECMWF does not accept any liability whatsoever for any "
-        "error or omission in the data, their availability, or for any loss or "
-        "damage arising from their use.</p>"
+      _("<h1>OpenCPN world forecast</h1>"
+        "<p>Download a GRIB from a global weather or ocean model for the "
+        "selected chart area.</p>"
+        "<p>Forecast length starts at the model run. The available hours "
+        "ahead of the current time depend on the age of that run.</p>"
+        "<p>This volunteer-run service uses open data from ECMWF (CC BY 4.0), "
+        "DWD, NOAA, Environment and Climate Change Canada, and M&eacute;t&eacute;o-France. "
+        "SMOC currents are generated using E.U. Copernicus Marine Service "
+        "information (DOI 10.48670/moi-00016).</p>"
         "</font></body></html>"));
   m_htmlInfoWin->SetBorders(10);
   m_htmlInfoWin->SetPage(
@@ -189,6 +173,10 @@ void GribRequestSetting::SaveConfig() {
     pConf->Write(_T( "RequestZoneMinLat" ), m_spMinLat->GetValue());
     pConf->Write(_T( "RequestZoneMaxLon" ), m_spMaxLon->GetValue());
     pConf->Write(_T( "RequestZoneMinLon" ), m_spMinLon->GetValue());
+    const int model = m_chWorldModel->GetSelection();
+    if (model != wxNOT_FOUND)
+      pConf->Write("WorldModel", wxString::FromUTF8(m_worldModels[model].id.c_str()));
+    pConf->Write("WorldForecastLength", m_spWorldForecastLength->GetValue());
   }
 }
 
@@ -240,6 +228,21 @@ void GribRequestSetting::InitRequestConfig() {
         wxString(_T( "000220XX.............." )).Len())
       m_RequestConfigBase = _T( "000220XX.............." );
   }
+  wxString worldModel = "ecmwf0p25";
+  int worldHours = 24;
+  if (pConf) {
+    pConf->Read("WorldModel", &worldModel, "ecmwf0p25");
+    pConf->Read("WorldForecastLength", &worldHours, 24);
+  }
+  SetWorldModels(xgrib::LoadWorldGribModels(
+                     m_parent.pPlugIn->m_world_models_catalog,
+                     GetXgribDataDirectory() + xgrib::kWorldGribModelsFile),
+                 worldModel);
+  if (!m_worldModels.empty()) {
+    const auto& model = m_worldModels[m_chWorldModel->GetSelection()];
+    m_spWorldForecastLength->SetValue(std::clamp(worldHours, 1, model.maxHours));
+  }
+
   // populate model, mail to, waves model choices
   wxString s1[] = {"GFS", "COAMPS", "RTOFS", "HRRR", "ICON", "ECMWF"};
   for (unsigned int i = 0; i < (sizeof(s1) / sizeof(wxString)); i++)
@@ -321,16 +324,7 @@ void GribRequestSetting::InitRequestConfig() {
 
 wxWindow *GetGRIBCanvas();
 void GribRequestSetting::OnClose(wxCloseEvent &event) {
-  if (m_downloading) {
-    OCPN_cancelDownloadFileBackground(m_download_handle);
-    m_downloading = false;
-    m_download_handle = 0;
-  }
-  if (m_connected) {
-    Disconnect(
-        wxEVT_DOWNLOAD_EVENT,
-        (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::onDLEvent);
-  }
+  if (m_downloadType != GribDownloadType::NONE) CancelDownload();
   m_RenderSelectionZoneState =
       RENDER_NONE;  // eventually stop graphical zone display
   RequestRefresh(GetGRIBCanvas());
@@ -508,17 +502,6 @@ void GribRequestSetting::SetCoordinatesText() {
   m_stMinLatNS->SetLabel(m_spMinLat->GetValue() < 0 ? _("S") : _("N"));
 }
 
-size_t LengthSelToHours(int sel) {
-  switch (sel) {
-    case 1:
-      return 72;
-    case 2:
-      return 999;
-    default:
-      return 24;
-  }
-}
-
 template <typename T>
 std::string GribRequestSetting::FormatPerLocale(T value) {
   std::stringstream ss;
@@ -546,20 +529,16 @@ void GribRequestSetting::onDLEvent(OCPN_downloadEvent &ev) {
   //           << ev.getDLEventStatus() << std::endl;
   switch (ev.getDLEventCondition()) {
     case OCPN_DL_EVENT_TYPE_END:
-      m_bTransferSuccess =
-          (ev.getDLEventStatus() == OCPN_DL_NO_ERROR) ? true : false;
-      Disconnect(wxEVT_DOWNLOAD_EVENT,
-                 (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::
-                     onDLEvent);
-      m_connected = false;
+      m_bTransferSuccess = ev.getDLEventStatus() == OCPN_DL_NO_ERROR;
+      DisconnectDownloadEvents();
       m_downloading = false;
       m_download_handle = 0;
-      wxYieldIfNeeded();
       break;
 
     case OCPN_DL_EVENT_TYPE_PROGRESS:
       switch (m_downloadType) {
         case GribDownloadType::WORLD:
+        case GribDownloadType::WORLD_CATALOG:
           m_staticTextInfo->SetLabelText(
               GetDownloadProgressText(ev.getTransferred(), ev.getTotal()));
           break;
@@ -588,92 +567,182 @@ void GribRequestSetting::onDLEvent(OCPN_downloadEvent &ev) {
   }
 }
 
-void GribRequestSetting::OnWorldDownload(wxCommandEvent &event) {
-  if (m_downloading) {
-    OCPN_cancelDownloadFileBackground(m_download_handle);
+namespace {
+class TemporaryDownload {
+public:
+  explicit TemporaryDownload(const wxString& destination)
+      : path(wxFileName::CreateTempFileName(destination + ".part-")) {}
+  ~TemporaryDownload() {
+    if (wxFileExists(path)) wxRemoveFile(path);
+  }
+  const wxString path;
+};
+}  // namespace
+
+void GribRequestSetting::DisconnectDownloadEvents() {
+  if (!m_connected) return;
+  Disconnect(wxEVT_DOWNLOAD_EVENT,
+             (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::onDLEvent);
+  m_connected = false;
+}
+
+void GribRequestSetting::CancelDownload() {
+  m_canceled = true;
+  if (!m_downloading) return;
+  m_downloading = false;
+  DisconnectDownloadEvents();
+  OCPN_cancelDownloadFileBackground(m_download_handle);
+  m_download_handle = 0;
+}
+
+bool GribRequestSetting::DownloadFile(const wxString& url, const wxString& path) {
+  if (path.empty() || m_canceled) return false;
+  m_bTransferSuccess = false;
+  m_connected = true;
+  m_downloading = true;
+  Connect(wxEVT_DOWNLOAD_EVENT,
+          (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::onDLEvent);
+  if (OCPN_downloadFileBackground(url, path, this, &m_download_handle) !=
+      OCPN_DL_STARTED) {
+    DisconnectDownloadEvents();
     m_downloading = false;
     m_download_handle = 0;
-    Disconnect(
-        wxEVT_DOWNLOAD_EVENT,
-        (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::onDLEvent);
-    m_connected = false;
-    m_btnDownloadWorld->SetLabelText(_("Download"));
-    m_staticTextInfo->SetLabelText(_("Download canceled"));
-    m_canceled = true;
-    m_downloadType = GribDownloadType::NONE;
-    EnableDownloadButtons();
-    wxTheApp->ProcessPendingEvents();
-    wxYieldIfNeeded();
-    return;
   }
-  m_canceled = false;
-  m_downloading = true;
-  m_downloadType = GribDownloadType::WORLD;
-  EnableDownloadButtons();
-  m_btnDownloadWorld->SetLabelText(_("Cancel"));
-  m_staticTextInfo->SetLabelText(_("Preparing data on server..."));
-  wxYieldIfNeeded();
-  wxString model;
-  switch (m_chECMWFResolution->GetSelection()) {
-    case 0:
-      model = "ecmwf0p25";
-      break;
-    case 1:
-      model = "ecmwfaifs0p25";
-      break;
-    default:
-      model = "ecmwf0p25";
-      break;
-  }
-  std::ostringstream oss;
-  oss << "https://grib.bosun.io/grib?";
-  oss << "model=" << model;
-  oss << "&latmin=" << GetMinLat();
-  oss << "&latmax=" << GetMaxLat();
-  oss << "&lonmin=" << GetMinLon();
-  oss << "&lonmax=" << GetMaxLon();
-  oss << "&length=" << LengthSelToHours(m_chForecastLength->GetSelection());
-  wxString filename =
-      wxString::Format("ocpn_%s_%li_%s.grb2", model.c_str(),
-                       LengthSelToHours(m_chForecastLength->GetSelection()),
-                       wxDateTime::Now().Format("%F-%H-%M"));
-  wxString path = m_parent.GetGribDir();
-  path.Append(wxFileName::GetPathSeparator());
-  path.Append(filename);
-  if (!m_connected) {
-    m_connected = true;
-    Connect(
-        wxEVT_DOWNLOAD_EVENT,
-        (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::onDLEvent);
-  }
-  auto res =
-      OCPN_downloadFileBackground(oss.str(), path, this, &m_download_handle);
   while (m_downloading) {
     wxTheApp->ProcessPendingEvents();
     wxMilliSleep(10);
   }
-  if (!m_canceled) {
-    if (m_bTransferSuccess) {
-      m_staticTextInfo->SetLabelText(
-          wxString::Format(_("Download complete: %s"), path.c_str()));
-      wxFileName fn(path);
-      m_parent.m_grib_dir = fn.GetPath();
-      m_parent.m_file_names.Clear();
-      m_parent.m_file_names.Add(path);
-      m_parent.OpenFile();
-      if (m_parent.pPlugIn) {
-        if (m_parent.pPlugIn->m_bZoomToCenterAtInit) m_parent.DoZoomToCenter();
-      }
-      m_parent.SetDialogsStyleSizePosition(true);
-      SaveConfig();
-      Close();
-    } else {
-      m_staticTextInfo->SetLabelText(_("Download failed"));
-    }
+  return !m_canceled && m_bTransferSuccess;
+}
+
+void GribRequestSetting::OpenDownloadedGrib(const wxString& path) {
+  m_parent.m_grib_dir = wxFileName(path).GetPath();
+  m_parent.m_file_names.Clear();
+  m_parent.m_file_names.Add(path);
+  m_parent.OpenFile();
+  if (m_parent.pPlugIn && m_parent.pPlugIn->m_bZoomToCenterAtInit)
+    m_parent.DoZoomToCenter();
+  m_parent.SetDialogsStyleSizePosition(true);
+  SaveConfig();
+  Close();
+}
+
+void GribRequestSetting::SetWorldModels(
+    std::vector<xgrib::WorldGribModel> models, const wxString& selectedId) {
+  m_worldModels = std::move(models);
+  m_chWorldModel->Clear();
+  int selected = 0;
+  for (const auto& model : m_worldModels) {
+    const int index = m_chWorldModel->Append(model.title);
+    if (wxString::FromUTF8(model.id.c_str()) == selectedId) selected = index;
   }
-  m_btnDownloadWorld->SetLabelText(_("Download"));
-  m_downloadType = GribDownloadType::NONE;
+  if (!m_worldModels.empty()) m_chWorldModel->SetSelection(selected);
+  UpdateWorldForecastRange();
+}
+
+void GribRequestSetting::UpdateWorldForecastRange() {
+  const int selected = m_chWorldModel->GetSelection();
+  if (selected == wxNOT_FOUND) return;
+  const int maxHours = m_worldModels[selected].maxHours;
+  const int hours = m_spWorldForecastLength->GetValue();
+  m_spWorldForecastLength->SetRange(1, maxHours);
+  m_spWorldForecastLength->SetValue(std::clamp(hours, 1, maxHours));
+}
+
+void GribRequestSetting::OnWorldModelChoice(wxCommandEvent&) {
+  UpdateWorldForecastRange();
+}
+
+void GribRequestSetting::OnUpdateWorldModels(wxCommandEvent&) {
+  if (m_downloadType == GribDownloadType::WORLD_CATALOG) {
+    CancelDownload();
+    return;
+  }
+  if (m_downloadType != GribDownloadType::NONE) return;
+
+  m_canceled = false;
+  m_downloadType = GribDownloadType::WORLD_CATALOG;
   EnableDownloadButtons();
+  m_btnUpdateWorldModels->SetLabel(_("Cancel update"));
+  m_staticTextInfo->SetLabelText(_("Downloading model list update..."));
+
+  const auto& cache = m_parent.pPlugIn->m_world_models_catalog;
+  TemporaryDownload download(cache);
+  if (DownloadFile(xgrib::kWorldGribModelsUrl, download.path)) {
+    auto models = xgrib::ReadWorldGribModels(download.path);
+    if (!models.empty() && wxRenameFile(download.path, cache, true)) {
+      const int selected = m_chWorldModel->GetSelection();
+      const auto id = selected == wxNOT_FOUND
+                          ? wxString("ecmwf0p25")
+                          : wxString::FromUTF8(m_worldModels[selected].id.c_str());
+      SetWorldModels(std::move(models), id);
+      m_staticTextInfo->SetLabelText(_("Model list update complete."));
+    } else {
+      m_staticTextInfo->SetLabelText(_("Could not save a valid model list."));
+    }
+  } else {
+    m_staticTextInfo->SetLabelText(m_canceled ? _("Model list update canceled.")
+                                              : _("Model list update failed."));
+  }
+  m_downloadType = GribDownloadType::NONE;
+  m_btnUpdateWorldModels->SetLabel(_("Update Models"));
+  m_panelWorld->Layout();
+  EnableDownloadButtons();
+}
+
+void GribRequestSetting::OnWorldDownload(wxCommandEvent&) {
+  if (m_downloadType == GribDownloadType::WORLD) {
+    CancelDownload();
+    return;
+  }
+  if (m_downloadType != GribDownloadType::NONE) return;
+  const int selected = m_chWorldModel->GetSelection();
+  if (selected == wxNOT_FOUND) return;
+
+  const auto& model = m_worldModels[selected];
+  const int hours =
+      std::clamp(m_spWorldForecastLength->GetValue(), 1, model.maxHours);
+  const auto url = xgrib::WorldGribUrl(model, hours, GetMinLat(), GetMaxLat(),
+                                      GetMinLon(), GetMaxLon());
+  const auto filename = wxString::Format(
+      "ocpn_%s_%d_%s.grb2", wxString::FromUTF8(model.id.c_str()), hours,
+      wxDateTime::Now().Format("%F-%H-%M-%S"));
+  const auto destination = wxFileName(m_parent.GetGribDir(), filename).GetFullPath();
+
+  m_canceled = false;
+  m_downloadType = GribDownloadType::WORLD;
+  EnableDownloadButtons();
+  m_btnDownloadWorld->SetLabel(_("Cancel"));
+  m_staticTextInfo->SetLabelText(_("Preparing data on server..."));
+
+  TemporaryDownload download(destination);
+  const bool received =
+      DownloadFile(wxString::FromUTF8(url.c_str()), download.path);
+  const bool grib = received && xgrib::HasWorldGribFileMarkers(download.path);
+  const bool saved = grib && wxRenameFile(download.path, destination, false);
+  if (saved) {
+    m_staticTextInfo->SetLabelText(_("Download complete."));
+  } else if (m_canceled) {
+    m_staticTextInfo->SetLabelText(_("Download canceled"));
+  } else if (grib) {
+    m_staticTextInfo->SetLabelText(_("Could not save the downloaded GRIB file."));
+  } else {
+    const auto reason = xgrib::WorldGribServerError(download.path);
+    if (!reason.empty()) {
+      m_staticTextInfo->SetLabelText(
+          wxString::Format(_("Download failed: %s"), reason));
+    } else {
+      m_staticTextInfo->SetLabelText(received
+          ? _("The server did not return a complete GRIB file.")
+          : _("Download failed"));
+    }
+    m_staticTextInfo->Wrap(m_panelWorld->GetClientSize().x - 10);
+  }
+  m_btnDownloadWorld->SetLabel(_("Download"));
+  m_downloadType = GribDownloadType::NONE;
+  m_panelWorld->Layout();
+  EnableDownloadButtons();
+  if (saved) OpenDownloadedGrib(destination);
 }
 
 enum LocalSourceItem { SOURCE, AREA, GRIB };
@@ -795,236 +864,122 @@ void GribRequestSetting::OnLocalTreeSelChanged(wxTreeEvent &event) {
   EnableDownloadButtons();
 }
 
-void GribRequestSetting::OnUpdateLocalCatalog(wxCommandEvent &event) {
-  if (m_downloading) {
-    OCPN_cancelDownloadFileBackground(m_download_handle);
-    m_downloading = false;
-    m_download_handle = 0;
-    Disconnect(
-        wxEVT_DOWNLOAD_EVENT,
-        (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::onDLEvent);
-    m_connected = false;
-    m_btnDownloadLocal->SetLabelText(_("Download"));
-    m_stLocalDownloadInfo->SetLabelText(_("Download canceled"));
-    m_canceled = true;
-    m_downloadType = GribDownloadType::NONE;
-    EnableDownloadButtons();
-    wxTheApp->ProcessPendingEvents();
-    wxYieldIfNeeded();
-    return;
-  }
+void GribRequestSetting::OnUpdateLocalCatalog(wxCommandEvent&) {
+  if (m_downloadType != GribDownloadType::NONE) return;
+
   m_canceled = false;
-  m_downloading = true;
   m_downloadType = GribDownloadType::LOCAL_CATALOG;
-  EnableDownloadButtons();
   m_btnDownloadLocal->SetLabelText(_("Cancel"));
-  m_staticTextInfo->SetLabelText(_("Downloading catalog update..."));
-  wxYieldIfNeeded();
-  if (!m_connected) {
-    m_connected = true;
-    Connect(
-        wxEVT_DOWNLOAD_EVENT,
-        (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::onDLEvent);
-  }
-  auto res = OCPN_downloadFileBackground(
-      CATALOG_URL, m_parent.pPlugIn->m_local_sources_catalog + "new", this,
-      &m_download_handle);
-  while (m_downloading) {
-    wxTheApp->ProcessPendingEvents();
-    wxMilliSleep(10);
-  }
-  if (!m_canceled) {
-    if (m_bTransferSuccess) {
-      wxRenameFile(m_parent.pPlugIn->m_local_sources_catalog + "new",
-                   m_parent.pPlugIn->m_local_sources_catalog, true);
+  m_stLocalDownloadInfo->SetLabelText(_("Downloading catalog update..."));
+  EnableDownloadButtons();
+
+  const auto& cache = m_parent.pPlugIn->m_local_sources_catalog;
+  TemporaryDownload download(cache);
+  if (DownloadFile(CATALOG_URL, download.path)) {
+    wxJSONReader reader;
+    wxJSONValue root;
+    bool valid;
+    {
+      wxFileInputStream stream(download.path);
+      valid = stream.IsOk() && reader.Parse(stream, &root) == 0 &&
+              root.IsObject() && root["sources"].IsArray();
+    }
+    if (valid && wxRenameFile(download.path, cache, true)) {
       ReadLocalCatalog();
       m_stLocalDownloadInfo->SetLabelText(_("Catalog update complete."));
     } else {
-      m_stLocalDownloadInfo->SetLabelText(_("Download failed"));
+      m_stLocalDownloadInfo->SetLabelText(_("Could not save a valid catalog."));
     }
+  } else {
+    m_stLocalDownloadInfo->SetLabelText(m_canceled ? _("Download canceled")
+                                                  : _("Download failed"));
   }
   m_btnDownloadLocal->SetLabelText(_("Download"));
   m_downloadType = GribDownloadType::NONE;
   EnableDownloadButtons();
 }
 
-void GribRequestSetting::OnDownloadLocal(wxCommandEvent &event) {
-  if (m_downloading) {
-    OCPN_cancelDownloadFileBackground(m_download_handle);
-    m_downloading = false;
-    m_download_handle = 0;
-    Disconnect(
-        wxEVT_DOWNLOAD_EVENT,
-        (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::onDLEvent);
-    m_connected = false;
-    m_btnDownloadLocal->SetLabelText(_("Download"));
-    m_stLocalDownloadInfo->SetLabelText(_("Download canceled"));
-    m_canceled = true;
-    m_downloadType = GribDownloadType::NONE;
-    EnableDownloadButtons();
-    wxTheApp->ProcessPendingEvents();
-    wxYieldIfNeeded();
+void GribRequestSetting::OnDownloadLocal(wxCommandEvent&) {
+  if (m_downloadType == GribDownloadType::LOCAL ||
+      m_downloadType == GribDownloadType::LOCAL_CATALOG) {
+    CancelDownload();
     return;
   }
-  m_canceled = false;
-  m_downloading = true;
-  m_downloadType = GribDownloadType::LOCAL;
-  EnableDownloadButtons();
-  m_btnDownloadLocal->SetLabelText(_("Cancel"));
-  m_staticTextInfo->SetLabelText(_("Downloading grib..."));
-  wxYieldIfNeeded();
-  auto src = (GribCatalogInfo *)(m_SourcesTreeCtrl1->GetItemData(
-      m_SourcesTreeCtrl1->GetSelection()));
-  if (!src || src->type != LocalSourceItem::GRIB || src->url.IsEmpty()) {
-    m_downloading = false;
+  if (m_downloadType != GribDownloadType::NONE) return;
+
+  const auto* src = static_cast<const GribCatalogInfo*>(
+      m_SourcesTreeCtrl1->GetItemData(m_SourcesTreeCtrl1->GetSelection()));
+  if (!src || src->type != LocalSourceItem::GRIB || src->url.empty()) {
     m_stLocalDownloadInfo->SetLabelText(_("Download can't be started."));
-    m_btnDownloadWorld->SetLabelText(_("Download"));
-    m_downloadType = GribDownloadType::NONE;
-    EnableDownloadButtons();
     return;
-  }
-  if (!m_connected) {
-    m_connected = true;
-    Connect(
-        wxEVT_DOWNLOAD_EVENT,
-        (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::onDLEvent);
   }
   wxString url = src->url;
-  // If it is a grib that changes location and requires help of, download the
-  // manifest first
-  if (src->download_type == LocalGribDownloadType::MANIFEST) {
-    wxString path = m_parent.GetGribDir();
-    path.Append(wxFileName::GetPathSeparator());
-    path.Append("grib_manifest.json");
-    auto res = OCPN_downloadFileBackground(url, path, this, &m_download_handle);
-    while (m_downloading) {
-      wxTheApp->ProcessPendingEvents();
-      wxMilliSleep(10);
-    }
-    bool success = true;
-    if (!m_canceled) {
-      if (!m_bTransferSuccess) {
-        success = false;
-        m_stLocalDownloadInfo->SetLabelText(_("Download failed"));
-      }
-    } else {
-      success = false;
-      m_stLocalDownloadInfo->SetLabelText(_("Download canceled"));
-    }
-    if (success) {
+  wxString filename = src->filename;
+  const auto downloadType = src->download_type;
+  const auto directory = m_parent.GetGribDir();
+
+  m_canceled = false;
+  m_downloadType = GribDownloadType::LOCAL;
+  m_btnDownloadLocal->SetLabelText(_("Cancel"));
+  m_stLocalDownloadInfo->SetLabelText(_("Downloading grib..."));
+  EnableDownloadButtons();
+
+  if (downloadType == LocalGribDownloadType::MANIFEST) {
+    TemporaryDownload manifest(wxFileName(directory, "grib_manifest.json").GetFullPath());
+    const auto manifestUrl = url;
+    url.clear();
+    if (DownloadFile(manifestUrl, manifest.path)) {
       wxJSONReader reader;
-      wxFileInputStream str(path);
       wxJSONValue root;
-      reader.Parse(str, &root);
-      if (root.HasMember("url")) {
-        wxString parsed = root["url"].AsString();
-        if (parsed.StartsWith("http")) {
-          url = parsed;
-        } else {
-          m_stLocalDownloadInfo->SetLabelText(_("Download failed"));
-          success = false;
-        }
+      wxFileInputStream stream(manifest.path);
+      if (stream.IsOk() && reader.Parse(stream, &root) == 0 &&
+          root.IsObject() && root["url"].IsString()) {
+        const auto candidate = root["url"].AsString();
+        if (candidate.StartsWith("https://") || candidate.StartsWith("http://"))
+          url = candidate;
       }
-    }
-    if (!success) {  // Something went wrong, clean up and do not continue to
-                     // the actual download
-      m_downloading = false;
-      m_download_handle = 0;
-      Disconnect(wxEVT_DOWNLOAD_EVENT,
-                 (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::
-                     onDLEvent);
-      m_connected = false;
-      m_btnDownloadLocal->SetLabelText(_("Download"));
-      m_stLocalDownloadInfo->SetLabelText(_("Download failed"));
-      m_canceled = true;
-      m_downloadType = GribDownloadType::NONE;
-      EnableDownloadButtons();
-      wxTheApp->ProcessPendingEvents();
-      wxYieldIfNeeded();
-      return;
-    }
-  }
-  // Download the actual grib
-  m_downloading = true;
-  wxYieldIfNeeded();
-  if (!m_connected) {
-    m_connected = true;
-    Connect(
-        wxEVT_DOWNLOAD_EVENT,
-        (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::onDLEvent);
-  }
-  wxString filename;
-  if (!src->filename.IsEmpty()) {
-    filename = src->filename;
-  } else {
-    filename =
-        url.AfterLast('/');  // Get last part of the URL and try to sanitize the
-                             // filename somewhat if we call some API...
-    filename.Replace("?", "_");
-    filename.Replace("&", "_");
-    if (!(filename.Contains(".grb2") || filename.Contains(".grib2") ||
-          filename.Contains(".grb") || filename.Contains(".grib"))) {
-      filename.Append(".grb");
     }
   }
 
-  wxString path = m_parent.GetGribDir();
-  path.Append(wxFileName::GetPathSeparator());
-  path.Append(filename);
-  auto res = OCPN_downloadFileBackground(url, path, this, &m_download_handle);
-  while (m_downloading) {
-    wxTheApp->ProcessPendingEvents();
-    wxMilliSleep(10);
-  }
-  if (!m_canceled) {
-    if (m_bTransferSuccess) {
-      m_stLocalDownloadInfo->SetLabelText(_("Grib download complete."));
-      m_stLocalDownloadInfo->SetLabelText(
-          wxString::Format(_("Download complete: %s"), path.c_str()));
-      wxFileName fn(path);
-      m_parent.m_grib_dir = fn.GetPath();
-      m_parent.m_file_names.Clear();
-      m_parent.m_file_names.Add(
-          path);  //("/home/nohal/Downloads/Cherbourg_4km_WRF_WAM_240228-12.grb.bz2");
-      m_parent.OpenFile();
-      if (m_parent.pPlugIn) {
-        if (m_parent.pPlugIn->m_bZoomToCenterAtInit) m_parent.DoZoomToCenter();
-      }
-      m_parent.SetDialogsStyleSizePosition(true);
-      SaveConfig();
-      Close();
-    } else {
-      m_stLocalDownloadInfo->SetLabelText(_("Download failed"));
+  wxString destination;
+  bool saved = false;
+  if (!url.empty()) {
+    if (filename.empty()) {
+      filename = url.AfterLast('/');
+      filename.Replace("?", "_");
+      filename.Replace("&", "_");
+      if (!filename.Contains(".grb") && !filename.Contains(".grib"))
+        filename.Append(".grb");
     }
+    destination = wxFileName(directory, filename).GetFullPath();
+    TemporaryDownload download(destination);
+    saved = DownloadFile(url, download.path) &&
+            wxRenameFile(download.path, destination, true);
   }
-  m_btnDownloadWorld->SetLabelText(_("Download"));
+  m_stLocalDownloadInfo->SetLabelText(
+      saved ? _("Grib download complete.")
+            : m_canceled ? _("Download canceled") : _("Download failed"));
+  m_btnDownloadLocal->SetLabelText(_("Download"));
   m_downloadType = GribDownloadType::NONE;
   EnableDownloadButtons();
+  if (saved) OpenDownloadedGrib(destination);
 }
 
 void GribRequestSetting::EnableDownloadButtons() {
-  switch (m_downloadType) {
-    case GribDownloadType::WORLD:
-      m_btnDownloadWorld->Enable(true);
-      m_btnDownloadLocal->Enable(false);
-      m_buttonUpdateCatalog->Enable(false);
-      break;
-    case GribDownloadType::LOCAL:
-    case GribDownloadType::LOCAL_CATALOG:
-      m_btnDownloadWorld->Enable(false);
-      m_btnDownloadLocal->Enable(m_bLocal_source_selected || m_downloading);
-      m_buttonUpdateCatalog->Enable(false);
-      break;
-    case GribDownloadType::XYGRIB:
-      m_xygribPanel->m_download_button->Enable(true);
-      break;
-    default:
-      m_btnDownloadWorld->Enable(true);
-      m_btnDownloadLocal->Enable(m_bLocal_source_selected || m_downloading);
-      m_buttonUpdateCatalog->Enable(true);
-      m_xygribPanel->m_download_button->Enable(true);
-      break;
-  }
+  const bool idle = m_downloadType == GribDownloadType::NONE;
+  const bool hasWorldModels = !m_worldModels.empty();
+  m_chWorldModel->Enable(idle && hasWorldModels);
+  m_spWorldForecastLength->Enable(idle && hasWorldModels);
+  m_btnDownloadWorld->Enable((idle && hasWorldModels) ||
+                             m_downloadType == GribDownloadType::WORLD);
+  m_btnUpdateWorldModels->Enable(idle ||
+                                 m_downloadType == GribDownloadType::WORLD_CATALOG);
+  m_btnDownloadLocal->Enable((idle && m_bLocal_source_selected) ||
+                             m_downloadType == GribDownloadType::LOCAL ||
+                             m_downloadType == GribDownloadType::LOCAL_CATALOG);
+  m_buttonUpdateCatalog->Enable(idle);
+  m_xygribPanel->m_download_button->Enable(
+      idle || m_downloadType == GribDownloadType::XYGRIB);
 }
 
 void GribRequestSetting::StopGraphicalZoneSelection() {
@@ -2065,29 +2020,12 @@ wxString GribRequestSetting::BuildGribFileName() {
  * it.
  * @param event Event data from the GUI loop
  */
-void GribRequestSetting::OnXyGribDownloadButton(wxCommandEvent &event) {
-  // Check if we are already downloading a GRIB file
-  if (m_downloading) {
-    // Yes : it means that "Download" button has been changed to "Cancel"
-    // button. So, let's cancel the on-going download
-    OCPN_cancelDownloadFileBackground(m_download_handle);
-    m_downloading = false;
-    m_download_handle = 0;
-    Disconnect(
-        wxEVT_DOWNLOAD_EVENT,
-        (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::onDLEvent);
-    m_connected = false;
-    m_xygribPanel->m_progress_gauge->SetValue(0);
-    m_xygribPanel->m_download_button->SetLabelText(_("Download"));
-    m_xygribPanel->m_status_text->SetLabelText(_("Download cancelled"));
-    m_canceled = true;
-    m_downloadType = GribDownloadType::NONE;
-    EnableDownloadButtons();
-    wxTheApp->ProcessPendingEvents();
-    wxYieldIfNeeded();
+void GribRequestSetting::OnXyGribDownloadButton(wxCommandEvent&) {
+  if (m_downloadType == GribDownloadType::XYGRIB) {
+    CancelDownload();
     return;
   }
-  // No : start a new download
+  if (m_downloadType != GribDownloadType::NONE) return;
   if (m_gribSizeEstimate > XYGRIB_MAX_DOWNLOADABLE_GRIB_SIZE_MB * 1024 * 1024) {
     m_xygribPanel->m_status_text->SetLabelText(
         wxString::Format(_("Can't download GRIB file bigger than %d MB"),
@@ -2095,61 +2033,29 @@ void GribRequestSetting::OnXyGribDownloadButton(wxCommandEvent &event) {
     return;
   }
 
-  // First we memorize the current configuration. This is the one which will be
-  // saved in OpenCPN' config file at exit
   MemorizeXyGribConfiguration();
   m_canceled = false;
-  m_downloading = true;
   m_downloadType = GribDownloadType::XYGRIB;
   EnableDownloadButtons();
-  // Change "Download" button into "Cancel" button
   m_xygribPanel->m_download_button->SetLabelText(_("Cancel"));
-  m_xygribPanel->m_status_text->SetLabelText(
-      _("Preparing GRIB file on server..."));
-  wxYieldIfNeeded();
+  m_xygribPanel->m_status_text->SetLabelText(_("Preparing GRIB file on server..."));
 
-  // Build the XyGrib DownloadURL from the current GUI configuration
-  wxString requestUrl = BuildXyGribUrl();
-
-  // First we download the temporary XML file that will tell us where to
-  // download the file on the server Downloading the XML triggers the
-  // construction of the GRIB file on the server.
-  wxString filename = wxString::Format("ocpn_xygrib_%s.xml",
-                                       wxDateTime::Now().Format("%F-%H-%M"));
-  wxString path = m_parent.GetGribDir();
-  path << wxFileName::GetPathSeparator();
-  path << filename;
-  if (!m_connected) {
-    m_connected = true;
-    Connect(
-        wxEVT_DOWNLOAD_EVENT,
-        (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::onDLEvent);
-  }
-  auto res = OCPN_downloadFileBackground(requestUrl.c_str(), path, this,
-                                         &m_download_handle);
-
-  // Wait for the file to be downloaded. Note that it can take some time because
-  // server will not send it to us until the GRIB file is ready, or an error
-  // occured.
-  while (m_downloading) {
-    wxTheApp->ProcessPendingEvents();
-    wxMilliSleep(10);
-  }
-
-  if ((m_canceled) || (!m_bTransferSuccess)) {
-    // Something went wrong : publish error on GUI
-    m_xygribPanel->m_status_text->SetLabelText(_("Grib request failed"));
+  const auto directory = m_parent.GetGribDir();
+  TemporaryDownload manifest(wxFileName(directory, "ocpn_xygrib.xml").GetFullPath());
+  if (!DownloadFile(BuildXyGribUrl(), manifest.path)) {
+    m_xygribPanel->m_status_text->SetLabelText(
+        m_canceled ? _("Download cancelled") : _("Grib request failed"));
+    m_xygribPanel->m_progress_gauge->SetValue(0);
     m_xygribPanel->m_download_button->SetLabelText(_("Download"));
     m_downloadType = GribDownloadType::NONE;
     EnableDownloadButtons();
-    wxRemoveFile(path);
     return;
   }
 
   // Read the XML file in a wxString
   wxFile xmlFile;
   wxString strXml;
-  bool readOk = xmlFile.Open(path);
+  bool readOk = xmlFile.Open(manifest.path);
   if (readOk) {
     readOk &= xmlFile.ReadAll(&strXml);
     if (readOk) {
@@ -2176,7 +2082,6 @@ void GribRequestSetting::OnXyGribDownloadButton(wxCommandEvent &event) {
     m_xygribPanel->m_download_button->SetLabelText(_("Download"));
     m_downloadType = GribDownloadType::NONE;
     EnableDownloadButtons();
-    wxRemoveFile(path);
     return;
   } else {
     // Extract GRIB URL from XML
@@ -2192,11 +2097,8 @@ void GribRequestSetting::OnXyGribDownloadButton(wxCommandEvent &event) {
     }
   }
 
-  wxRemoveFile(path);
 
-  // Check if there was any error in the previous phase
   if (!readOk) {
-    // Yes : stop download and report error to GUI
     m_xygribPanel->m_status_text->SetLabelText(
         _("Error parsing XML file from server"));
     m_xygribPanel->m_download_button->SetLabelText(_("Download"));
@@ -2206,55 +2108,18 @@ void GribRequestSetting::OnXyGribDownloadButton(wxCommandEvent &event) {
   }
 
   m_xygribPanel->m_status_text->SetLabelText(_("Downloading GRIB file"));
-
-  // Build name of the GRIB file for disk storage
-  path = m_parent.GetGribDir();
-  path << wxFileName::GetPathSeparator();
-  path << BuildGribFileName();
-
-  // Start download
-  m_canceled = false;
-  m_downloading = true;
-  if (!m_connected) {
-    m_connected = true;
-    Connect(
-        wxEVT_DOWNLOAD_EVENT,
-        (wxObjectEventFunction)(wxEventFunction)&GribRequestSetting::onDLEvent);
-  }
-  res =
-      OCPN_downloadFileBackground(url.c_str(), path, this, &m_download_handle);
-  // Wait for end of download. Note that the previously registered callback
-  // "onDLEvent" will update the progress indicator on the GUI.
-  while (m_downloading) {
-    wxTheApp->ProcessPendingEvents();
-    wxMilliSleep(10);
-  }
-
-  // Download finished : restore "Download" button
+  const auto destination = wxFileName(directory, BuildGribFileName()).GetFullPath();
+  TemporaryDownload download(destination);
+  const bool saved = DownloadFile(url, download.path) &&
+                     wxRenameFile(download.path, destination, true);
+  m_xygribPanel->m_status_text->SetLabelText(
+      saved ? _("Download complete")
+            : m_canceled ? _("Download cancelled") : _("Download failed"));
+  if (m_canceled) m_xygribPanel->m_progress_gauge->SetValue(0);
   m_xygribPanel->m_download_button->SetLabelText(_("Download"));
-
-  if (!m_canceled) {
-    if (m_bTransferSuccess) {
-      // Transfer successfull : switch to GRIB display on chart
-      m_xygribPanel->m_status_text->SetLabelText(_("Download complete"));
-      wxFileName fn(path);
-      m_parent.m_grib_dir = fn.GetPath();
-      m_parent.m_file_names.Clear();
-      m_parent.m_file_names.Add(path);
-      m_parent.OpenFile();
-      if (m_parent.pPlugIn) {
-        if (m_parent.pPlugIn->m_bZoomToCenterAtInit) m_parent.DoZoomToCenter();
-      }
-      m_parent.SetDialogsStyleSizePosition(true);
-      SaveConfig();
-      Close();
-    } else {
-      // Download failed : report error to GUI
-      m_xygribPanel->m_status_text->SetLabelText(_("Download failed"));
-    }
-  }
   m_downloadType = GribDownloadType::NONE;
   EnableDownloadButtons();
+  if (saved) OpenDownloadedGrib(destination);
 }
 
 /// @brief Handle action of changing atmospheric model selection.

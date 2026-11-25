@@ -72,10 +72,10 @@ set(LONG_DESCRIPTION
 )
 
 set(VERSION_MAJOR "0")
-set(VERSION_MINOR "4")
-set(VERSION_PATCH "6")
+set(VERSION_MINOR "5")
+set(VERSION_PATCH "0")
 set(VERSION_TWEAK "0")
-set(VERSION_DATE "23/11/2026") # DD/MM/YYYY format
+set(VERSION_DATE "25/11/2026") # DD/MM/YYYY format
 set(OCPN_MIN_VERSION "ov511")
 
 set(OCPN_API_VERSION_MAJOR "1")
@@ -221,6 +221,7 @@ set(SRCS
     src/GeneratorJobJson.cpp
     src/ProcessCommand.cpp
     src/TimeZoneDisplay.cpp
+    src/WorldGribModels.cpp
     src/XgribPaths.cpp
     src/XgribPluginPolicy.cpp
     src/CursorData.cpp
@@ -662,6 +663,16 @@ if (NOT OCPN_FLATPAK_CONFIG)
     add_test(NAME xgrib_generator_job_json_tests
              COMMAND xgrib_generator_job_json_tests)
 
+    add_executable(xgrib_world_catalogue_tests
+      test/WorldGribModelsTests.cpp src/WorldGribModels.cpp)
+    target_include_directories(xgrib_world_catalogue_tests PRIVATE
+      ${PROJECT_SOURCE_DIR}/src)
+    target_link_libraries(xgrib_world_catalogue_tests PRIVATE
+      ocpn::wxjson ${wxWidgets_LIBRARIES})
+    add_test(NAME xgrib_world_catalogue_tests
+      COMMAND xgrib_world_catalogue_tests
+        "${PROJECT_SOURCE_DIR}/data/world-models.json")
+
     add_executable(xgrib_plugin_policy_tests
       test/XgribPluginPolicyTests.cpp src/XgribPluginPolicy.cpp)
     target_include_directories(xgrib_plugin_policy_tests PRIVATE
@@ -686,9 +697,11 @@ if (NOT OCPN_FLATPAK_CONFIG)
         -P ${PROJECT_SOURCE_DIR}/test/PlatformMatrixContract.cmake)
 
     if(UNIX AND TARGET environmental_grib_engine)
-      add_executable(xgrib_android_server_tests test/AndroidServerDownloadTests.cpp)
+      add_executable(xgrib_android_server_tests test/AndroidServerDownloadTests.cpp
+        src/WorldGribModels.cpp)
       target_include_directories(xgrib_android_server_tests PRIVATE ${PROJECT_SOURCE_DIR}/src)
-      target_link_libraries(xgrib_android_server_tests PRIVATE environmental_grib_engine)
+      target_link_libraries(xgrib_android_server_tests PRIVATE
+        environmental_grib_engine ocpn::wxjson ${wxWidgets_LIBRARIES})
       add_test(NAME xgrib_android_server_tests COMMAND xgrib_android_server_tests)
       add_dependencies(${PACKAGE_NAME} xgrib_android_server_tests)
     endif()

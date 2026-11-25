@@ -12,7 +12,8 @@ void AndroidFitDialog(wxWindow* parent, wxDialog& dialog);
 class AndroidGribGeneratorDialog : public wxDialog {
  public:
   using GribReadyCallback = std::function<void(const wxString&)>;
-  AndroidGribGeneratorDialog(wxWindow* parent, GribReadyCallback ready);
+  AndroidGribGeneratorDialog(wxWindow* parent, GribReadyCallback ready,
+                             const wxString& worldModelCache);
   ~AndroidGribGeneratorDialog() override;
   void ShowMobile(const PlugIn_ViewPort& viewport, bool serverDownload = false);
  private:

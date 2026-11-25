@@ -35,6 +35,9 @@
 #include <wx/regex.h>
 
 #include <wx/stdpaths.h>
+#ifdef __WXOSX__
+#include <wx/sysopt.h>
+#endif
 
 #include <algorithm>
 #include <stdlib.h>
@@ -1411,7 +1414,8 @@ void GRIBUICtrlBar::OnRequestForecastData(wxCommandEvent& event) {
 #ifdef __OCPN__ANDROID__
   if (!m_androidGribGeneratorDialog)
     m_androidGribGeneratorDialog = new AndroidGribGeneratorDialog(
-        GetParent(), [this](const wxString& path) { OpenGeneratedGrib(path); });
+        GetParent(), [this](const wxString& path) { OpenGeneratedGrib(path); },
+        pPlugIn->m_world_models_catalog);
   Hide();
   m_androidGribGeneratorDialog->ShowMobile(pPlugIn->GetCurrentViewPort(), true);
   Show();
@@ -1441,7 +1445,8 @@ void GRIBUICtrlBar::OnEnvironmentalGrib(wxCommandEvent& event) {
 #ifdef __OCPN__ANDROID__
   if (!m_androidGribGeneratorDialog) {
     m_androidGribGeneratorDialog = new AndroidGribGeneratorDialog(
-        GetParent(), [this](const wxString& path) { OpenGeneratedGrib(path); });
+        GetParent(), [this](const wxString& path) { OpenGeneratedGrib(path); },
+        pPlugIn->m_world_models_catalog);
   }
   Hide();
   m_androidGribGeneratorDialog->ShowMobile(pPlugIn->GetCurrentViewPort());
@@ -2045,6 +2050,11 @@ void GRIBUICtrlBar::OnOpenFile(wxCommandEvent& event) {
 
   if (wxDir::Exists(m_grib_dir)) l_grib_dir = m_grib_dir;
 
+#ifdef __WXOSX__
+  const int savedFileTypeSetting =
+      wxSystemOptions::GetOptionInt(wxOSX_FILEDIALOG_ALWAYS_SHOW_TYPES);
+  wxSystemOptions::SetOption(wxOSX_FILEDIALOG_ALWAYS_SHOW_TYPES, 1);
+#endif
   wxFileDialog* dialog = new wxFileDialog(
       nullptr, _("Select a GRIB file"), l_grib_dir, "",
       _("Grib files") +
@@ -2053,7 +2063,12 @@ void GRIBUICtrlBar::OnOpenFile(wxCommandEvent& event) {
       wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE, wxDefaultPosition,
       wxDefaultSize, _("File Dialog"));
 
-  if (dialog->ShowModal() == wxID_OK) {
+  const int result = dialog->ShowModal();
+#ifdef __WXOSX__
+  wxSystemOptions::SetOption(wxOSX_FILEDIALOG_ALWAYS_SHOW_TYPES,
+                              savedFileTypeSetting);
+#endif
+  if (result == wxID_OK) {
     ::wxBeginBusyCursor();
 
     m_grib_dir = dialog->GetDirectory();

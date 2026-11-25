@@ -173,6 +173,7 @@ public:
   bool m_bZoomToCenterAtInit;
   bool m_bZoomToCenterAtInitExplicit;
   wxString m_local_sources_catalog;
+  wxString m_world_models_catalog;
   double m_boat_lat, m_boat_lon;
   double m_boat_cog, m_boat_sog;
   time_t m_boat_time;

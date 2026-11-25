@@ -53,11 +53,13 @@
 
 #include "GribUIDialogBase.h"
 #include "GribUIDialog.h"
+#include "WorldGribModels.h"
 #include "pi_ocpndc.h"
 #include "wx/jsonreader.h"
 
 enum GribDownloadType {
   WORLD,          ///< Global forecast downloads (e.g., GFS)
+  WORLD_CATALOG,  ///< Update of the global model catalogue
   LOCAL,          ///< Downloads from local sources
   LOCAL_CATALOG,  ///< Downloads from configured catalogs
   XYGRIB,         ///< Downloads from XyGrib service
@@ -236,6 +238,9 @@ public:
 private:
   void HighlightArea(double latmax, double lonmax, double latmin,
                      double lonmin);
+  void SetWorldModels(std::vector<xgrib::WorldGribModel> models,
+                       const wxString& selectedId);
+  void UpdateWorldForecastRange();
   void ReadLocalCatalog();
   void FillTreeCtrl(wxJSONValue &data);
   void ApplyRequestConfig(unsigned rs, unsigned it, unsigned tr);
@@ -277,8 +282,8 @@ private:
   void OnCoordinatesChange(wxSpinEvent &event) override;
   void OnMouseEventTimer(wxTimerEvent &event);
   void SetCoordinatesText();
-  void OnWorldLengthChoice(wxCommandEvent &event) override { event.Skip(); }
-  void OnWorldResolutionChoice(wxCommandEvent &event) override { event.Skip(); }
+  void OnWorldModelChoice(wxCommandEvent &event) override;
+  void OnUpdateWorldModels(wxCommandEvent &event) override;
   void OnWorldDownload(wxCommandEvent &event) override;
   void OnLocalTreeItemExpanded(wxTreeEvent &event) override { event.Skip(); }
   void OnLocalTreeSelChanged(wxTreeEvent &event) override;
@@ -286,6 +291,10 @@ private:
   void OnDownloadLocal(wxCommandEvent &event) override;
   void onDLEvent(OCPN_downloadEvent &ev);
   void EnableDownloadButtons();
+  void DisconnectDownloadEvents();
+  void CancelDownload();
+  bool DownloadFile(const wxString& url, const wxString& path);
+  void OpenDownloadedGrib(const wxString& path);
 
   // Xygrib internal methods
   void InitializeXygribDialog();
@@ -332,6 +341,7 @@ private:
   bool m_canceled;
   bool m_bLocal_source_selected;
   GribDownloadType m_downloadType;
+  std::vector<xgrib::WorldGribModel> m_worldModels;
   /** Index of the canvas where the bounding box is drawn during manual zone
    * selection. */
   int m_boundingBoxCanvasIndex;

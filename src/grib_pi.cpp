@@ -80,6 +80,7 @@ bool g_bpause;
 
 #include "icons.h"
 #include "XgribPaths.h"
+#include "WorldGribModels.h"
 #include "XgribPluginPolicy.h"
 
 //---------------------------------------------------------------------------------------------------------
@@ -205,6 +206,7 @@ int grib_pi::Init(void) {
   }
   m_local_sources_catalog =
       data_path + wxFileName::GetPathSeparator() + local_grib_catalog;
+  m_world_models_catalog = wxFileName(data_path, xgrib::kWorldGribModelsFile).GetFullPath();
   if (!wxFileExists(m_local_sources_catalog)) {
     wxCopyFile(shareLocn + local_grib_catalog, m_local_sources_catalog);
   }

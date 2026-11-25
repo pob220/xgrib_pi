@@ -29,11 +29,12 @@ from writable Android storage. Desktop dialogue layouts are unchanged.
   Forecast-time selection likewise requires explicit acceptance (the bundled
   wxQt modal return code is not trusted). Existing GRIBs and local generator
   inputs use Android file selection, including the Android Back control.
-- Download restores the desktop `grib.bosun.io` ECMWF IFS/AIFS server route:
-  24 hours, 3 days or full forecast. HTTPS is verified, partial files are
-  validated before opening, and existing forecasts are never overwritten.
-  The 128 MiB download limit is **not** an OpenCPN memory limit. This route
-  does not add ocean currents.
+- Download uses the same `grib.bosun.io` catalogue as the desktop World tab.
+  Choose a weather or ocean-current model and enter a forecast length in hours
+  from the model run. **Update Models** refreshes the list. HTTPS is verified,
+  partial files are validated before opening, and existing forecasts are
+  preserved. Downloads have a 128 MiB file-size limit. Use **Generate** to
+  combine weather and currents in one file.
 - The eight supplied desktop area presets (and any presets saved in this
   installation) apply bounds only on Android. They do not switch providers or
   unexpectedly require an account. Use chart area/manual entry remain.

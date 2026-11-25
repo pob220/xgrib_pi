@@ -19,6 +19,8 @@
 #include <QCalendarWidget>
 #include <QLabel>
 #include <QLineEdit>
+#include <QIntValidator>
+#include <QSignalBlocker>
 #include <QMessageBox>
 #include <QListWidget>
 #include <QGuiApplication>
@@ -31,7 +33,9 @@
 #include <QTabWidget>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <wx/file.h>
 #include <wx/fileconf.h>
+#include <wx/mstream.h>
 #include <wx/filename.h>
 #include "XgribPaths.h"
 #include "AreaPreset.h"
@@ -129,6 +133,11 @@ struct AndroidGribGeneratorDialog::Impl {
   bool serverDownload{false};
   PlugIn_ViewPort viewport{};
   std::future<eg::EnvironmentResult> job;
+  wxString worldModelCache;
+  std::vector<xgrib::WorldGribModel> worldModels;
+  std::future<std::vector<unsigned char>> modelJob;
+  QIntValidator* serverHoursValidator;
+  QPushButton* updateModels;
   std::shared_ptr<std::atomic<bool>> cancelled;
   std::mutex logMutex;
   std::string latestProgress;
@@ -258,8 +267,11 @@ struct AndroidGribGeneratorDialog::Impl {
       UpdateStartLabel(); UpdateOptions();
     }
   }
-  Impl(AndroidGribGeneratorDialog* dialog, GribReadyCallback callback)
-      : owner(dialog), ready(std::move(callback)), root(static_cast<QWidget*>(dialog->GetHandle())) {
+  Impl(AndroidGribGeneratorDialog* dialog, GribReadyCallback callback,
+       const wxString& modelCache)
+      : owner(dialog), ready(std::move(callback)),
+        root(static_cast<QWidget*>(dialog->GetHandle())),
+        worldModelCache(modelCache) {
     root->setStyleSheet("QWidget {font-size: 20px;}"
         "QLineEdit, QComboBox, QPushButton {min-height: 48px;}"
         "QComboBox QAbstractItemView::item {min-height: 48px;}"
@@ -312,8 +324,15 @@ struct AndroidGribGeneratorDialog::Impl {
     Field(area, "hours", "Duration (hours)", "24")->setInputMethodHints(Qt::ImhDigitsOnly);
     Choice(area, "step", "Forecast interval (hours)", {{"1","1"},{"3","3"},{"6","6"},{"12","12"}})->setCurrentIndex(1);
     auto* weather = Page("Weather / waves");
-    Choice(area, "serverDuration", "Server forecast duration", {{"24","24 hours"},{"72","3 days"},{"999","Full available forecast"}});
-    Choice(weather, "serverModel", "OpenCPN forecast server", {{"ecmwf0p25","ECMWF IFS 0.25 degrees"},{"ecmwfaifs0p25","ECMWF AIFS 0.25 degrees"}});
+    auto* serverHours = Field(area, "serverDuration", "Forecast length (hours)", "24");
+    serverHours->setInputMethodHints(Qt::ImhDigitsOnly);
+    serverHoursValidator = new QIntValidator(1, 384, serverHours);
+    serverHours->setValidator(serverHoursValidator);
+    Choice(weather, "serverModel", "OpenCPN forecast server", {});
+    updateModels = new QPushButton("Update Models");
+    rows["serverModel"]->layout()->addWidget(updateModels);
+    QObject::connect(updateModels, &QPushButton::clicked, root,
+                     [this] { RefreshWorldModels(); });
     Choice(weather, "weather", "Weather source", {{"gfs","NOAA GFS"}, {"noaa_hrrr","NOAA HRRR 3 km"},
       {"ukmo_ukv","Met Office UKV 2 km"}, {"metno_nordic","MET Norway Nordic"}, {"dwd_icon_eu","DWD ICON-EU"},
       {"ecmwf_ifs_open","ECMWF IFS Open Data"}, {"ecmwf_aifs_open","ECMWF AIFS Open Data"},
@@ -392,6 +411,8 @@ struct AndroidGribGeneratorDialog::Impl {
       if (remember && config->Read("/Settings/xGRIB/AndroidGenerator/username", &username)) fields["username"]->setText(QtText(username));
       rememberPassword->setChecked(config->ReadBool("/Settings/xGRIB/AndroidGenerator/rememberPassword", false));
     }
+    SetWorldModels(xgrib::LoadWorldGribModels(
+        worldModelCache, GetXgribDataDirectory() + xgrib::kWorldGribModelsFile));
     for (auto& [key, choice] : choices) {
       wxString saved;
       if (auto* config = GetOCPNConfigObject(); config && config->Read("/Settings/xGRIB/AndroidGenerator/" + wxString(key), &saved)) {
@@ -403,6 +424,10 @@ struct AndroidGribGeneratorDialog::Impl {
     for (const auto& entry : choices)
       QObject::connect(entry.second, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
                        root, [this] { UpdateOptions(); });
+    QObject::connect(choices["serverModel"],
+                     static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+                     root, [this] { UpdateWorldForecastRange(); });
+    UpdateWorldForecastRange();
     QObject::connect(extend, &QCheckBox::toggled, root, [this] { UpdateOptions(); });
     QObject::connect(fields["username"], &QLineEdit::textChanged, root, [this] {
       if (restoredPassword && fields["username"]->text().trimmed() != credentialUsername) {
@@ -411,7 +436,83 @@ struct AndroidGribGeneratorDialog::Impl {
     });
     UpdateOptions();
   }
-  ~Impl() { if (cancelled) cancelled->store(true); if (job.valid()) job.wait(); if (credentialJob.valid()) credentialJob.wait(); }
+  ~Impl() {
+    if (cancelled) cancelled->store(true);
+    if (job.valid()) job.wait();
+    if (modelJob.valid()) modelJob.wait();
+    if (credentialJob.valid()) credentialJob.wait();
+  }
+  void SetWorldModels(std::vector<xgrib::WorldGribModel> models) {
+    auto* choice = choices["serverModel"];
+    const QSignalBlocker blockSignals(choice);
+    const auto previous = choice->currentData();
+    worldModels = std::move(models);
+    choice->clear();
+    for (const auto& model : worldModels)
+      choice->addItem(QtText(model.title), Text(model.id));
+    const int selected = choice->findData(previous);
+    if (selected >= 0) choice->setCurrentIndex(selected);
+    UpdateWorldForecastRange();
+  }
+  void UpdateWorldForecastRange() {
+    const int index = choices["serverModel"]->currentIndex();
+    if (index < 0) return;
+    const int maxHours = worldModels[index].maxHours;
+    serverHoursValidator->setTop(maxHours);
+    auto* field = fields["serverDuration"];
+    field->setToolTip(QString("1 to %1 hours from the start of the model run")
+                          .arg(maxHours));
+    bool valid = false;
+    const int hours = field->text().toInt(&valid);
+    if (valid && hours > maxHours) field->setText(QString::number(maxHours));
+  }
+  void RefreshWorldModels() {
+    if (running || modelJob.valid() || credentialAction != CredentialAction::None)
+      return;
+    cancelled = std::make_shared<std::atomic<bool>>(false);
+    eg::ExecutionContext execution;
+    execution.cancelled = cancelled;
+    const auto caBundlePath = GetXgribDataDirectory() + "android-ca-bundle.pem";
+    const auto caBundle = caBundlePath.utf8_str();
+    execution.ca_bundle.assign(caBundle.data(), caBundle.length());
+    modelJob = std::async(std::launch::async, [execution] {
+      eg::ExecutionScope scope(execution);
+      return eg::CurlHttpGet(xgrib::kWorldGribModelsUrl, 15);
+    });
+    closeWhenFinished = false;
+    tabs->setEnabled(false);
+    generate->setEnabled(false);
+    cancel->setEnabled(true);
+    status->setText("Downloading model list update…");
+    timer->start(150);
+  }
+  void PollWorldModels() {
+    if (modelJob.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+      return;
+    timer->stop();
+    tabs->setEnabled(true);
+    generate->setEnabled(true);
+    cancel->setEnabled(false);
+    try {
+      const auto bytes = modelJob.get();
+      wxMemoryInputStream stream(bytes.data(), bytes.size());
+      auto models = xgrib::ParseWorldGribModels(stream);
+      if (models.empty()) throw std::runtime_error("The model list is invalid.");
+      if (!cancelled->load()) {
+        wxTempFile file(worldModelCache);
+        if (!file.IsOpened() || !file.Write(bytes.data(), bytes.size()) ||
+            !file.Commit())
+          throw std::runtime_error("Could not save the model list.");
+        SetWorldModels(std::move(models));
+      }
+      status->setText(cancelled->load() ? "Model list update canceled."
+                                        : "Model list update complete.");
+    } catch (const std::exception& error) {
+      status->setText(cancelled->load() ? "Model list update canceled."
+                                        : Text(std::string(error.what())));
+    }
+    if (closeWhenFinished) { closeWhenFinished = false; Close(); }
+  }
   void CredentialTask(CredentialAction action, const QString& value = {}) {
     credentialUsername = fields["username"]->text().trimmed();
     const auto username = credentialUsername;
@@ -446,7 +547,7 @@ struct AndroidGribGeneratorDialog::Impl {
   }
   void Close() {
     if (credentialAction != CredentialAction::None) return;
-    if (running) { closeWhenFinished = true; Cancel(); return; }
+    if (running || modelJob.valid()) { closeWhenFinished = true; Cancel(); return; }
     QGuiApplication::inputMethod()->hide();
     if (auto* config = GetOCPNConfigObject()) {
       for (const auto& [key, field] : fields)
@@ -458,6 +559,10 @@ struct AndroidGribGeneratorDialog::Impl {
       // Android can terminate the host without a desktop-style clean exit.
       // Make the closed generator's preferences durable now.
       config->Flush();
+    }
+    if (serverDownload) {
+      FinishClose();
+      return;
     }
     if (rememberPassword->isChecked()) {
       if (fields["username"]->text().trimmed().isEmpty() || fields["password"]->text().isEmpty()) {
@@ -530,7 +635,7 @@ struct AndroidGribGeneratorDialog::Impl {
     for (const char* key : {"fallbackWeather", "fallbackWave", "fallbackCurrent"}) rows[key]->setVisible(!serverDownload && extend->isChecked());
     if (running) return;
     if (serverDownload) {
-      estimate->setText("Downloads from grib.bosun.io, the same volunteer-run ECMWF service as desktop xGRIB. Model fields/timesteps are set by the server. No currents are added. Maximum download: 128 MiB.");
+      estimate->setText("The World server supplies the fields and times for the selected model. Forecast length starts at the model run. Maximum download: 128 MiB. SMOC uses E.U. Copernicus Marine Service information (DOI 10.48670/moi-00016).");
       return;
     }
     try {
@@ -627,7 +732,8 @@ struct AndroidGribGeneratorDialog::Impl {
     return false;
   }
   void Start(std::optional<eg::EnvironmentRequest> retry = std::nullopt) {
-    if (running || credentialAction != CredentialAction::None) return;
+    if (running || modelJob.valid() || credentialAction != CredentialAction::None)
+      return;
     QGuiApplication::inputMethod()->hide();
     if (!retry && !ValidateAreaInput()) return;
     try {
@@ -650,12 +756,23 @@ struct AndroidGribGeneratorDialog::Impl {
         tabs->setCurrentIndex(4);
         throw std::runtime_error("Enter your Copernicus username and password on the Account tab.");
       }
+      std::optional<xgrib::WorldGribModel> model;
+      int duration = 0;
+      if (serverDownload) {
+        const int index = choices["serverModel"]->currentIndex();
+        if (index < 0) throw std::runtime_error("Update Models to load a World forecast model.");
+        model = worldModels[index];
+        bool valid = false;
+        duration = fields["serverDuration"]->text().toInt(&valid);
+        if (!valid || duration < 1 || duration > model->maxHours)
+          throw std::runtime_error("Enter a forecast length from 1 to " +
+                                   std::to_string(model->maxHours) + " hours.");
+      }
       QGuiApplication::inputMethod()->hide();
       latestProgress.clear(); log->clear(); hasLog = true; log->show();
-      const auto model = Selected("serverModel"); const int duration = std::stoi(Selected("serverDuration"));
       lastRequest = request;
       job = std::async(std::launch::async, [this, request = std::move(request), model, duration] {
-        if (serverDownload) return xgrib::DownloadServerGrib(request, model, duration);
+        if (model) return xgrib::DownloadServerGrib(request, *model, duration);
         auto result = eg::GenerateEnvironment(request, {}, std::nullopt,
             [this, flag = request.execution.cancelled](const std::string& stage, const Json::Value&) {
               if (flag->load()) throw std::runtime_error("Generation cancelled");
@@ -671,6 +788,7 @@ struct AndroidGribGeneratorDialog::Impl {
     } catch (const std::exception& error) { status->setText(Text(std::string(error.what()))); }
   }
   void Poll() {
+    if (modelJob.valid()) { PollWorldModels(); return; }
     if (credentialAction != CredentialAction::None) {
       if (credentialJob.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
       const auto action = credentialAction; credentialAction = CredentialAction::None;
@@ -744,18 +862,27 @@ struct AndroidGribGeneratorDialog::Impl {
   }
 };
 
-AndroidGribGeneratorDialog::AndroidGribGeneratorDialog(wxWindow* parent, GribReadyCallback ready)
+AndroidGribGeneratorDialog::AndroidGribGeneratorDialog(
+    wxWindow* parent, GribReadyCallback ready, const wxString& worldModelCache)
     : wxDialog(parent, wxID_ANY, "xGRIB", wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
-      impl_(std::make_unique<Impl>(this, std::move(ready))) {
+      impl_(std::make_unique<Impl>(this, std::move(ready), worldModelCache)) {
   Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent&) { impl_->Close(); });
 }
 AndroidGribGeneratorDialog::~AndroidGribGeneratorDialog() = default;
 void AndroidGribGeneratorDialog::ShowMobile(const PlugIn_ViewPort& viewport, bool serverDownload) {
-  impl_->viewport = viewport; impl_->serverDownload = serverDownload;
+  impl_->viewport = viewport;
+  if (impl_->serverDownload != serverDownload) {
+    impl_->log->clear();
+    impl_->hasLog = false;
+    impl_->log->hide();
+  }
+  impl_->serverDownload = serverDownload;
   impl_->generate->setText(serverDownload ? "Download" : "Generate");
   impl_->heading->setText(serverDownload ? "xGRIB — Download from server" : "xGRIB — Generate forecast");
   impl_->tabs->setCurrentIndex(0); impl_->UpdateOptions();
-  impl_->resize->Fit(); impl_->LoadCredentials(); ShowModal();
+  impl_->resize->Fit();
+  if (!serverDownload) impl_->LoadCredentials();
+  ShowModal();
 }
 
 void AndroidFitDialog(wxWindow* parent, wxDialog& dialog) {
