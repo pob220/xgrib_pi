@@ -445,6 +445,16 @@ Invoke-NativeLogged {
 } (Join-Path $logDir "test.log") "CTest"
 
 $merge = Join-Path $generatorBin "environmental-grib.exe"
+$ccsdsReport = Join-Path $testDir "ccsds-windows-inspection.json"
+& $merge inspect-grib (Join-Path $repo "test\fixtures\hardening\farallon-ccsds.grb2") |
+    Set-Content -Encoding utf8 $ccsdsReport
+Assert-NativeSuccess "CCSDS weather inspection"
+$ccsdsMessages = (Get-Content $ccsdsReport -Raw | ConvertFrom-Json).messages
+if (-not $ccsdsMessages -or @($ccsdsMessages | Where-Object {
+    $_.packing_type -ne "grid_ccsds" -or -not $_.values.count
+}).Count -gt 0) {
+    throw "The staged GRIB helper could not decode CCSDS forecast values"
+}
 $reader = Join-Path $build "Release\xgrib_reader_integration_tests.exe"
 $combined = Join-Path $testDir "combined-windows.grb2"
 & $merge merge-environment-gribs `

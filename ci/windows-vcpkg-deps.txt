@@ -1,7 +1,7 @@
 bzip2
 blosc
 curl
-eccodes
+eccodes[aec]
 glew
 jsoncpp
 libzip

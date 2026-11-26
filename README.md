@@ -10,6 +10,14 @@ that same engine on a background worker behind its native touch interface.
 Both paths use the same provider adapters, date-line geometry, UTC handling
 and output validation. Generated files open directly in xGRIB.
 
+### New in 0.5.1
+
+The Windows generator decodes CCSDS-compressed forecasts such as ECMWF Open
+Data. Use **Open Copernicus Marine Data Store** to sign in with CDSE in your
+browser, then download a surface-current NetCDF subset with both velocity
+components. In **Generate GRIB**, select **Copernicus Marine NetCDF file** and
+match its area and UTC times.
+
 ### New in 0.5.0
 
 **Download GRIB → World** uses OpenCPN's expanded

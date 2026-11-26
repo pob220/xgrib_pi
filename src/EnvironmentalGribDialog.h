@@ -78,6 +78,7 @@ private:
   bool ValidateMetNoRequest();
   bool AutoWouldUseMarineIe() const;
   bool NeedsCopernicusCredentials() const;
+  bool UsesCopernicusNetcdf() const;
   bool IsOfflineTidalSelected() const;
   bool IsOfflineTidalNeeded() const;
   bool ValidateOfflineTidalPackage();
@@ -147,6 +148,7 @@ private:
   wxButton* m_manageAreaPresetsButton;
   wxChoice* m_provider;
   wxStaticText* m_usernameLabel;
+  wxButton* m_copernicusWebsite;
   wxTextCtrl* m_username;
   wxStaticText* m_passwordLabel;
   wxTextCtrl* m_password;

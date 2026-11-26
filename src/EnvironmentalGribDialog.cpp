@@ -578,8 +578,18 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
       addRow(_("Offline current status"), m_offlineTidalStatus);
   m_offlineCurrentModeLabel =
       addRow(_("Offline current mode"), m_offlineCurrentMode);
-  m_usernameLabel = addRow("Copernicus username", m_username);
+  m_usernameLabel = addRow(_("Copernicus Marine username or email"), m_username);
   m_passwordLabel = addRow("Copernicus password", m_password);
+  m_username->SetToolTip(
+      _("Enter a direct Copernicus Marine login. For Login with CDSE, use the Data Store website and import a NetCDF currents file."));
+  m_copernicusWebsite =
+      new wxButton(scrolled, wxID_ANY, _("Open Copernicus Marine Data Store"));
+  grid->Add(0, 0);
+  grid->Add(m_copernicusWebsite, 0);
+  m_copernicusWebsite->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+    if (!wxLaunchDefaultBrowser("https://data.marine.copernicus.eu/products"))
+      AppendLog(_("Could not open the Copernicus Marine Data Store."));
+  });
   addRow("Provider note", m_providerNote);
   m_tpxoModelDirLabel = addRow("TPXO model directory", m_tpxoModelDir);
   m_tpxoModelNameLabel = addRow("TPXO model name", m_tpxoModelName);
@@ -670,6 +680,8 @@ EnvironmentalGribDialog::EnvironmentalGribDialog(wxWindow* parent,
   m_existingCurrentFile->Bind(
       wxEVT_FILEPICKER_CHANGED,
       &EnvironmentalGribDialog::OnExistingGribFileChanged, this);
+  m_localNetcdf->Bind(wxEVT_FILEPICKER_CHANGED,
+                     [this](wxFileDirPickerEvent&) { QueueEstimate(); });
   m_offlineTidalFile->Bind(wxEVT_FILEPICKER_CHANGED,
                            &EnvironmentalGribDialog::OnOfflineTidalFileChanged,
                            this);
@@ -994,6 +1006,13 @@ void EnvironmentalGribDialog::OnGenerate(wxCommandEvent&) {
         "Select an existing current GRIB file or choose TPXO cache/None.";
     AppendLog(message);
     wxMessageBox(message, "Missing current GRIB", wxOK | wxICON_WARNING, this);
+    return;
+  }
+  if (UsesCopernicusNetcdf() &&
+      !wxFileName::FileExists(m_localNetcdf->GetPath())) {
+    const auto message = _("Select the surface-current NetCDF file downloaded from Copernicus Marine.");
+    AppendLog(message);
+    wxMessageBox(message, _("Missing current NetCDF"), wxOK | wxICON_WARNING, this);
     return;
   }
   if (m_generateCurrents->GetValue() && IsOfflineTidalNeeded()) {
@@ -1369,11 +1388,18 @@ bool EnvironmentalGribDialog::NeedsCopernicusCredentials() const {
   if (waveCopernicus) {
     return true;
   }
-  if (!m_generateCurrents->GetValue()) {
+  if (!m_generateCurrents->GetValue() || UsesCopernicusNetcdf()) {
     return false;
   }
   wxString currentSource = m_currentSource->GetStringSelection();
   return currentSource.Contains("Copernicus") || currentSource.Contains("Auto");
+}
+
+bool EnvironmentalGribDialog::UsesCopernicusNetcdf() const {
+  const auto& options = xgrib::CurrentProviderOptions();
+  const int choice = m_currentSource->GetSelection();
+  return m_generateCurrents->GetValue() && choice >= 0 &&
+         static_cast<size_t>(choice) < options.size() && options[choice].id == "netcdf";
 }
 
 bool EnvironmentalGribDialog::IsOfflineTidalSelected() const {
@@ -1669,13 +1695,15 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
            currentOfflineNeeded);
   showPair(m_usernameLabel, m_username, needsCopernicusCredentials);
   showPair(m_passwordLabel, m_password, needsCopernicusCredentials);
+  const bool currentNetcdf = UsesCopernicusNetcdf();
+  m_copernicusWebsite->Show(needsCopernicusCredentials || currentNetcdf);
   showPair(m_tpxoModelDirLabel, m_tpxoModelDir, showTpxoModel);
   showPair(m_tpxoModelNameLabel, m_tpxoModelName, showTpxoModel);
   showPair(m_tpxoGridSpacingLabel, m_tpxoGridSpacing, showTpxoModel);
   showPair(m_checkTpxoLabel, m_checkTpxoButton, showTpxoModel);
   showPair(m_tpxoCacheFileLabel, m_tpxoCacheFile, currentTpxoCache);
   showPair(m_prepareTpxoCacheLabel, m_prepareTpxoCacheButton, currentTpxoCache);
-  showPair(m_localNetcdfLabel, m_localNetcdf, false);
+  showPair(m_localNetcdfLabel, m_localNetcdf, currentNetcdf);
   m_rememberUsername->Show(needsCopernicusCredentials);
   m_existingCurrentFile->Enable(currentExisting);
   m_offlineTidalFile->Enable(currentOfflineNeeded && !m_processRunning);
@@ -1692,10 +1720,14 @@ void EnvironmentalGribDialog::UpdateProviderUi() {
   m_useTpxoCache->Enable(false);
   m_tpxoCacheFile->Enable(currentTpxoCache);
   m_prepareTpxoCacheButton->Enable(currentTpxoCache && !m_processRunning);
-  m_localNetcdf->Enable(false);
+  m_localNetcdf->Enable(currentNetcdf && !m_processRunning);
 
   wxString currentNote;
-  if (currentOfflineTidal) {
+  if (currentNetcdf) {
+    currentNote = _("Sign in to the Marine Data Store with Login with CDSE.\n"
+                    "Download NetCDF with both current components at one surface depth.\n"
+                    "Match this request's area and UTC times to the file.");
+  } else if (currentOfflineTidal) {
     currentNote =
         m_offlineCurrentMode->GetSelection() == 1
             ? _("Current source: authenticated offline XTD package. Output "
@@ -2380,6 +2412,11 @@ void EnvironmentalGribDialog::FinishCommand(long exit_code, bool launched,
             resultValue["error"].HasMember("message")) {
           nativeError = resultValue["error"]["message"].AsString();
           AppendLog("Native generator error: " + Redact(nativeError));
+          if (resultValue["error"]["code"].AsString() == "copernicus_authentication_failed" &&
+              nativeError.Contains("invalid_grant")) {
+            AppendLog(_("For CDSE sign-in, open the Copernicus Marine Data Store, "
+                        "download a surface-current subset, and select Copernicus Marine NetCDF file."));
+          }
         }
         wxJSONValue coverage =
             resultValue["result"]["diagnostics"]["forecast_extension"]["coverage"];
@@ -2610,7 +2647,9 @@ bool EnvironmentalGribDialog::BuildGenerateJobText(wxString* text,
   wxString currentSource = "none";
   if (m_generateCurrents->GetValue()) {
     const wxString selected = m_currentSource->GetStringSelection();
-    if (IsOfflineTidalSelected())
+    if (UsesCopernicusNetcdf())
+      currentSource = "netcdf";
+    else if (IsOfflineTidalSelected())
       currentSource = "offline-tidal";
     else if (selected.Contains("TPXO cache"))
       currentSource = "tpxo-cache";
@@ -2902,6 +2941,8 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
     }
     if (IsOfflineTidalSelected())
       prefix += "_offline_tidal";
+    else if (UsesCopernicusNetcdf())
+      prefix += "_copernicus_netcdf";
     else if (currentSource.Contains("TPXO cache"))
       prefix += "_tpxo_cache";
     else if (currentSource.Contains("TPXO direct"))
@@ -2963,6 +3004,8 @@ wxString EnvironmentalGribDialog::DefaultOutputFilenameForSelection() const {
     prefix = "current";
     if (IsOfflineTidalSelected())
       prefix += "_offline_tidal";
+    else if (UsesCopernicusNetcdf())
+      prefix += "_copernicus_netcdf";
     else if (currentSource.Contains("TPXO cache"))
       prefix += "_tpxo_cache";
     else if (currentSource.Contains("TPXO direct"))

@@ -100,7 +100,8 @@ const std::vector<ProviderPreferenceOption>& CurrentProviderOptions() {
       {"copernicus_ibi",
        _("Copernicus IBI high-resolution forecast/model currents")},
       {"copernicus_mediterranean",
-       _("Copernicus Mediterranean forecast/model currents")}};
+       _("Copernicus Mediterranean forecast/model currents")},
+      {"netcdf", _("Copernicus Marine NetCDF file")}};
   return options;
 }
 
